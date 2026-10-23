@@ -19,15 +19,21 @@ for _m26d_e03_h in "${_M26D_HOTES[@]}"; do
     _ko "$_m26d_e03_h : aucun rapport Lynis lisible dans /var/log/lynis-report.dat (audit lancé ? SSH et sudo de lecture ?)"
     continue
   fi
-  check_output "$_m26d_e03_h : rapport produit par Lynis 3.1.7 (pas la 3.1.4 de Debian)" \
-    '^lynis_version=3\.1\.7$' printf '%s\n' "$_m26d_e03_rapport"
+  # Après E24, le rôle installe Lynis (paquet) et l'analyse hebdomadaire réécrit le rapport : la
+  # version et l'absence de paquet ne se contrôlent plus (l'indice, si).
+  if remote "$_m26d_e03_h" "test -x /usr/local/sbin/conformite-analyse" >/dev/null 2>&1; then
+    skip "$_m26d_e03_h : Lynis 3.1.7 sans installation" "conformité continue (E24) en place : Lynis installé par le rôle"
+  else
+    check_output "$_m26d_e03_h : rapport produit par Lynis 3.1.7 (pas la 3.1.4 de Debian)" \
+      '^lynis_version=3\.1\.7$' printf '%s\n' "$_m26d_e03_rapport"
+    check_ssh "$_m26d_e03_h : Lynis n'est pas installé en paquet (mesure sans installation)" "$_m26d_e03_h" \
+      "! command -v lynis >/dev/null 2>&1"
+  fi
   check_output "$_m26d_e03_h : indice de durcissement calculé (audit complet)" \
     '^hardening_index=[0-9]{1,3}$' printf '%s\n' "$_m26d_e03_rapport"
   # Mesurer n'est pas installer : l'archive dépliée ne doit pas rester sur la VM.
   check_ssh "$_m26d_e03_h : aucun dossier Lynis déplié laissé sur la VM (/root, /home, /tmp, /var/tmp)" "$_m26d_e03_h" \
     "! sudo -n find /root /home /tmp /var/tmp -maxdepth 4 -type f -name lynis -path '*/lynis/lynis' 2>/dev/null | grep -q ."
-  check_ssh "$_m26d_e03_h : Lynis n'est pas installé en paquet (mesure sans installation)" "$_m26d_e03_h" \
-    "! command -v lynis >/dev/null 2>&1"
 done
 
 # --- 2. ssh-audit sur adm01 ---------------------------------------------------------------------------

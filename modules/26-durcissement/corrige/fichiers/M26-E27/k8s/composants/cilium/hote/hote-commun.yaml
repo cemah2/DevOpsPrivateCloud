@@ -51,8 +51,9 @@ spec:
         - ports:
             - {port: "10250", protocol: TCP}
     # --- Collecte de Prometheus (espace supervision, M21) ----------------------------------------------
-    # 9100 node-exporter (hostNetwork) ; 9962 agent Cilium, 9964 Envoy, 9965 Hubble (M15-E26) ;
-    # 10250 kubelet et cAdvisor ; 2112 Tetragon (hostNetwork, M26-E20).
+    # 9100 node-exporter (hostNetwork) ; 9962 agent Cilium, 9963 opérateur Cilium (hostNetwork, sur
+    # le nœud qui le porte), 9964 Envoy, 9965 Hubble (M15-E26) ; 10250 kubelet et cAdvisor ;
+    # 2112 Tetragon (hostNetwork, M26-E20).
     - fromEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: supervision
@@ -60,6 +61,7 @@ spec:
         - ports:
             - {port: "9100", protocol: TCP}
             - {port: "9962", protocol: TCP}
+            - {port: "9963", protocol: TCP}
             - {port: "9964", protocol: TCP}
             - {port: "9965", protocol: TCP}
             - {port: "10250", protocol: TCP}

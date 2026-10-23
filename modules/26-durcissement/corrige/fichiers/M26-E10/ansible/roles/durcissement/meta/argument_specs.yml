@@ -55,7 +55,7 @@ argument_specs:
       durcissement_ssh_comptes_sans_ssh:
         type: list
         elements: str
-        default: []
+        default: [root]
         description: Comptes locaux à clés qui ne doivent volontairement plus se connecter.
       durcissement_auditd_immuable:
         type: bool

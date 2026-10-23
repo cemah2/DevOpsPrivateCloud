@@ -25,14 +25,18 @@ _e37_sidekick_ok() {
     yq -e '.falcosidekick.config.alertmanager.hostport | test("kps-alertmanager\\.supervision(\\.svc)?(\\.cluster\\.local)?:9093$")' >/dev/null 2>&1 &&
     _m26x_app_ok falco
 }
-_e37_loki_ok() { loki_requete '{service="falco"}' audit 1h 2>/dev/null | jq -e '.status == "success"' >/dev/null 2>&1; }
+# Au moins une détection de la règle « shell interactif » arrivée dans Loki depuis 1 h (l'essai rejoué).
+_e37_loki_ok() {
+  loki_requete '{service="falco"} |~ "(?i)shell interactif"' audit 1h 2>/dev/null |
+    jq -e '.status == "success" and ([.data.result[]?.values[]?] | length > 0)' >/dev/null 2>&1
+}
 
 check_cmd "le DaemonSet Falco couvre tous les nœuds" _e37_couvre_noeuds
 check_cmd "la règle « shell interactif dans un conteneur applicatif » est chargée et active" \
   _m26x_regle_falco_active 'shell interactif dans un conteneur'
 check_cmd "la priorité minimale de Falco laisse passer les règles MédiSphère" _e37_priorite_ok
 check_cmd "falcosidekick joint l'Alertmanager du cluster" _e37_sidekick_ok
-check_cmd "le locataire audit de Loki répond pour service=falco" _e37_loki_ok
+check_cmd "un essai récent (moins d'1 h) est arrivé dans Loki (service=falco, locataire audit)" _e37_loki_ok
 check_cmd "pipeline de main de plateforme/politiques vert" _m26x_pipeline_main_vert plateforme/politiques
 check_cmd "RB-260 : section « Falco est muet »" _m26x_doc_contient "$_m26x_rb/RB-260-*.md" '(muet|ne d[ée]tecte|aucune alerte)'
 check_cmd "panne M26-E37 close" _m26x_aucune_panne_active E37

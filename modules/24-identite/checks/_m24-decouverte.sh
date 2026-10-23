@@ -70,9 +70,11 @@ _m24d_kc() {
   keycloak_api "$1" 2>/dev/null || true
 }
 
-# _m24d_kc_client CLIENT_ID — représentation JSON du client (vide si absent ou illisible).
+# _m24d_kc_client CLIENT_ID — représentation JSON du client (vide si absent ou illisible), SANS son
+# secret : jusqu'à Keycloak 26.7, le rôle view-clients de wb-checks reçoit le secret de chaque client
+# confidentiel dans cette représentation (26.8 l'exige manage-clients) ; on le retire aussitôt.
 _m24d_kc_client() {
-  _m24d_kc "clients?clientId=$(_m24d_uri "$1")" | jq -c '.[0] // empty' 2>/dev/null || true
+  _m24d_kc "clients?clientId=$(_m24d_uri "$1")" | jq -c '.[0] // empty | del(.secret)' 2>/dev/null || true
 }
 
 # _m24d_chaine_tls HÔTE PORT [SNI] — la chaîne présentée se vérifie jusqu'à la racine MédiSphère.

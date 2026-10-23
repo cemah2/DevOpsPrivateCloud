@@ -291,7 +291,7 @@ Fichiers : [`clients-argocd.tf`](fichiers/M24-E13/identite/tofu/clients-argocd.t
 **Explications**
 
 - **Où vit la décision.** Argo CD vérifie l'ID token (émetteur, signature par le JWKS, audience `argocd` ou `argocd-cli`), lit `groups` (`scopes: [groups]`), et Casbin évalue `policy.csv` : un sujet de ligne `g` peut être un compte local ou un groupe OIDC, sans distinction. C'est pourquoi aucun compte local ne doit porter le nom d'un groupe, et pourquoi les tests de la politique fonctionnent avec des noms de groupes.
-- **Durée de session.** `users.session.duration: 8h` (M20-E25) : une personne désactivée dans l'annuaire garde l'interface déjà ouverte au plus 8 h ; le jeton OIDC (5 min) n'est pas rejoué par Argo CD à chaque requête. RB-242 (E23) traite ce cas.
+- **Durée de session.** Pour une personne entrée par le SSO, la « session » d'Argo CD est l'**ID token de Keycloak** lui-même (cookie `argocd.token`, vérifié à chaque requête : `util/session/sessionmanager.go`) ; `users.session.duration` (8 h, M20-E25) ne vaut que pour les jetons qu'Argo CD signe lui-même (comptes locaux). L'ID token vit 5 minutes ; `refreshTokenThreshold: 2m` le fait renouveler par le jeton de rafraîchissement tant que la session SSO de Keycloak existe (30 min d'inactivité, 10 h au plus). Une personne désactivée dans l'annuaire garde donc l'interface tant que sa session Keycloak vit ; une fois ses sessions Keycloak fermées (RB-242, E23), au plus 5 minutes.
 - **Bris de glace.** `admin` reste désactivé ; si Keycloak est en panne **et** qu'une intervention dans Argo CD est indispensable, on le réactive par Helmfile (procédure du M20-E03, depuis un accès `kubectl` de bris de glace), on l'utilise, on le désactive, on le consigne (RB-240).
 
 **Alternatives**
@@ -311,7 +311,7 @@ Fichiers : [`clients-argocd.tf`](fichiers/M24-E13/identite/tofu/clients-argocd.t
 
 **En production chez MédiSphère**
 
-Le rôle de projet par équipe pour les jetons d'automatisation, révoqués un par un ; les tests de la politique joués aussi contre la configuration rendue (`helmfile template`) ; alerte sur la réactivation d'`admin` (événement d'audit sur le ConfigMap `argocd-cm`) ; `users.session.duration` ramené à 4 h quand l'OTP (E21) rend les reconnexions moins coûteuses à justifier.
+Le rôle de projet par équipe pour les jetons d'automatisation, révoqués un par un ; les tests de la politique joués aussi contre la configuration rendue (`helmfile template`) ; alerte sur la réactivation d'`admin` (événement d'audit sur le ConfigMap `argocd-cm`) ; durée des sessions des personnes réglée là où elle vit désormais, dans Keycloak (session SSO, E27), et non plus par `users.session.duration`, qui ne concerne que les comptes locaux restants.
 
 ---
 
@@ -395,14 +395,14 @@ root@pve01:~# pveum user token add root@pam realm-oidc --privsep 0 --expire $(( 
 │ full-tokenid │ root@pam!realm-oidc                  │
 │ value        │ 3c2b…                                │
 admin@adm01:~/src/infra$ . outils/charger-acces.sh
-admin@adm01:~/src/infra$ read -rsp 'Jeton temporaire : ' v; echo; export PROXMOX_VE_API_TOKEN="root@pam!realm-oidc=$v"; unset v
+admin@adm01:~/src/infra$ read -rsp 'Jeton temporaire : ' v; echo; export PROXMOX_VE_API_TOKEN='root@pam!realm-oidc='"$v"; unset v
 admin@adm01:~/src/infra$ tofu -chdir=acces-proxmox init && tofu -chdir=acces-proxmox plan -out=plan.tfplan
 Plan: 9 to add, 0 to change, 0 to destroy.
 admin@adm01:~/src/infra$ tofu -chdir=acces-proxmox apply plan.tfplan
 root@pve01:~# pveum user token delete root@pam realm-oidc
 admin@adm01:~/src/infra$ unset PROXMOX_VE_API_TOKEN; rm -f acces-proxmox/plan.tfplan
 ```
-(La MR est relue **avant** l'apply, sur le plan joint en commentaire ; l'état `acces-proxmox` n'est pas appliqué par la CI : la CI n'a pas, et ne doit pas avoir, de jeton capable de changer les droits de l'hyperviseur.) Le compromis : un jeton `root@pam` de 30 minutes, créé et supprimé sous tes yeux, vaut mieux qu'un jeton d'automatisation permanent avec `Permissions.Modify` sur `/` (qui équivaut à l'administration complète de l'hyperviseur).
+(Apostrophes autour de `root@pam!realm-oidc=` : entre guillemets doubles, le shell interactif prendrait `!realm` pour un rappel de l'historique, « event not found ». La MR est relue **avant** l'apply, sur le plan joint en commentaire ; l'état `acces-proxmox` n'est pas appliqué par la CI : la CI n'a pas, et ne doit pas avoir, de jeton capable de changer les droits de l'hyperviseur.) Le compromis : un jeton `root@pam` de 30 minutes, créé et supprimé sous tes yeux, vaut mieux qu'un jeton d'automatisation permanent avec `Permissions.Modify` sur `/` (qui équivaut à l'administration complète de l'hyperviseur).
 
 Connexions : `<MOI>@medisphere` (membre de `plateforme-admins-medisphere` et `plateforme-medisphere`, rôle `PVEAdmin` sur `/`), `lucas.martin@medisphere` (`plateforme-medisphere`, `PVEAuditor` : il voit tout, n'arrête rien ; le bouton *Shutdown* répond « Permission check failed »). `wb-admin@pve` désactivé (`pveum user modify wb-admin@pve --enable 0`) : pas supprimé, pour garder le lien entre son nom et l'historique des tâches et des journaux.
 
@@ -471,7 +471,7 @@ Proxmox VE et PBS derrière l'OTP de Keycloak (E21) ; TFA locale exigée sur `ro
 Fichiers : [`clients-kubernetes.tf`](fichiers/M24-E16/identite/tofu/clients-kubernetes.tf) ; dans `plateforme/ansible` : rôle [`k8s_authentification`](fichiers/M24-E16/ansible/roles/k8s_authentification/) ([`defaults`](fichiers/M24-E16/ansible/roles/k8s_authentification/defaults/main.yml), [`tasks`](fichiers/M24-E16/ansible/roles/k8s_authentification/tasks/main.yml), [`config.yaml.j2`](fichiers/M24-E16/ansible/roles/k8s_authentification/templates/config.yaml.j2)), [`group_vars/k8s_plan_controle/authentification.yml`](fichiers/M24-E16/ansible/inventories/lab/group_vars/k8s_plan_controle/authentification.yml), [`playbooks/k8s-api-fichiers.yml`](fichiers/M24-E16/ansible/playbooks/k8s-api-fichiers.yml) ; dans `plateforme/k8s` : [`cluster/kubeadm-config.yaml.extrait`](fichiers/M24-E16/k8s/cluster/kubeadm-config.yaml.extrait), [`outils/kubeconfig-oidc.sh`](fichiers/M24-E16/k8s/outils/kubeconfig-oidc.sh), [`rbac/wb-checks-securite.yaml`](fichiers/M24-E16/k8s/rbac/wb-checks-securite.yaml) ; documentation : [`acces.md.extrait`](fichiers/M24-E16/medisphere/docs/kubernetes/acces.md.extrait).
 
 *A.* Notes attendues :
-- **Préfixe `oidc:`** : sans lui, un groupe `system:masters` créé dans l'annuaire donnerait les pleins pouvoirs sans passer par le RBAC, et un utilisateur `kubernetes-admin` se ferait passer pour celui d'`admin.conf`. Avec lui, tout ce qui vient de Keycloak est dans un espace de noms à part ; les `userValidationRules` refusent en plus tout nom en `system:`.
+- **Préfixe `oidc:`** : sans lui, un groupe `system:masters` créé dans l'annuaire donnerait les pleins pouvoirs sans passer par le RBAC, et un utilisateur `kubernetes-admin` se ferait passer pour celui d'`admin.conf`. Avec lui, tout ce qui vient de Keycloak est dans un espace de noms à part ; les `userValidationRules` (appliquées à l'identité finale, préfixe compris) refusent en plus tout nom en `system:` : redondantes tant que le préfixe est là, elles sont le filet du jour où quelqu'un le retirerait.
 - **Ce que vérifie le serveur d'API** : signature de l'ID token avec les clés du JWKS (récupérées par la découverte et gardées en cache), `iss` = l'URL de l'émetteur, `aud` contient `kubernetes`, `exp` et `nbf`, puis les `claimValidationRules` (CEL sur `claims`), la correspondance (`username`, `groups`, `uid`), enfin les `userValidationRules` (CEL sur `user`).
 - **La racine dans le fichier** : kube-apiserver tourne dans un conteneur dont l'image a son propre magasin, sans la racine MédiSphère ; `certificateAuthority` est la seule ancre qu'il utilisera pour joindre `sso`.
 - **Option mélangée** : `--authentication-config` et une option `--oidc-*` ensemble, et le serveur d'API refuse de démarrer (« authentication-config file and oidc-* flags are mutually exclusive ») : un tiers du plan de contrôle perdu par nœud reconfiguré.
@@ -623,7 +623,7 @@ OK     intrus          system:masters     kube-system         list    secrets   
 Matrice conforme au modèle d'autorisation.
 ```
 
-`--as` seul n'apporte que l'utilisateur ; kube-apiserver n'invente pas ses groupes (ils viendraient du jeton) : il faut `--as-group` pour chacun (`system:authenticated` est ajouté d'office). Usurper une identité exige le verbe `impersonate` sur `users` et `groups` : `cluster-admin` l'a ; c'est un droit d'administration complet (on devient n'importe qui, `system:masters` compris), à ne donner qu'aux administrateurs. Le cas `system:masters` : un groupe de ce nom dans l'annuaire arrive **préfixé** (`oidc:system:masters`), n'a aucune liaison, donc aucun droit ; et la règle CEL d'E16 refuse de toute façon un groupe qui commence par `system:`.
+`--as` seul n'apporte que l'utilisateur ; kube-apiserver n'invente pas ses groupes (ils viendraient du jeton) : il faut `--as-group` pour chacun (`system:authenticated` est ajouté d'office). Usurper une identité exige le verbe `impersonate` sur `users` et `groups` : `cluster-admin` l'a ; c'est un droit d'administration complet (on devient n'importe qui, `system:masters` compris), à ne donner qu'aux administrateurs. Le cas `system:masters` : un groupe de ce nom dans l'annuaire arrive **préfixé** (`oidc:system:masters`), n'a aucune liaison, donc aucun droit. Les `userValidationRules` d'E16 ne le refusent **pas** : elles portent sur l'identité **finale**, préfixe compris, et `oidc:system:masters` ne commence pas par `system:`. Elles ne servent que de filet si le préfixe disparaissait un jour (`prefix: ""`) ; refuser le groupe dès le jeton demanderait une `claimValidationRule` sur `claims.groups`.
 
 Le jeton réel de Lucas sans toucher au tien :
 

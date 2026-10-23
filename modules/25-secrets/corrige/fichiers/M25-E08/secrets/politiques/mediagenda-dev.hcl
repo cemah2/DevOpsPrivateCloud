@@ -6,8 +6,10 @@ path "kv/data/mediagenda/dev/*" {
 }
 
 # Le « * » couvre aussi la chaîne vide : cette règle permet de lister kv/metadata/mediagenda/dev/.
+# Pas de « delete » ici : supprimer les MÉTADONNÉES efface le secret et TOUTES ses versions, sans
+# retour possible (c'est une destruction, comme kv/destroy).
 path "kv/metadata/mediagenda/dev/*" {
-  capabilities = ["read", "list", "delete"]
+  capabilities = ["read", "list"]
 }
 
 # Voir quels environnements existent (dev/, recette/, prod/), sans rien y lire. Une LISTE vise le

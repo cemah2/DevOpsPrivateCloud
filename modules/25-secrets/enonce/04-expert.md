@@ -40,7 +40,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 | Configuration | `plateforme/secrets` (OpenTofu, pipeline authentifié par le rôle `ci-plateforme-secrets` ; bris de glace : `tofu apply` depuis `adm01`, M25-E10) ; `plateforme/ansible` (`playbooks/coffre.yml`, rôles `openbao`, `openbao_kms`, `pare_feu_local`, `keepalived`, `certificats_acme`) |
 | Audit | dispositif déclaratif `audit "file" "fichier"` dans `openbao.hcl`, **identique sur les trois nœuds**, `/var/log/openbao/audit.log` → Alloy → Loki (`audit`, `{service="openbao"}`) ; règles du ruler de M25-E21 (`OpenBaoPolitiqueModifiee`…) |
 | Alertes | `regles/secrets.yaml` (M25-E27) : `OpenBaoScelle`, `OpenBaoSansLeader`, `OpenBaoToleranceNulle`, `OpenBaoAuditEnEchec`, `OpenBaoBauxNombreux`, `OpenBaoInstantaneEnRetard`, `CertificatServicesExpireBientot` |
-| Consommateurs | CI : méthode `gitlab/` (`jwt`), rôles `ci-<groupe>-<projet>`, composant `securite` v2.9.0 ; ESO 2.13 : ClusterSecretStore `openbao`, SecretStore `openbao` par espace (rôles `eso-<espace>`, méthode `k8s-par1`) ; MédiAgenda : `db-mediagenda/`, baux d'1 h, ExternalSecret rafraîchis toutes les 30 min, Reloader ; PKI : `pki-services/`, rôle `services-k8s`, ClusterIssuer `openbao-services`, certificats de 48 h |
+| Consommateurs | CI : méthode `gitlab/` (`jwt`), rôles `ci-<groupe>-<projet>`, composant `securite` v2.10.0 (job caché `.openbao-connexion` de la v2.9.0, signature par `transit` depuis M25-E20) ; ESO 2.13 : ClusterSecretStore `openbao`, SecretStore `openbao` par espace (rôles `eso-<espace>`, méthode `k8s-par1`) ; MédiAgenda : `db-mediagenda/`, baux d'1 h, ExternalSecret rafraîchis toutes les 30 min, Reloader ; PKI : `pki-services/`, rôle `services-k8s`, ClusterIssuer `openbao-services`, certificats de 48 h |
 | Jetons des pannes | `BAO_TOKEN` exporté, sinon `~/.vault-token` (`plateforme-admin`, ≥ 20 min) ; `BAO_KMS_TOKEN` (facultatif, M25-E42 et E43) |
 | Documentation | journaux `docs/socle/journal/AAAA-MM-JJ-INC-52XX.md`, post-mortem `docs/socle/post-mortems/AAAA-MM-JJ-INC-5243.md` ; fiches réflexes dans `docs/securite/secrets/` ; RB-250 (fuite), RB-251 (descellement), RB-252 (restauration), RB-255 (coffre fermé, M25-E43) |
 | Tickets | INC-5235 à INC-5243 (pannes), PLAT-2644 (E44), SEC-2645 (E45) |
@@ -121,7 +121,7 @@ Depuis le nœud, interroge-le comme le fait keepalived : `curl --cacert /usr/loc
 ### M25-E36 — Panne : la CI ne lit plus ses secrets  `BF` `★★★`
 
 > **Ticket INC-5236** — *De : Julien Petit*
-> Le pipeline de `main` de `mediagenda/api` est rouge depuis ce matin : `securite:signature` s'arrête à l'étape OpenBao, avant même de signer. On n'a rien poussé depuis hier midi, le composant `securite` est toujours en v2.9.0, et relancer le job ne change rien. On a une mise en recette prévue à 14 h. *(Le détail s'affiche à l'injection.)*
+> Le pipeline de `main` de `mediagenda/api` est rouge depuis ce matin : `securite:verification` s'arrête à l'étape OpenBao, avant même de vérifier les signatures. On n'a rien poussé depuis hier midi, le composant `securite` n'a pas changé de version, et relancer le job ne change rien. On a une mise en recette prévue à 14 h. *(Le détail s'affiche à l'injection.)*
 
 **Objectifs pédagogiques**
 - Lire un échec de connexion par jeton d'identité : distinguer un refus **à la connexion** (méthode, rôle, revendications) d'un refus **à la lecture** (politique), à partir du seul journal du job.
@@ -129,7 +129,7 @@ Depuis le nœud, interroge-le comme le fait keepalived : `curl --cacert /usr/loc
 - Délimiter la panne (un rôle, une méthode, tous les projets ?) avant de toucher à quoi que ce soit, et retrouver l'écriture fautive dans l'audit.
 - Corriger par le code, y compris quand le pipeline qui applique la configuration est lui-même touché, et mettre en place un contrôle de dérive.
 
-**Prérequis** : M25-E10 (méthode `gitlab/`, composant `securite` v2.9.0), M25-E21 (audit dans Loki) ; `lab/bin/check 25 10` vert et dernier pipeline de `main` de `mediagenda/api` vert avant l'injection.
+**Prérequis** : M25-E10 (méthode `gitlab/`, job `.openbao-connexion` du composant `securite`), M25-E20, M25-E21 (audit dans Loki) ; `lab/bin/check 25 10` vert et dernier pipeline de `main` de `mediagenda/api` vert avant l'injection.
 **Durée indicative** : 45 min (temps cible).
 
 **Contexte technique**
@@ -143,7 +143,7 @@ Depuis le nœud, interroge-le comme le fait keepalived : `curl --cacert /usr/loc
 **Injection** : `lab/bin/break 25 36` (4 variantes).
 
 **Travail demandé**
-1. **Lis l'échec.** Dans le journal du job `securite:signature`, relève le message exact renvoyé par OpenBao (code HTTP compris). La connexion a-t-elle réussi ? Si oui, avec quelles politiques ? Formule une hypothèse par **étape** de la chaîne (clés, émetteur, audience, revendications, politiques) et dis laquelle le message désigne.
+1. **Lis l'échec.** Dans le journal du job `securite:verification`, relève le message exact renvoyé par OpenBao (code HTTP compris). La connexion a-t-elle réussi ? Si oui, avec quelles politiques ? Formule une hypothèse par **étape** de la chaîne (clés, émetteur, audience, revendications, politiques) et dis laquelle le message désigne.
 2. **Délimite.** Les autres projets migrés en M25-E10 (`medidoc/medidoc`, le pipeline de `plateforme/secrets`) se connectent-ils encore ? Relance au besoin un job qui lit le coffre. Conclus : panne de la **méthode** ou d'un **rôle** ? Vérifie aussi que le coffre est descellé et que `main` est toujours protégée dans `mediagenda/api`.
 3. **Compare la configuration à la référence.** Lis la méthode et le rôle **au format JSON** (pas en tableau), confronte chaque champ à `tofu/auth-gitlab.tf` et lance `tofu plan` en lecture. Pour l'écart trouvé, explique **pourquoi** il produit exactement ce message (ou ce refus de lecture).
 4. **Trouve l'écriture.** Dans l'audit, retrouve la requête qui a modifié la méthode ou le rôle : heure, chemin, auteur (ici ton propre jeton : l'injection l'utilise). L'alerte `OpenBaoPolitiqueModifiee` d'E21 a-t-elle sonné ? Pourquoi ?
@@ -153,7 +153,7 @@ Depuis le nœud, interroge-le comme le fait keepalived : `curl --cacert /usr/loc
 **Critères de réussite**
 - [ ] La méthode `gitlab/` est configurée par la découverte OIDC de `git01`, sans `jwks_url` ni clé recopiée, émetteur lié.
 - [ ] Le rôle `ci-mediagenda-api` lie l'audience `openbao.medisphere.internal`, `ref_protected` à la **chaîne** `"true"` avec le type `glob`, accepte `main` et `v*`, et porte la politique `ci-mediagenda-api` ; les autres rôles `ci-*` de M25-E10 lient la même audience et la même chaîne.
-- [ ] Le dernier pipeline de `main` de `mediagenda/api` est vert, signature comprise.
+- [ ] Le dernier pipeline de `main` de `mediagenda/api` est vert, signature et vérification comprises.
 - [ ] Le contrôle de dérive des rôles tourne dans la CI de `plateforme/secrets` ; ton journal de diagnostic (un fichier dont le nom contient `INC-5236`, dans `docs/socle/journal/`) cite le message exact du job et la cause.
 
 **Vérification** : `lab/bin/check 25 36`
@@ -342,7 +342,7 @@ Une connexion déjà ouverte survit à un changement de mot de passe comme à un
 
 <details><summary>Indice 1</summary>
 
-`sys/health` ne dépend pas d'un actif : chaque nœud répond pour lui-même (lis la page de l'API pour la signification de 200, 429, 503 et des paramètres qui changent ces codes). En revanche, presque tout le reste, `list-peers` et `autopilot state` compris, est **transmis** à l'actif par un nœud en attente. Et `sys/leader` d'un nœud en attente lit une information que ce nœud garde **localement** : demande-toi si elle a pu être mise à jour depuis que la grappe a perdu sa majorité.
+`sys/health` ne dépend pas d'un actif : chaque nœud répond pour lui-même (lis la page de l'API pour la signification de 200, 429, 503 et des paramètres qui changent ces codes). Un nœud en attente sert lui-même certaines **lectures** depuis sa copie locale de l'état (`list-peers` en fait partie : regarde bien la colonne `State`) ; tout ce qui écrit ou exige l'actif (`autopilot state`, une connexion, une écriture) est **transmis** à l'actif. Et `sys/leader` d'un nœud en attente lit une information que ce nœud garde **localement** : demande-toi si elle a pu être mise à jour depuis que la grappe a perdu sa majorité.
 </details>
 
 <details><summary>Indice 2</summary>
@@ -521,7 +521,7 @@ Deux familles de symptômes. Si le processus **s'arrête** au démarrage, l'erre
 `systemctl status openbao` affiche `start-limit-hit` : systemd a renoncé après `StartLimitBurst` essais. Une fois la cause corrigée, il faut lui dire de réessayer (`reset-failed`). Pour la politique : compare-la mot à mot avec le fichier versionné ; une politique peut aussi être **trop** restrictive pour le renouvellement du jeton lui-même (que fait le serveur pour garder son jeton vivant, et avec quel droit ?).
 </details>
 
-**Pour aller plus loin** (facultatif) : lis la page [*Seal High Availability*](https://openbao.org/docs/concepts/seal/) et chiffre ce qu'aurait apporté un second seal (un second `kms`, ou un seal `static` de secours gardé hors des nœuds) dans chacune des quatre variantes. Lequel des quatre maillons resterait un point unique ?
+**Pour aller plus loin** (facultatif) : OpenBao 2.7 n'accepte qu'un seal actif (un second bloc ne sert qu'à une migration, voir la page [seal](https://openbao.org/docs/concepts/seal/)) ; lis la description du *Seal High Availability* de Vault Enterprise et chiffre ce qu'aurait apporté un second seal (un second `kms`, ou un seal `static` de secours gardé hors des nœuds) dans chacune des quatre variantes. Lequel des quatre maillons resterait un point unique ?
 
 ---
 

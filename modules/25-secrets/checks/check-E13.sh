@@ -72,10 +72,13 @@ _m25o_e13_conf() {
   local c n
   c="$(_m25o_contenu "$_M25O_P_K8S" outils/secrets-k8s.conf)"
   [[ -n "$c" ]] || return 1
-  n="$(grep -Ev '^[[:space:]]*(#|$)' <<<"$c" | grep -Evc 'gitlab-runner-certs|medisphere-root-ca|fichier:')" || true
+  # Tolérés : l'amorçage (racine MédiSphère publique) et la clé Cosign, hors périmètre (retirée en M25-E20,
+  # vérifié par check-E20).
+  n="$(grep -Ev '^[[:space:]]*(#|$)' <<<"$c" | grep -Ev '^[[:space:]]*cosign-ci[[:space:]]' \
+    | grep -Evc 'gitlab-runner-certs|medisphere-root-ca')" || true
   [[ "$n" -eq 0 ]]
 }
-check_cmd "secrets-k8s.conf (main) : plus aucune ligne active hors amorçage (racine MédiSphère)" _m25o_e13_conf
+check_cmd "secrets-k8s.conf (main) : plus aucune ligne active hors amorçage (racine MédiSphère ; clé Cosign jusqu'à E20)" _m25o_e13_conf
 
 # --- Santé après migration -------------------------------------------------------------------------
 for _m25o_e13_app in kube-prometheus-stack loki tempo mediagenda-recette medidoc-recette; do

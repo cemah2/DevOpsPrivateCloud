@@ -7,16 +7,19 @@
 # développeuse MédiDoc, groupe medidoc), est créée DANS L'ANNUAIRE par le cadre de FreeIPA sur ipa01
 # (raccourci du workbook : en vrai elle arrive par RB-241 et annuaire/personnes.yml). Puis :
 #   1. le mot de passe du compte système svc-keycloak est changé dans l'annuaire (rotation commencée
-#      d'un côté seulement) : la fédération ne se lie plus (LDAP 49), ni synchronisation ni recherche ;
-#      les connexions qui exigent une lecture de l'annuaire échouent aussi ;
+#      d'un côté seulement), puis Keycloak est redémarré (« pour prendre en compte ») : la fédération
+#      ne se lie plus (LDAP 49), ni synchronisation ni recherche ; les connexions qui exigent une
+#      lecture de l'annuaire échouent aussi. Le redémarrage est nécessaire : Keycloak garde ses
+#      connexions LDAP déjà liées dans une réserve JNDI (connectionPooling, « plain ssl » par défaut,
+#      sans délai d'inactivité), qui continueraient de marcher avec l'ancien mot de passe ;
 #   2. le filtre des personnes de la fédération « gèle » l'import : (createTimestamp<=…) ajouté à
 #      (!(uid=admin)) : les personnes créées après cette date sont invisibles pour Keycloak, les autres
 #      ne voient rien ;
 #   3. le filtre du mappeur de groupes perd (cn=medidoc) (« groupe vide », dit Lucas) : la personne
 #      arrive dans Keycloak SANS groupe ; pour les services, elle n'a aucun droit.
 # Rien ne touche admin (annuaire), kc-secours, ni les comptes des personnages ou de l'apprenant.
-# Sauvegardes : empreinte du mot de passe de svc-keycloak (lue en root, rétablie telle quelle),
-# composants Keycloak exportés en JSON.
+# Sauvegardes : empreinte du mot de passe de svc-keycloak (lue en root, rétablie telle quelle, et
+# seulement si l'annuaire porte encore l'empreinte injectée), composants Keycloak exportés en JSON.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
@@ -45,7 +48,9 @@ PY
 read -r -d '' _E37_PY_DEPART <<'PY' || true
 try:
     u = api.Command.user_show(P["uid"], all=True)["result"]
-    if "M24-E37" in " ".join(u.get("title", [])):
+    t = u.get("title", [])
+    t = [t] if isinstance(t, str) else [str(x) for x in t]
+    if "M24-E37" in " ".join(t):
         api.Command.user_del(P["uid"])
         sortie({"etat": "supprime"})
     else:
@@ -77,10 +82,13 @@ _e37_arrivee() {
 }
 
 _e37_mdp() { m24_ipa_py "$_E37_PY_MDP" "$1" | tail -n 1; }
+# _e37_mdp_lire — empreinte(s) actuelle(s) du mot de passe de svc-keycloak (JSON compact, vide si illisible).
+_e37_mdp_lire() { _e37_mdp "$(jq -nc --arg d "$_E37_DN_SVC" '{dn: $d, action: "lire"}')" | jq -c '.hash // empty' 2>/dev/null || true; }
 
 # --- Keycloak ----------------------------------------------------------------------------------------
 
 # _e37_lie_ldap [DEPUIS] — Keycloak a tenté une liaison avec svc-keycloak et l'annuaire l'a refusée (code 49).
+# DEPUIS est une heure d'idp01 (m24_heure), pas d'adm01.
 _e37_lie_ldap() {
   local d="${1:-$(m24_lire E37 depuis)}"
   m24_ssh "$_M24_IDP" "journalctl -u keycloak --since @$d --no-pager -o cat | grep -Eqi 'error code 49|Invalid Credentials'"
@@ -92,13 +100,16 @@ _m24E37_une() {
   [[ -n "$l" ]] || return 10
   lid="$(jq -r .id <<<"$l")"
   m24_ecrire E37 variante "$n"
-  m24_ecrire E37 depuis "$(m24_maintenant)"
+  m24_ecrire E37 depuis "$(m24_heure "$_M24_IDP" || m24_maintenant)"
   case "$n" in
     1)
-      h="$(_e37_mdp "$(jq -nc --arg d "$_E37_DN_SVC" '{dn: $d, action: "lire"}')" | jq -c '.hash // empty')" || h=""
+      h="$(_e37_mdp_lire)"
       [[ -n "$h" && "$h" != "[]" ]] || return 10
       m24_ecrire E37 hash-svc "$h"
       _e37_mdp "$(jq -nc --arg d "$_E37_DN_SVC" '{dn: $d, action: "changer"}')" | grep -q change || return 1
+      m24_ecrire E37 hash-injecte "$(_e37_mdp_lire)"
+      # Vider la réserve de connexions LDAP déjà liées (voir l'en-tête).
+      m24_kc_redemarrer || return 1
       ;;
     2)
       filtre="$(jq -r '.config.customUserSearchFilter[0] // ""' <<<"$l")"
@@ -156,16 +167,22 @@ annuler_E37() {
     1)
       h="$(m24_lire E37 hash-svc)"
       if [[ -n "$h" ]]; then
-        # Rétablit l'empreinte d'origine (le mot de passe du Vault critique redevient valable), mais
-        # seulement si la liaison de Keycloak échoue ENCORE maintenant : une rotation complète faite par
-        # l'apprenant (annuaire + Vault + OpenTofu) n'est jamais défaite.
-        t="$(m24_maintenant)"
-        lid="$(m24_kc_ldap 2>/dev/null | jq -r '.id // empty' 2>/dev/null || true)"
-        if [[ -n "$lid" ]]; then m24_kc_synchro "$lid" triggerChangedUsersSync; fi
-        sleep 5
-        if _e37_lie_ldap "$t" 2>/dev/null; then
-          _e37_mdp "$(jq -nc --arg d "$_E37_DN_SVC" --argjson h "$h" '{dn: $d, action: "remettre", hash: $h}')" >/dev/null 2>&1 ||
+        # Rétablit l'empreinte d'origine (le mot de passe du Vault critique redevient valable) seulement
+        # si l'annuaire porte ENCORE l'empreinte injectée (ou, injection interrompue avant sa lecture,
+        # une empreinte différente de l'origine) : un mot de passe remis ou tourné par l'apprenant
+        # (annuaire + Vault + OpenTofu) n'est jamais défait. Sans danger après une injection ratée.
+        k="$(m24_lire E37 hash-injecte)"
+        t="$(_e37_mdp_lire)"
+        if [[ -n "$t" ]] && { [[ -n "$k" && "$t" == "$k" ]] || [[ -z "$k" && "$t" != "$h" ]]; }; then
+          if _e37_mdp "$(jq -nc --arg d "$_E37_DN_SVC" --argjson h "$h" '{dn: $d, action: "remettre", hash: $h}')" | grep -q remis; then
+            lid="$(m24_kc_ldap 2>/dev/null | jq -r '.id // empty' 2>/dev/null || true)"
+            if [[ -n "$lid" ]]; then m24_kc_synchro "$lid" triggerChangedUsersSync; fi
+          else
             wb_avert "empreinte du mot de passe de svc-keycloak non rétablie (sauvegarde : $(m24_etat E37)/hash-svc)"
+          fi
+        elif [[ -z "$t" ]]; then
+          wb_avert "annuaire illisible : empreinte de svc-keycloak non vérifiée (sauvegarde : $(m24_etat E37)/hash-svc, conservée)"
+          return 0
         fi
       fi
       ;;
@@ -197,7 +214,7 @@ annuler_E37() {
     u="$(m24_kc_utilisateur "$_M24_ARRIVEE" 2>/dev/null | jq -r '.id // empty' 2>/dev/null || true)"
     if [[ -n "$u" ]]; then m24_kc DELETE "users/$u" >/dev/null 2>&1 || true; fi
   fi
-  for k in variante depuis hash-svc filtre-injecte arrivee; do m24_oublier E37 "$k"; done
+  for k in variante depuis hash-svc hash-injecte filtre-injecte arrivee; do m24_oublier E37 "$k"; done
   m24_kc_oublier E37 ldap
   m24_kc_oublier E37 mappeur
   m24_journal E37 "annulation"

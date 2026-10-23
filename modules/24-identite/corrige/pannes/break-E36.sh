@@ -108,9 +108,15 @@ annuler_E36() {
   for noeud in "${_M24_CP[@]}"; do
     if [[ -n "$v" ]]; then
       avant="$(_e36_lire "$noeud" 2>/dev/null || true)"
+      if [[ -z "$avant" ]]; then
+        # Nœud injoignable ou fichier illisible : la sauvegarde reste dans /var/lib/workbook.
+        wb_avert "$noeud : fichier d'authentification non relu, rien rétabli (sauvegarde M24-E36 gardée dans /var/lib/workbook)"
+        continue
+      fi
       apres="$("_e36_i$v" <<<"$avant" 2>/dev/null || true)"
-      if [[ -n "$avant" && -n "$apres" && "$apres" != "$avant" ]]; then
-        _e36_ecrire "$noeud" "$apres" >/dev/null 2>&1 || wb_avert "$noeud : fichier d'authentification non rétabli (sauvegarde dans /var/lib/workbook)"
+      if [[ -n "$apres" && "$apres" != "$avant" ]] && ! _e36_ecrire "$noeud" "$apres" >/dev/null 2>&1; then
+        wb_avert "$noeud : fichier d'authentification non rétabli (sauvegarde M24-E36 gardée dans /var/lib/workbook)"
+        continue
       fi
     fi
     m24_wb_exec "$noeud" <<'EOF' >/dev/null 2>&1 || true

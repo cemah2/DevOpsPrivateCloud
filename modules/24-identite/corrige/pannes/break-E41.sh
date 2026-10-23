@@ -157,7 +157,7 @@ resume_E41() { echo "L'interface de Mailpit (mon01:8443) renvoie au SSO en boucl
 symptome_E41() {
   local detail
   case "$WB_VAR" in
-    1) detail="J'ouvre https://mon01.par1.medisphere.internal:8443, je passe par Keycloak (OTP compris), je reviens… sur « Login Failed: Unable to find a valid CSRF token. Please try again. » Je réessaie : pareil, en boucle." ;;
+    1) detail="J'ouvre https://mon01.par1.medisphere.internal:8443, je passe par Keycloak, je reviens… sur « Login Failed: Unable to find a valid CSRF token. Please try again. » Je réessaie : pareil, en boucle." ;;
     2) detail="J'ouvre https://mon01.par1.medisphere.internal:8443 et j'arrive directement sur une page d'erreur de Keycloak, sans formulaire de connexion." ;;
     *) detail="J'ouvre https://mon01.par1.medisphere.internal:8443, je me connecte, et je me retrouve sur hubble.apps… avec « Login Failed ». Je reviens sur Mailpit : rebelote." ;;
   esac

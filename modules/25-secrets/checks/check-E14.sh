@@ -33,18 +33,19 @@ check_cmd "connexion mediagenda-prod : 10.10.41.65, compte openbao, certificat v
 check_cmd "connexion mediagenda-recette : politique de mot de passe déclarée" \
   _m25o_json "$(_m25o_bao db-mediagenda/config/mediagenda-recette)" '(.data.password_policy // "") != ""'
 
-# _m25o_e14_role NOM 'regex création' — TTL 1 h, max 24 h, connexion, instructions.
+# _m25o_e14_role NOM 'regex création' ['regex interdite'] — TTL 1 h, max 24 h, connexion, instructions.
 _m25o_e14_role() {
-  _m25o_json "$(_m25o_bao "db-mediagenda/roles/$1")" --arg re "$2" '
+  _m25o_json "$(_m25o_bao "db-mediagenda/roles/$1")" --arg re "$2" --arg non "${3:-^\$}" '
     .data.default_ttl == 3600 and .data.max_ttl == 86400
     and (.data.creation_statements | join(" ") | test($re; "i"))
     and (.data.creation_statements | join(" ") | test("VALID UNTIL"; "i"))
     and (.data.creation_statements | join(" ") | test("SUPERUSER|CREATEROLE|CREATEDB"; "i") | not)
+    and (.data.creation_statements | join(" ") | test($non; "i") | not)
     and ((.data.revocation_statements // []) | join(" ") | test("DROP ROLE"; "i"))'
 }
 for _m25o_e14_env in recette prod; do
-  check_cmd "rôle mediagenda-api-$_m25o_e14_env : 1 h / 24 h, membre de mediagenda_api, révoqué par DROP ROLE" \
-    _m25o_e14_role "mediagenda-api-$_m25o_e14_env" 'IN ROLE "?mediagenda_api"?'
+  check_cmd "rôle mediagenda-api-$_m25o_e14_env : 1 h / 24 h, membre de mediagenda_api (pas du propriétaire), révoqué par DROP ROLE" \
+    _m25o_e14_role "mediagenda-api-$_m25o_e14_env" 'IN ROLE "?mediagenda_api"?' 'IN ROLE[^;]*\bmediagenda\b"?([^_]|$)'
   check_cmd "rôle mediagenda-migrateur-$_m25o_e14_env : 1 h / 24 h, objets créés au nom de mediagenda" \
     _m25o_e14_role "mediagenda-migrateur-$_m25o_e14_env" "SET +role *(=|TO) *'?\"?mediagenda'?\"?"
 done

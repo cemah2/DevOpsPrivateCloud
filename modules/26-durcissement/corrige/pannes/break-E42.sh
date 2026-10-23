@@ -56,7 +56,7 @@ kind: Deployment
 metadata:
   name: wb-mineur
   namespace: $_E42_NS
-  labels: {app.kubernetes.io/name: wb-mineur, medisphere.internal/panne: M26-E42}
+  labels: {app.kubernetes.io/name: wb-mineur, medisphere.internal/equipe: plateforme, medisphere.internal/panne: M26-E42}
 spec:
   replicas: 1
   selector: {matchLabels: {app.kubernetes.io/name: wb-mineur}}
@@ -83,12 +83,12 @@ kind: CronJob
 metadata:
   name: wb-persistance
   namespace: $_E42_NS
-  labels: {medisphere.internal/panne: M26-E42}
+  labels: {medisphere.internal/equipe: plateforme, medisphere.internal/panne: M26-E42}
 spec:
   schedule: "*/1 * * * *"
   concurrencyPolicy: Forbid
   jobTemplate:
-    metadata: {labels: {medisphere.internal/panne: M26-E42}}
+    metadata: {labels: {medisphere.internal/equipe: plateforme, medisphere.internal/panne: M26-E42}}
     spec:
       template:
         metadata: {labels: {app.kubernetes.io/name: wb-persistance, medisphere.internal/equipe: plateforme, medisphere.internal/panne: M26-E42}}

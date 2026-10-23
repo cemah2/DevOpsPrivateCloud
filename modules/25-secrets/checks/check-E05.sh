@@ -29,8 +29,8 @@ check_cmd "mediagenda-dev : écriture dans kv/data/mediagenda/dev/*" _m25d_e05_u
   mediagenda-dev '^kv/data/mediagenda/dev/\* .*"(create|update)"'
 check_cmd "mediagenda-dev : rien sur recette ni prod, aucun chemin global (*, kv/*, kv/data/*)" _m25d_e05_aucune_regle \
   mediagenda-dev '^(\*|\+)|^kv/(data/|metadata/)?(\*|\+)|mediagenda/(recette|prod)'
-check_cmd "mediagenda-dev : ni destruction définitive (kv/destroy), ni sudo" _m25d_e05_aucune_regle \
-  mediagenda-dev '^kv/destroy|"sudo"'
+check_cmd "mediagenda-dev : ni destruction définitive (kv/destroy, suppression des métadonnées), ni sudo" \
+  _m25d_e05_aucune_regle mediagenda-dev '^kv/destroy|^kv/metadata/[^ ]* .*"delete"|"sudo"'
 check_cmd "plateforme-lecture : aucune valeur de secret (pas de kv/data)" _m25d_e05_aucune_regle \
   plateforme-lecture '^kv/(data|\*|\+)'
 check_cmd "plateforme-lecture : aucune écriture (create, delete, sudo ; update seulement pour capabilities-self)" \

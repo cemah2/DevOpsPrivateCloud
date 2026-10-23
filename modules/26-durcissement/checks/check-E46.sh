@@ -27,14 +27,18 @@ _e46_score_cible() {
   local v; v="$(_m26x_conformite_val 'min(medisphere_conformite_score{referentiel=~".*cis.*l1.*|.*cis_l1.*"})')"
   [[ -n "$v" ]] && awk -v x="$v" 'BEGIN{exit !((x>=85 && x<=100) || (x>=0.85 && x<=1))}'
 }
+# L'analyse la PLUS ANCIENNE (min) a moins de 8 jours, et aucun hôte supervisé n'est sans analyse.
 _e46_analyse_fraiche() {
-  local t; t="$(_m26x_conformite_val 'time() - max(medisphere_conformite_derniere_analyse_secondes)')"
-  [[ -z "$t" ]] || awk -v x="$t" 'BEGIN{exit !(x < 691200)}'
+  local t n
+  t="$(_m26x_conformite_val 'time() - min(medisphere_conformite_derniere_analyse_secondes)')"
+  [[ -n "$t" ]] && awk -v x="$t" 'BEGIN{exit !(x < 691200)}' || return 1
+  n="$(_m26x_conformite_val 'count((up{job=~"vms|node-exporter"} == 1) unless on (instance) medisphere_conformite_derniere_analyse_secondes) or vector(0)')"
+  [[ "${n%.*}" == 0 ]]
 }
 check_cmd "métrique de conformité exposée (medisphere_conformite_score)" _e46_conformite_exposee
 check_cmd "score CIS niveau 1 ≥ 85 % hors exceptions" _e46_score_cible
 check_cmd "registre des exceptions présent et commité (exceptions.md)" _m26x_doc_commite "docs/securite/durcissement/exceptions.md"
-check_cmd "analyse de conformité récente (< 8 jours)" _e46_analyse_fraiche
+check_cmd "chaque hôte supervisé a une analyse de conformité de moins de 8 jours" _e46_analyse_fraiche
 
 # --- 3. Admission --------------------------------------------------------------------------------------
 title "M26-E46 — 3/6 Admission"
@@ -72,13 +76,23 @@ check_cmd "pipeline de main de plateforme/politiques vert" _m26x_pipeline_main_v
 # --- 4. Détection --------------------------------------------------------------------------------------
 title "M26-E46 — 4/6 Détection à l'exécution"
 _e46_falco_couvre() {
-  _m26x_kq '.status.desiredNumberScheduled == (.status.numberReady // 0) and .status.desiredNumberScheduled > 1' -n "$_m26x_ns_falco" daemonset falco
+  local n
+  n="$(kube get nodes -o name 2>/dev/null | grep -c .)" || n=0
+  ((n > 0)) && _m26x_kq ".status.desiredNumberScheduled == $n and (.status.numberReady // 0) == $n" \
+    -n "$_m26x_ns_falco" daemonset falco
 }
-_e46_loki_audit() { loki_requete '{service=~"falco|tetragon|auditd"}' audit 6h 2>/dev/null | jq -e '.status == "success"' >/dev/null 2>&1; }
+# Des événements récents des trois sources (pas seulement « Loki répond »).
+_e46_loki_audit() {
+  local s
+  for s in falco tetragon auditd; do
+    loki_requete "{service=\"$s\"}" audit 24h 2>/dev/null |
+      jq -e '.status == "success" and ([.data.result[]?.values[]?] | length > 0)' >/dev/null 2>&1 || return 1
+  done
+}
 check_cmd "Falco couvre tous les nœuds" _e46_falco_couvre
 check_cmd "Application Argo CD « falco » Synced/Healthy" _m26x_app_ok falco
 check_cmd "Application Argo CD « tetragon » Synced/Healthy" _m26x_app_ok tetragon
-check_cmd "journaux de sécurité dans Loki (locataire audit)" _e46_loki_audit
+check_cmd "journaux de sécurité récents dans Loki (falco, tetragon, auditd ; locataire audit)" _e46_loki_audit
 
 # --- 5. Chiffrement et kubelets ------------------------------------------------------------------------
 title "M26-E46 — 5/6 Chiffrement et kubelets"

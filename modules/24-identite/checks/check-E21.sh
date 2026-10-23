@@ -78,7 +78,7 @@ check_cmd "L'enrôlement OTP est activé mais pas imposé à tous par défaut" _
 # admin-cli (client intégré de chaque royaume) est traité au durcissement (M24-E27) : son flux « direct
 # grant » par défaut exige déjà l'OTP de qui en a un.
 check_cmd "Aucun client MédiSphère n'accepte les Direct Access Grants (mot de passe sans formulaire ni OTP)" \
-  _m24c_json "$(_m24c_kc "clients?max=500")" \
+  _m24c_json "$(_m24c_kc "clients?max=500" | jq -c 'map(del(.secret))' 2>/dev/null || true)" \
   'length > 0 and ([.[] | select(.directAccessGrantsEnabled == true and .clientId != "admin-cli")] | length == 0)'
 
 # --- 5. Le code ---------------------------------------------------------------------------------------

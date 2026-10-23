@@ -10,10 +10,17 @@ source "$(dirname "${BASH_SOURCE[0]}")/_m26-expert.sh"
 title "M26-E35 — Les déploiements passent de nouveau en recette"
 require_cmd jq kubectl
 
-_e35_pas_de_garde() { _m26x_vp_sans_condition exiger-change && _m26x_vp_sans_condition garde-recette; }
+_e35_pas_de_garde() {
+  _m26x_vp_sans_condition garde-recette &&
+    _m26x_kq '[.items[]? | .spec.validations[]? | select((.message // "") | test("SEC-2735|ticket de changement"))] | length == 0' \
+      validatingpolicies.policies.kyverno.io
+}
+# Aucune politique en « Fail » dont une condition ou le sélecteur vise spécialement la recette.
 _e35_pas_de_fail_recette() {
-  _m26x_kq '[.items[]? | select((.spec.failurePolicy // "Ignore") == "Fail")
-            | select((.spec.matchConstraints.namespaceSelector.matchLabels["kubernetes.io/metadata.name"] // "") == "mediagenda-recette")] | length == 0' \
+  _m26x_kq '[.items[]? | select(.spec.failurePolicy == "Fail")
+            | select(((.spec.matchConditions // []) | any(.expression | test("mediagenda-recette")))
+                     or ((.spec.matchConstraints.namespaceSelector.matchLabels["kubernetes.io/metadata.name"] // "") == "mediagenda-recette"))]
+            | length == 0' \
     validatingpolicies.policies.kyverno.io
 }
 _e35_pas_de_refus_total() {

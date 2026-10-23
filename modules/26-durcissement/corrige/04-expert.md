@@ -42,21 +42,28 @@ admin@adm01:~$ kubectl get policyreports -n mediagenda-recette -o wide
 
 Un message `admission webhook "validate.kyverno.svc" denied the request` (ou une `ComparisonError`/`SyncFailed` qui le cite) classe la panne comme **refus**. Des pods `Running 0/1` sans refus classent comme **sondes** (variante GeneratingPolicy).
 
-**Variante 1 — politique d'audit passée en Deny avec une condition trop large.**
+**Variante 1 — une validation de trop, trop large pour la recette.**
 
 ```
-admin@adm01:~$ kubectl get validatingpolicy exiger-etiquettes -o yaml | yq '.spec.validationActions, .spec.matchConditions'
+admin@adm01:~$ kubectl -n mediagenda-recette apply --dry-run=server -f charge-conforme.yaml
+Error from server: admission webhook "…kyverno.svc…" denied the request: … SEC-2735 (Lucas) : toute charge de la recette doit citer son ticket de changement …
+admin@adm01:~$ kubectl get validatingpolicy exiger-etiquettes -o yaml | yq '.spec.validationActions, .spec.validations'
 ```
 
-`validationActions: [Deny]` et une `matchCondition` ajoutée (`exiger-change` : exige une annotation `medisphere.internal/change` que les charges n'ont pas). `git log` de `plateforme/politiques` montre le commit `M26-E35` de `lucas.martin` (« refuser les charges sans ticket de changement »). Il a voulu tracer les changements, mais il a transformé un audit en blocage total. **Correctif** : MR qui remet `validationActions: [Audit]` tant que la règle n'est pas mûre, ou qui retire la condition. [`fichiers/M26-E35/politiques/kyverno/validation/exiger-etiquettes.yaml`](fichiers/M26-E35/politiques/kyverno/validation/exiger-etiquettes.yaml) montre l'état sain.
+Le message du refus nomme la politique et cite la validation ajoutée : `object.metadata.namespace != "mediagenda-recette" || <annotation medisphere.internal/change présente>`. La politique était déjà en `Deny` sur recette et prod ; Lucas lui a ajouté une exigence (annotation de ticket de changement) qu'aucune charge ne remplit, limitée à la recette. `git log` de `plateforme/politiques` montre le commit `M26-E35` de `lucas.martin` (« refuser les charges sans ticket de changement »). **Correctif** : MR (`revert`) qui retire la validation ; si l'intention est bonne, elle se réintroduit plus tard dans une politique **à part**, en `Audit` d'abord (lecture des `PolicyReport`), avec un test `kyverno test`. [`fichiers/M26-E35/politiques/kyverno/validation/exiger-etiquettes.yaml`](fichiers/M26-E35/politiques/kyverno/validation/exiger-etiquettes.yaml) montre l'état sain.
+
+À ne pas confondre : une **`matchCondition`** fausse ne refuse rien, elle fait **ignorer** la politique pour l'objet (c'est un filtre de portée, comme dans une `ValidatingAdmissionPolicy`). Mettre l'exigence dans une `matchCondition` aurait donc… retiré la politique des charges sans annotation.
 
 **Variante 2 — failurePolicy: Fail avec une condition CEL qui échoue.**
 
 ```
-admin@adm01:~$ kubectl get validatingpolicy exiger-etiquettes -o yaml | yq '.spec.failurePolicy, .spec.matchConstraints.namespaceSelector, .spec.matchConditions'
+admin@adm01:~$ kubectl get validatingpolicy exiger-etiquettes -o yaml | yq '.spec.failurePolicy, .spec.matchConditions'
+Fail
+- name: garde-recette
+  expression: object.metadata.namespace != "mediagenda-recette" || object.spec.template.metadata.labels.absent == "oui"
 ```
 
-`failurePolicy: Fail`, un `namespaceSelector` sur `mediagenda-recette`, et une condition (`garde-recette`) dont l'expression (`object.spec.template.metadata.labels.absent == "oui"`) **échoue** à l'évaluation (champ absent). En `Fail`, un échec d'évaluation vaut refus. **Correctif** : MR qui remet `failurePolicy: Ignore` pour une politique d'audit (ou corrige l'expression) et retire la condition. La leçon : `failurePolicy: Fail` est réservé aux politiques de **refus mûres et testées** (signature en prod), jamais à une politique dont l'expression peut échouer.
+`failurePolicy: Fail` et une condition (`garde-recette`) qui, pour la seule recette (ailleurs, la partie gauche du `||` est vraie et CEL ne va pas plus loin), lit un champ qui n'existe pas : pour un pod, `object.spec.template` n'existe même pas, pour un Deployment la clé `absent` non plus. L'évaluation **échoue** ; en `Fail`, un échec d'évaluation d'une `matchCondition` vaut refus. **Correctif** : MR (`revert`) qui retire la condition et remet la `failurePolicy` d'origine (`Ignore` pour cette politique d'étiquettes). La leçon : `failurePolicy: Fail` est réservé aux politiques de **refus mûres et testées** (signature en prod), jamais à une politique dont l'expression peut échouer ; une expression défensive s'écrit avec `has()`.
 
 **Variante 3 — GeneratingPolicy qui pose un refus réseau total.**
 
@@ -71,7 +78,7 @@ NAME          AGE
 refus-total   8m
 ```
 
-Une `CiliumNetworkPolicy` `refus-total` (posée à la main, annotation `medisphere.internal/auteur: lucas.martin`, ou générée par une `GeneratingPolicy` mal réglée) refuse **toute** entrée et sortie, y compris le DNS : les pods démarrent mais leurs `readinessProbe` échouent (pas de résolution, pas de dépendances). **Correctif** : retirer la politique manuelle (`kubectl delete cnp refus-total -n mediagenda-recette`) **et** traiter l'intention par le code — la `GeneratingPolicy` `networkpolicy-par-defaut` doit poser un refus par défaut qui **laisse sortir le DNS** (port 53 vers `kube-system`) et **entrer la collecte des sondes** et de `supervision`. Voir [`fichiers/M26-E35/politiques/kyverno/generation/networkpolicy-par-defaut.yaml`](fichiers/M26-E35/politiques/kyverno/generation/networkpolicy-par-defaut.yaml).
+Une `CiliumNetworkPolicy` `refus-total` (posée à la main, annotation `medisphere.internal/auteur: lucas.martin` ; une `GeneratingPolicy` mal réglée produirait la même chose) a des règles **vides** (`ingress: [{}]`, `egress: [{}]`) : une règle vide active le refus par défaut dans son sens sans rien autoriser. Toute sortie est refusée, DNS compris : les pods démarrent mais leurs `readinessProbe` échouent (pas de résolution, pas de base). Les sondes du kubelet, elles, viennent de l'hôte local, que Cilium laisse passer par défaut : c'est bien la **dépendance** qui manque, pas la sonde. **Correctif** : retirer la politique manuelle (`kubectl delete cnp refus-total -n mediagenda-recette`) **et** traiter l'intention par le code — la `GeneratingPolicy` `networkpolicy-par-defaut` doit poser un refus par défaut qui **laisse sortir le DNS** (port 53 vers `kube-system`) et **entrer la collecte des sondes** et de `supervision`. Voir [`fichiers/M26-E35/politiques/kyverno/generation/networkpolicy-par-defaut.yaml`](fichiers/M26-E35/politiques/kyverno/generation/networkpolicy-par-defaut.yaml).
 
 **Clôture commune** : charge conforme admise, pods `Ready`, `lab/bin/check 26 35`, puis `lab/bin/break 26 35 --annuler`.
 
@@ -135,10 +142,10 @@ Un `matchExpressions` `kubernetes.io/metadata.name NotIn [wb-pannes]` retire l'e
 ```
 admin@adm01:~$ kubectl get validatingpolicy registres-autorises -o yaml | yq '.spec.matchConditions'
 - name: sauf-admins
-  expression: '!("system:masters" in request.userInfo.groups)'
+  expression: '!("oidc:plateforme-admins" in request.userInfo.groups)'     # ton groupe d'administration
 ```
 
-Lucas a exempté `system:masters` « pour ne pas être bloqué en urgence ». Conséquence : tout ce qu'un administrateur soumet (y compris une image hors registre) passe. **Correctif** : MR qui retire la condition. La bonne réponse à « je suis bloqué en urgence » est une `PolicyException` ciblée et datée, pas une exemption de tout un groupe puissant.
+Lucas a exempté le groupe des administrateurs (celui que `kubectl auth whoami` te montre : `oidc:plateforme-admins` après le M24 ; `kubeadm:cluster-admins` pour `admin.conf` ; `system:masters` n'est plus porté que par `super-admin.conf`) « pour ne pas être bloqué en urgence ». Conséquence : tout ce qu'un administrateur soumet (y compris une image hors registre) passe. **Correctif** : MR qui retire la condition. La bonne réponse à « je suis bloqué en urgence » est une `PolicyException` ciblée et datée, pas une exemption de tout un groupe puissant.
 
 **Clôture** : charge d'essai non conforme **refusée** (`--dry-run=server`), `lab/bin/check 26 36`, `--annuler`.
 
@@ -291,12 +298,12 @@ root@nbx01:~# grep -R timestamp_timeout /etc/sudoers.d/
 
 *Symptômes* : un service `failed`, journal « permission denied » alors que les droits Unix sont bons.
 
-*Hypothèses* : AppArmor en *enforce* sans un chemin ; contexte SELinux faux ; unité systemd durcie (`ProtectSystem=strict` sans `ReadWritePaths`).
+*Hypothèses* : AppArmor en *enforce* sans un chemin ; contexte SELinux faux sur un fichier qu'un domaine confiné doit utiliser ; unité systemd durcie dont les exceptions ont été retirées.
 
 **Étape 1 — Quel service, quel refus ?**
 
 ```
-admin@adm01:~$ ssh mon01 systemctl --failed
+admin@adm01:~$ ssh mon01 systemctl --failed ; ssh ceph01 systemctl --failed
 admin@adm01:~$ ssh mon01 'journalctl -u mailpit --since -20min | tail'
 ```
 
@@ -304,29 +311,42 @@ admin@adm01:~$ ssh mon01 'journalctl -u mailpit --since -20min | tail'
 
 ```
 admin@adm01:~$ ssh mon01 'journalctl -k | grep -i apparmor | tail'
-… apparmor="DENIED" operation="open" name="/var/lib/mailpit/mailpit.db" … requested_mask="wr"
+… apparmor="DENIED" operation="open" profile="mailpit" name="/var/lib/mailpit/mailpit.db" … requested_mask="wrc"
+admin@adm01:~$ ssh mon01 'diff <(sudo cat /etc/apparmor.d/usr.local.bin.mailpit) <(…profil rendu par le rôle…)'
 ```
 
-Le profil en *enforce* n'autorise plus le répertoire de données. **Correctif** : ajouter la règle (`/var/lib/mailpit/** rwk,`) par `aa-logprof` (en *complain* puis *enforce*), **par le rôle** `durcissement`. Jamais `aa-disable`.
+Le profil en *enforce* n'autorise plus le répertoire de données (les lignes `/var/lib/mailpit/` ont disparu du fichier déployé). **Correctif** : rejouer le rôle `durcissement` (tag du domaine `mac`), qui redépose le profil versionné et le recharge ; si la règle manquait **dans le gabarit**, l'ajouter au gabarit (`/var/lib/mailpit/** rwk,`), au besoin après une observation en *complain* (`aa-logprof`). Jamais `aa-disable`.
 
-**Variante 2 — SELinux (node_exporter, Rocky).**
+**Variante 2 — SELinux (AIDE, hôte Rocky).**
 
 ```
-admin@adm01:~$ ssh ceph01 'getenforce; ausearch -m AVC -ts recent | tail'
+admin@adm01:~$ ssh ceph01 'getenforce; systemctl status aide-verification --no-pager | tail -3'
 Enforcing
-… avc: denied { read } for … name="key.pem" scontext=system_u:system_r:… tcontext=unconfined_u:object_r:user_tmp_t
+… aide-verification.service: Main process exited, code=exited, status=17/n/a
+admin@adm01:~$ ssh ceph01 'sudo ausearch -m AVC -ts recent | tail -2'
+… avc: denied { write } for comm="aide" name="aide" … scontext=system_u:system_r:aide_t:s0 tcontext=unconfined_u:object_r:user_tmp_t:s0 tclass=dir
+admin@adm01:~$ ssh ceph01 'ls -dZ /var/log/aide; matchpathcon /var/log/aide'
+unconfined_u:object_r:user_tmp_t:s0 /var/log/aide
+/var/log/aide	system_u:object_r:aide_log_t:s0
 ```
 
-La clé TLS a pris un mauvais contexte (`user_tmp_t`) après une « copie ». **Correctif** : `restorecon -v` (ou un `semanage fcontext` durable pour le chemin), par le rôle ; jamais `setenforce 0`.
+Le dossier de journal d'AIDE a pris un contexte de fichier temporaire (copie, `mv` depuis `/tmp`, `chcon` manuel) : le domaine `aide_t` n'a pas le droit d'y écrire son rapport, la vérification échoue. Les droits Unix n'y sont pour rien. **Correctif** : `restorecon -Rv /var/log/aide` remet le contexte **de la politique** (`matchpathcon`) ; rien à ajouter au rôle si le chemin est standard (sinon : `semanage fcontext` par le rôle, puis `restorecon`) ; relancer `aide-verification.service` et vérifier qu'il se termine avec un code de 0 à 7. Jamais `setenforce 0`. Note : node_exporter, installé dans `/usr/local/bin`, tourne en `unconfined_service_t` (E13) : un contexte faux sur ses fichiers ne le gênerait pas — c'est pour cela que la panne vise un programme **confiné**.
 
-**Variante 3 — unité durcie (ProtectSystem=strict).**
+**Variante 3 — unité durcie dont les exceptions ont disparu (Mailpit, mon01).**
 
 ```
-admin@adm01:~$ ssh mon01 'systemd-analyze security node_exporter; systemctl cat node_exporter | grep -i protect'
+admin@adm01:~$ ssh mon01 'journalctl -u mailpit -n 5 --no-pager'
+… open /var/lib/mailpit/mailpit.db: read-only file system
+admin@adm01:~$ ssh mon01 'systemctl cat mailpit | grep -E "^# /|ProtectSystem|ReadWritePaths"'
+# /etc/systemd/system/mailpit.service
 ProtectSystem=strict
+ReadWritePaths=/var/lib/mailpit
+# /etc/systemd/system/mailpit.service.d/90-durcissement.conf
+ProtectSystem=strict
+ReadWritePaths=
 ```
 
-Sans `ReadWritePaths`, le service ne peut plus écrire (collecteur *textfile*, fichiers d'état). **Correctif** : ajouter `ReadWritePaths=/var/lib/prometheus/node-exporter` (dossier du collecteur *textfile*, M21) au drop-in, par le rôle.
+« Read-only file system » et non « permission denied » : c'est l'espace de noms de montage de l'unité, pas le MAC. Le drop-in `90-durcissement.conf` contient `ReadWritePaths=` **vide**, ce qui **remet à zéro** la liste de l'unité : `/var/lib/mailpit` n'est plus inscriptible. **Correctif** : retirer le drop-in (il ne vient d'aucun rôle) ou, si un drop-in de durcissement est voulu, y redéclarer `ReadWritePaths=/var/lib/mailpit` ; `daemon-reload`, redémarrage ; le coder dans le rôle `mailpit` (M19) et vérifier avec `systemd-analyze security mailpit` que l'exposition n'a pas augmenté.
 
 **Clôture** : service `active`, MAC toujours en place, `lab/bin/check 26 39`, `--annuler`.
 
@@ -373,7 +393,7 @@ NAME       STATUS   …   PARE-FEU-HOTE
 k8s-w03    Ready    …                      # les autres nœuds : oui
 ```
 
-Lucas a voulu « essayer une version resserrée » sur `k8s-w03` : il a retiré l'étiquette `medisphere.internal/pare-feu-hote` (les politiques `hote-*` d'E27 ne sélectionnent plus ce nœud) et posé à la main une `CiliumClusterwideNetworkPolicy` à `nodeSelector` `kubernetes.io/hostname: k8s-w03` qui reprend leurs flux… **sauf** la santé Cilium (4240/TCP et l'écho ICMP depuis `remote-node`/`health`). Dès qu'une politique d'hôte sélectionne un nœud, tout ce qu'elle n'autorise pas est refusé : les sondes de santé des autres agents échouent, le nœud devient « injoignable » (`cilium-health status`, `cilium_unreachable_nodes`). **Démarche** : `kubectl get ccnp` et `-L medisphere.internal/pare-feu-hote` montrent l'écart avec `plateforme/k8s` ; `hubble observe --verdict DROPPED --node k8s-w03 --port 4240` le confirme. **Correctif** : retirer la politique d'essai (hors Git) et remettre l'étiquette par `cluster/noeuds.yaml` (`task` d'E27, ou `kubectl label node k8s-w03 medisphere.internal/pare-feu-hote=oui` puis vérifier que Git dit la même chose) ; les flux de référence sont ceux de [`hote-commun.yaml`](fichiers/M26-E27/k8s/composants/cilium/hote/hote-commun.yaml) et [`hote-travailleurs.yaml`](fichiers/M26-E27/k8s/composants/cilium/hote/hote-travailleurs.yaml). Toute variante d'une politique d'hôte s'essaie d'abord en `policyAuditMode` sur un nœud (RB-264) ; retirer l'étiquette est un geste de **retour arrière** (étape 2 de RB-264 : le nœud n'est alors plus filtré du tout), pas un moyen d'essayer une autre politique.
+Lucas a voulu « essayer une version resserrée » sur `k8s-w03` : il a retiré l'étiquette `medisphere.internal/pare-feu-hote` (les politiques `hote-*` d'E27 ne sélectionnent plus ce nœud) et posé à la main une `CiliumClusterwideNetworkPolicy` à `nodeSelector` `kubernetes.io/hostname: k8s-w03` qui reprend leurs flux… **sauf** la santé Cilium (4240/TCP et l'écho ICMP depuis `remote-node`/`health`). Dès qu'une politique d'hôte sélectionne un nœud, tout ce qu'elle n'autorise pas est refusé : les sondes de santé des autres agents échouent, le nœud devient « injoignable » (`cilium-health status`, `cilium_unreachable_nodes`) — vu depuis les **nœuds de contrôle** : entre travailleurs, le trafic d'hôte passe par `cilium_wg0` (chiffrement nœud à nœud, E26), où les politiques d'hôte ne s'appliquent pas (limite connue, RB-264) ; regarde donc `cilium-health status` dans l'agent de `k8s-cp01`. **Démarche** : `kubectl get ccnp` et `-L medisphere.internal/pare-feu-hote` montrent l'écart avec `plateforme/k8s` ; `hubble observe --verdict DROPPED --node k8s-w03 --port 4240` le confirme. **Correctif** : retirer la politique d'essai (hors Git) et remettre l'étiquette par `cluster/noeuds.yaml` (`task` d'E27, ou `kubectl label node k8s-w03 medisphere.internal/pare-feu-hote=oui` puis vérifier que Git dit la même chose) ; les flux de référence sont ceux de [`hote-commun.yaml`](fichiers/M26-E27/k8s/composants/cilium/hote/hote-commun.yaml) et [`hote-travailleurs.yaml`](fichiers/M26-E27/k8s/composants/cilium/hote/hote-travailleurs.yaml). Toute variante d'une politique d'hôte s'essaie d'abord avec le point de terminaison d'hôte du nœud **en audit** (`outils/pare-feu-hote.sh audit k8s-w03`, RB-264 ; jamais l'option globale `policyAuditMode`) ; retirer l'étiquette est un geste de **retour arrière** (étape 2 de RB-264 : le nœud n'est alors plus filtré du tout), pas un moyen d'essayer une autre politique.
 
 **Variante 2 — nftables local qui filtre WireGuard.**
 
@@ -395,7 +415,7 @@ Les gros paquets tombent (symptôme intermittent). **Correctif** : rétablir la 
 
 **Clôture** : nœuds `Ready`, `cilium encrypt status` cohérent, `cilium_unreachable_nodes == 0`, `lab/bin/check 26 40`, `--annuler`.
 
-**Prévention.** Toujours appliquer un pare-feu d'hôte en `policyAuditMode` d'abord, nœud par nœud (RB-264) ; une alerte `cilium_unreachable_nodes > 0` ; les règles nftables des nœuds uniquement par Ansible, avec une alerte si une table inconnue apparaît.
+**Prévention.** Toujours appliquer un pare-feu d'hôte après une phase d'audit du point de terminaison d'hôte, nœud par nœud (RB-264) ; une alerte `cilium_unreachable_nodes > 0` ; les règles nftables des nœuds uniquement par Ansible, avec une alerte si une table inconnue apparaît.
 
 **Explications.** Un refus de **politique** apparaît dans Hubble (avec le nom de la politique) ; un paquet jeté par le **pare-feu local** du nœud n'y apparaît pas (il n'a pas atteint l'eBPF de Cilium). Une MTU incohérente ne « refuse » rien : elle fait disparaître les gros paquets.
 
@@ -411,38 +431,45 @@ Les gros paquets tombent (symptôme intermittent). **Correctif** : rétablir la 
 
 **Démarche de diagnostic**
 
-*Symptômes* : `kubectl logs/exec` en erreur TLS (x509) ou timeout, constant (un nœud) ou intermittent (un apiserver sur trois).
+*Symptômes* : `kubectl logs/exec` en erreur TLS, constant (un nœud) ou intermittent (un apiserver sur trois).
 
-*Hypothèses* : CSR de service non approuvée (regex de l'approbateur, certificat renouvelé) ; horloge décalée ; CA fausse sur un nœud de contrôle.
+*Hypothèses* : le kubelet n'a plus de certificat de service (CSR refusée par l'approbateur, ou jamais traitée parce que l'approbateur est arrêté) ; un serveur d'API vérifie les kubelets avec une mauvaise CA.
+
+Rappel : kubeadm ne pose pas `--kubelet-certificate-authority` ; dans ce lab, le serveur d'API ne vérifie donc **pas** le certificat des kubelets (dette notée en M14 et en E25). Sans certificat de service, en revanche, le kubelet ne peut **rien** présenter : la poignée de main échoue côté kubelet.
 
 **Étape 1 — Lire l'erreur, puis les CSR.**
 
 ```
 admin@adm01:~$ kubectl logs -n mediagenda-recette deploy/mediagenda-api
-Error from server: Get "https://10.10.40.63:10250/containerLogs/…": x509: certificate signed by unknown authority
-admin@adm01:~$ kubectl get csr | grep kubelet-serving
-csr-abc…  3m  kubernetes.io/kubelet-serving  system:node:k8s-w03  <none>  Pending
+Error from server: Get "https://10.10.40.63:10250/containerLogs/…": remote error: tls: internal error
+admin@adm01:~$ kubectl get csr --sort-by=.metadata.creationTimestamp | grep kubelet-serving | tail -3
+csr-abc…  3m  kubernetes.io/kubelet-serving  system:node:k8s-w03  <none>  Denied        # variante 1
+csr-def…  3m  kubernetes.io/kubelet-serving  system:node:k8s-w03  <none>  Pending       # variante 2
+admin@k8s-w03:~$ ls -l /var/lib/kubelet/pki/ ; sudo journalctl -u kubelet --since -10min | grep -i 'serving\|certificate' | tail -3
 ```
 
 **Variante 1 — regex de l'approbateur + certificat renouvelé.**
 
 ```
-admin@adm01:~$ kubectl get csr csr-abc… -o jsonpath='{.spec.username}{"\n"}'
-system:node:k8s-w03
-admin@adm01:~$ git show (plateforme/politiques, M26-E41) → providerRegex: ^k8s-(cp|w)0[1-2]$
+admin@adm01:~$ kubectl get csr csr-abc… -o jsonpath='{.spec.username} {.status.conditions[0].type} {.status.conditions[0].message}{"\n"}'
+system:node:k8s-w03 Denied …
+admin@adm01:~/src/gitops$ git log -p -S providerRegex -- valeurs/kubelet-csr-approver/values.yaml | head -20   # commit M26-E41 de lucas.martin
+-providerRegex: '^k8s-(cp|w)0[1-9]$'
++providerRegex: '^k8s-(cp|w)0[1-2]$' # PLAT-2741 (Lucas) : restreindre l approbation
 ```
 
-La regex exclut `k8s-w03` ; après renouvellement, la nouvelle CSR reste `Pending`, l'apiserver ne peut plus vérifier ce kubelet. **Correctif** : MR qui rétablit `providerRegex: ^k8s-(cp|w)0[1-9]$`, puis approuver la CSR légitime (`kubectl certificate approve csr-abc…`). Vérifier l'origine de la CSR avant d'approuver (ne jamais approuver en aveugle).
+La regex exclut `k8s-w03` (et `k8s-cp03` à son prochain renouvellement) ; la nouvelle CSR est **refusée** (`skipDenyStep: false`), le kubelet n'a plus de certificat. **Correctif** : MR (`revert`) qui rétablit `providerRegex: '^k8s-(cp|w)0[1-9]$'` dans `plateforme/gitops`, synchronisation d'Argo CD. Une CSR refusée ne se rattrape pas : le kubelet en soumet une nouvelle à sa prochaine tentative (quelques minutes) ou au redémarrage du kubelet ; l'approbateur réparé l'approuve.
 
-**Variante 2 — horloge décalée.**
+**Variante 2 — approbateur arrêté + certificat renouvelé.**
 
 ```
-admin@adm01:~$ ssh k8s-w03 'systemctl is-active chrony; date -u'
-inactive
-… (2 h d'avance)
+admin@adm01:~$ kubectl -n kubelet-csr-approver get deploy
+NAME                   READY   UP-TO-DATE   AVAILABLE
+kubelet-csr-approver   0/0     0            0
+admin@adm01:~/src/gitops$ git log -p -- valeurs/kubelet-csr-approver/values.yaml | head -12   # replicas: 0, commit M26-E41
 ```
 
-`x509: certificate … is not yet valid` : le certificat de service a un `notBefore` dans le « futur » vu des autres. **Correctif** : relancer chrony, `chronyc makestep` (par l'agent QEMU si besoin).
+Personne ne traite la CSR : elle reste `Pending`. **Correctif** : MR (`revert`) qui remet `replicas: 2` ; l'approbateur, relancé, approuve la CSR en attente (vérifie dans ses journaux qu'il l'a bien examinée). Approuver à la main est possible en urgence (RB-143 §5) **après** avoir lu la demande (`openssl req -noout -text` du champ `spec.request` : nom et adresse du nœud) — jamais en aveugle.
 
 **Variante 3 — CA fausse sur un nœud de contrôle.**
 
@@ -451,17 +478,17 @@ admin@adm01:~$ ssh k8s-cp03 'sudo grep kubelet-certificate-authority /etc/kubern
 - --kubelet-certificate-authority=/etc/kubernetes/pki/front-proxy-ca.crt
 ```
 
-Cet apiserver vérifie les kubelets avec la **mauvaise** CA : une requête sur trois (celles qu'il sert) échoue. **Correctif** : restaurer la bonne CA (`/etc/kubernetes/pki/ca.crt` ou le fichier du rôle) dans le manifeste du **seul** nœud touché ; le pod statique redémarre.
+Cet apiserver est le seul à vérifier les kubelets, et avec la **mauvaise** CA (`x509: certificate signed by unknown authority`) : une requête sur trois (celles qu'il sert) échoue. **Correctif** : remettre le manifeste du **seul** nœud touché dans l'état des deux autres (option retirée), le pod statique redémarre ; le manifeste est produit par kubeadm (`cluster/kubeadm-config.yaml`) : vérifie qu'aucune `extraArgs` du dépôt ne l'y remettrait. Poser `--kubelet-certificate-authority=/etc/kubernetes/pki/ca.crt` sur **les trois** (par `apiServer.extraArgs` et `outils/reconfigurer-apiserver.sh`, un nœud à la fois) est la vraie amélioration, une fois tous les kubelets dotés d'un certificat signé : à proposer par MR, pas pendant l'incident.
 
-**Clôture** : plus de CSR `Pending`, `kubectl logs/exec` partout, `lab/bin/check 26 41`, `--annuler`.
+**Clôture** : plus de CSR `Pending`, approbateur prêt, `kubectl logs/exec` partout, `lab/bin/check 26 41`, `--annuler`.
 
 **Prévention.** Alerte sur une CSR `kubelet-serving` `Pending` depuis plus de N minutes ([`fichiers/M26-E41/observabilite/regles/kubelets.yaml`](fichiers/M26-E41/observabilite/regles/kubelets.yaml)) ; alerte sur l'expiration des certificats de service ; un seul nœud de contrôle modifié à la fois.
 
-**Explications.** `kubectl logs/exec` ouvre une connexion TLS apiserver → kubelet 10250 ; l'apiserver vérifie le certificat **de service** du kubelet via `--kubelet-certificate-authority`. Sans certificat signé (CSR non approuvée), sans horloge juste, ou avec une mauvaise CA, la poignée de main échoue.
+**Explications.** `kubectl logs/exec` ouvre une connexion TLS apiserver → kubelet 10250. Avec `serverTLSBootstrap: true`, le kubelet ne sert qu'un certificat **signé** : CSR refusée ou jamais traitée → aucun certificat → `tls: internal error`. L'apiserver ne vérifie ce certificat que si `--kubelet-certificate-authority` est posé ; posé avec une mauvaise CA sur un seul des trois, il produit une panne intermittente.
 
 **Alternatives.** Approuver les CSR à la main (sans l'approbateur) : possible mais fragile ; l'approbateur avec une regex stricte est plus sûr qu'une approbation automatique de tout.
 
-**Pièges classiques.** Approuver une CSR sans en vérifier l'origine ; toucher aux trois nœuds de contrôle à la fois ; oublier l'horloge.
+**Pièges classiques.** Approuver une CSR sans en vérifier l'origine ; toucher aux trois nœuds de contrôle à la fois ; corriger les valeurs de l'approbateur dans le cluster au lieu de `plateforme/gitops` (Argo CD les défait) ; supprimer à la main le certificat d'autres nœuds « pour tester ».
 
 **En production chez MédiSphère.** metrics-server et Prometheus vérifient les certificats des kubelets (pas de `--kubelet-insecure-tls`) ; l'approbateur a une regex stricte et une alerte sur les CSR en attente.
 
@@ -496,13 +523,13 @@ La `CiliumClusterwideNetworkPolicy` `quarantaine` (posée en M26-E33, [`fichiers
 
 ```
 admin@adm01:~$ kubectl -n wb-pannes get pod <pod> -o yaml > ~/m26/e42/pod.yaml
-admin@adm01:~$ kubectl debug -n wb-pannes <pod> --image=registry.par1.medisphere.internal/dockerhub/library/busybox:1.37 --target=app -- sh -c 'ps aux; ls -la /tmp; cat /tmp/.wb-depot-incident 2>/dev/null' | tee ~/m26/e42/preuves.txt
+admin@adm01:~$ kubectl debug -n wb-pannes <pod> --profile=restricted --image=registry.par1.medisphere.internal/dockerhub/library/busybox:1.37 --target=app -- sh -c 'ps aux; ls -la /tmp; cat /tmp/.wb-depot-incident 2>/dev/null' | tee ~/m26/e42/preuves.txt
 admin@adm01:~$ loki_requete '{service=~"falco|tetragon"}' audit 1h > ~/m26/e42/detections.json
 admin@adm01:~$ sha256sum ~/m26/e42/* > ~/m26/e42/empreintes.txt
 admin@adm01:~$ aws --endpoint-url https://s3-01.par1.medisphere.internal:8333 s3 cp ~/m26/e42/ s3://preuves/INC-5342/ --recursive   # compartiment preuves
 ```
 
-(Le *checkpoint* de conteneur par l'API du kubelet, `ContainerCheckpoint`, est une alternative de collecte si la fonction est disponible — statut en 1.36 à vérifier.)
+(Le *checkpoint* de conteneur par l'API du kubelet, `ContainerCheckpoint` — bêta, activée par défaut depuis 1.30, toujours bêta en 1.36 —, fige la mémoire du conteneur sans l'arrêter, si le runtime le permet (containerd avec CRIU, sinon réponse `500`) : archive dans `/var/lib/kubelet/checkpoints/` du nœud, à copier dans `preuves` avec son empreinte.)
 
 **4. Éradiquer.**
 

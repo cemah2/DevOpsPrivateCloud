@@ -106,7 +106,7 @@ admin@adm01:~$ bao token revoke -accessor <ACCESSOR>
 admin@adm01:~$ bao lease revoke -prefix db-mediagenda/creds/<RÔLE>
 # Nouvelle version d'un secret statique, par l'identité qui a le droit d'écrire ce chemin
 # (inventaire-secrets.md, colonne « propriétaire ») ; valeur saisie sans écho, jamais en argument
-admin@adm01:~$ read -rs v; jq -n --arg v "$v" '{data: {mot_de_passe: $v}}' | bao write kv/data/<CHEMIN> - ; unset v
+admin@adm01:~$ read -rs v; printf '%s' "$v" | jq -Rs '{data: {mot_de_passe: .}}' | bao write kv/data/<CHEMIN> - ; unset v
 # Détruire un secret_id d'AppRole par son accessor
 admin@adm01:~$ bao write auth/approle/role/medictl/secret-id-accessor/destroy secret_id_accessor=<ACCESSOR-SECRET-ID>
 ```

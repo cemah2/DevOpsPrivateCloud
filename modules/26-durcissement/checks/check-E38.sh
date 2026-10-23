@@ -11,7 +11,10 @@ require_cmd ssh
 
 _m26_e38_vms="${WB_M26_VMS_SUDO:-nbx01 dns02 mon01}"
 for vm in $_m26_e38_vms; do
-  if _m26x_ssh_ok "$vm"; then
+  # SSH répond mais « sudo -n » non : c'est précisément la panne, le contrôle doit être ROUGE (pas sauté).
+  if ! _m26x_ssh_ok "$vm" && remote "$vm" true </dev/null >/dev/null 2>&1; then
+    check_ssh "$vm : « sudo -n true » fonctionne (Ansible et checks)" "$vm" "sudo -n true"
+  elif _m26x_ssh_ok "$vm"; then
     check_ssh "$vm : « sudo -n true » fonctionne (Ansible et checks)" "$vm" "sudo -n true"
     check_ssh "$vm : aucun « Defaults requiretty » dans sudoers" "$vm" \
       "! sudo -n grep -RqsE '^[[:space:]]*Defaults[[:space:]]+requiretty' /etc/sudoers /etc/sudoers.d/"

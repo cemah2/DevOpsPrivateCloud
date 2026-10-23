@@ -30,6 +30,12 @@ _e40_injecter() {
   local n="$1"
   m26_kube_sain || return 1
   wb_kubectl get node "$_E40_NOEUD" >/dev/null 2>&1 || { wb_avert "nœud $_E40_NOEUD introuvable"; return 1; }
+  # Garde-fou (WB_M26_NOEUD) : jamais un nœud de contrôle (etcd, VIP de l'API).
+  if [[ -n "$(wb_kubectl get node "$_E40_NOEUD" -o jsonpath='{.metadata.labels.node-role\.kubernetes\.io/control-plane}' 2>/dev/null)" ]] \
+     || wb_kubectl get node "$_E40_NOEUD" -o jsonpath='{.metadata.labels}' 2>/dev/null | grep -q 'node-role.kubernetes.io/control-plane'; then
+    wb_avert "$_E40_NOEUD est un nœud de contrôle : M26-E40 ne vise qu'un travailleur (WB_M26_NOEUD)"
+    return 1
+  fi
   m26_ecrire E40 variante "$n"
   case "$n" in
     1)
@@ -96,10 +102,16 @@ EOF
 
 _e40_effet() {
   case "$1" in
-    # Effet réel : un autre agent Cilium voit le nœud injoignable par la sonde de santé.
-    1) wb_kubectl get ciliumclusterwidenetworkpolicies wb-pare-feu-hote-essai >/dev/null 2>&1 \
-         && wb_kubectl -n kube-system exec ds/cilium -c cilium-agent -- cilium-health status 2>/dev/null \
-            | grep -A3 "$_E40_NOEUD" | grep -qiE 'unreachable|connection refused|timeout|i/o' ;;
+    # Effet réel : l'agent d'un NŒUD DE CONTRÔLE voit le nœud injoignable par la sonde de santé. Pas
+    # « ds/cilium » (premier pod venu, peut-être celui du nœud cassé) ni un autre travailleur : avec le
+    # chiffrement nœud à nœud (E26), le trafic d'hôte entre travailleurs arrive par cilium_wg0, où le
+    # pare-feu d'hôte ne s'applique pas ; les nœuds de contrôle, exclus du chiffrement, passent par eth0.
+    1) local p
+       p="$(wb_kubectl -n kube-system get pods -l k8s-app=cilium --field-selector spec.nodeName=k8s-cp01 \
+             -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)" || p=""
+       [[ -n "$p" ]] && wb_kubectl get ciliumclusterwidenetworkpolicies wb-pare-feu-hote-essai >/dev/null 2>&1 \
+         && wb_kubectl -n kube-system exec "$p" -c cilium-agent -- cilium-health status --verbose 2>/dev/null \
+            | grep -A8 "$_E40_NOEUD" | grep -qiE 'unreachable|connection refused|timed? ?out|i/o' ;;
     2) m26_ssh "$_E40_NOEUD" 'nft list table inet wb_e40' >/dev/null 2>&1 ;;
     3) [[ "$(m26_ssh "$_E40_NOEUD" 'cat /sys/class/net/eth0/mtu' 2>/dev/null)" == 1400 ]] ;;
   esac
@@ -151,7 +163,7 @@ symptome_E40() {
     "Depuis la vague « réseau » du durcissement (pare-feu d'hôte, chiffrement WireGuard), des pods d'un" \
     "nœud n'arrivent plus à joindre ceux des autres : des connexions tombent, des sondes échouent par" \
     "intermittence, Hubble montre des paquets perdus. Un seul travailleur semble concerné." \
-    "Un nœud de contrôle à la fois, un retour arrière écrit : ne touche pas tout le cluster." \
+    "Un nœud à la fois, un retour arrière écrit : ne touche pas tout le cluster." \
     "" \
     "Temps cible : 45 min. Contrôle : lab/bin/check 26 40"
 }

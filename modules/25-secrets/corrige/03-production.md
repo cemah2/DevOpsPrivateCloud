@@ -96,10 +96,10 @@ Ordres de grandeur mesurés sur le banc (sans keepalived, en écrivant par un n�
 
 **Explications**
 
-Le stockage Raft intégré réplique les données (chiffrées par la barrière) sur chaque nœud ; le **leader Raft** ordonne les écritures, le **nœud actif** d'OpenBao (celui qui tient le verrou HA, stocké lui aussi dans Raft) sert les requêtes. Les nœuds en attente répondent quand même : ils **transmettent** la requête au nœud actif par le port 8201 (*request forwarding*, TLS interne de la grappe) — c'est pour cela que la boucle peut écrire par n'importe quel nom. Ils ne savent pas servir eux-mêmes une lecture (les *performance standby* sont une fonction de Vault Enterprise). Le quorum est de 2 sur 3 : une panne tolérée, deux pannes = plus d'actif possible, plus aucune lecture.
+Le stockage Raft intégré réplique les données (chiffrées par la barrière) sur chaque nœud ; le **leader Raft** ordonne les écritures, le **nœud actif** d'OpenBao (celui qui tient le verrou HA, stocké lui aussi dans Raft) sert les requêtes. Les nœuds en attente répondent quand même : ils **transmettent** les écritures (et tout ce qui exige l'actif : connexions, baux, administration) au nœud actif par le port 8201 (*request forwarding*, TLS interne de la grappe) — c'est pour cela que la boucle peut écrire par n'importe quel nom. Depuis OpenBao 2.5, ils servent en revanche **eux-mêmes** les lectures pures depuis leur copie locale (*Horizontal Read Scalability*, cohérence à terme, `disable_standby_reads` pour l'interdire) : l'équivalent libre des *performance standby* que Vault réserve à l'édition Enterprise (M25-E44). Le quorum est de 2 sur 3 : une panne tolérée, deux pannes = plus d'actif possible, plus aucune écriture (les nœuds en attente servent encore des lectures figées, mais la VIP, qui ne suit que l'actif, a disparu).
 
 **Alternatives**
-- **HAProxy devant les trois nœuds** (vérification `sys/health`) au lieu d'une VIP : un saut de plus, TLS à re-chiffrer ou à passer en TCP ; utile si l'on veut équilibrer la charge vers des *performance standby* (pas chez nous).
+- **HAProxy devant les trois nœuds** (vérification `sys/health`) au lieu d'une VIP : un saut de plus, TLS à re-chiffrer ou à passer en TCP ; utile si l'on veut répartir les **lectures** sur les nœuds en attente (servies localement depuis la 2.5), ce que la VIP ne fait pas.
 - **DNS à trois enregistrements** : les clients essaieraient un nœud en attente, qui transmet ; simple, mais un nœud **scellé** reste dans le DNS et répond 503.
 - Certificats : défi **DNS-01** (pas de relais), mais le client `step` ne le fait pas ; un client ACME qui le sait (certbot et sa clé TSIG pour PowerDNS) ajoute un outil et un secret.
 - Cinq nœuds : tolérance de deux pannes, mais tous sur `pve01` (E32, question 12).
@@ -180,7 +180,7 @@ La barrière chiffre les données avec le **trousseau** ; le trousseau est chiff
 **Alternatives**
 - **`static`** : une clé AES-256 dans un fichier ou une variable du nœud ; auto-descellement sans dépendance, mais la clé est **à côté** des données : un vol de la VM entière donne tout (ADR-0250).
 - **PKCS#11 / HSM** : greffon KMS externe depuis la 2.7 ; la cible si MédiSphère achète un HSM.
-- **Seal High Availability** (plusieurs seals à la fois) : à lire dans la documentation ; réduirait la dépendance à un seul `kms01`.
+- **Plusieurs seals actifs** (*Seal High Availability*) : fonction de Vault Enterprise ; OpenBao 2.7.1 refuse deux blocs `seal` actifs (« two seals provided but neither is disabled », vérifié : un second bloc ne sert qu'à une migration). La dépendance à `kms01` se réduit ici par sa sauvegarde, sa supervision et RB-251.
 - `kms01` en grappe : trois VMs de plus pour un service qui ne sert qu'au démarrage ; la sauvegarde PBS et la procédure suffisent au lab.
 
 **Pièges classiques**

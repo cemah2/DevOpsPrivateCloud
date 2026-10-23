@@ -11,8 +11,10 @@
 #   2. l'espace mediagenda-recette ré-étiqueté « pod-security.kubernetes.io/enforce: privileged »
 #      (plateforme/k8s, espaces/) : un pod privilégié y est admis ;
 #   3. le matchConstraints de « registres-autorises » exclut désormais wb-pannes (namespaceSelector NotIn) ;
-#   4. la politique saute les requêtes du groupe system:masters (matchCondition) : l'admin n'est plus
-#      filtré (« comme ça mes essais passent », Lucas).
+#   4. la politique saute les requêtes du groupe d'administration de la personne qui lance la panne
+#      (matchCondition sur request.userInfo.groups ; groupe lu par « kubectl auth whoami » : après le
+#      M24, c'est un groupe « oidc:… », pas system:masters, que seul super-admin.conf porte) : l'admin
+#      n'est plus filtré (« comme ça mes essais passent », Lucas).
 #
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
@@ -50,6 +52,8 @@ spec:
     - name: c
       image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
       command: ["sleep", "1"]
+      # Limites présentes : seul le caractère privilégié doit faire refuser ce pod (PSA), pas exiger-limites.
+      resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 50m, memory: 64Mi}}
       securityContext: {privileged: true}
 EOF
 }
@@ -81,12 +85,20 @@ _e36_t3() {
 _e36_i3() {
   yq '(select(.kind == "ValidatingPolicy") | .spec.matchConstraints.namespaceSelector.matchExpressions) |= map(select(.values != ["wb-pannes"]))'
 }
+# Groupe exempté : le premier groupe non générique de l'identité d'administration (E36/groupe).
+_e36_groupe_admin() {
+  wb_kubectl auth whoami -o json 2>/dev/null |
+    jq -r '[.status.userInfo.groups[]? | select(. != "system:authenticated")][0] // empty'
+}
 _e36_t4() {
-  yq '(select(.kind == "ValidatingPolicy") | .spec.matchConditions) += [{"name": "sauf-admins", "expression": "!(\"system:masters\" in request.userInfo.groups)"}]
-      | (select(.kind == "ValidatingPolicy") | .spec.matchConditions[-1]) head_comment = "PLAT-2736 (Lucas) : ne pas me bloquer en urgence"'
+  G="$(m26_lire E36 groupe)" yq 'with(select(.kind == "ValidatingPolicy");
+        .spec.matchConditions += [{"name": "sauf-admins", "expression": "!(\"" + strenv(G) + "\" in request.userInfo.groups)"}]
+        | .spec.matchConditions[-1] head_comment = "PLAT-2736 (Lucas) : ne pas me bloquer en urgence")'
 }
 _e36_i4() {
-  yq '(select(.kind == "ValidatingPolicy") | .spec.matchConditions) |= map(select(.name != "sauf-admins"))'
+  yq 'with(select(.kind == "ValidatingPolicy" and ((.spec.matchConditions // []) | any_c(.name == "sauf-admins")));
+        .spec.matchConditions |= map(select(.name != "sauf-admins"))
+        | with(select((.spec.matchConditions | length) == 0); del(.spec.matchConditions)))'
 }
 # v2 : espace ré-étiqueté privileged.
 _e36_t2() { yq '(select(.kind == "Namespace") | .metadata.labels."pod-security.kubernetes.io/enforce") = "privileged"'; }
@@ -119,6 +131,8 @@ _m26E36_une() {
       ;;
     4)
       f="$(_e36_fichier_registres)" || return 10
+      m26_ecrire E36 groupe "$(_e36_groupe_admin)"
+      [[ -n "$(m26_lire E36 groupe)" ]] || return 10
       m26_git_transformer E36 pol "$_M26_PROJ_POL" "$f" \
         "fix(validation): exempter les administrateurs (M26-E36)" _e36_t4 || return
       ;;
@@ -132,7 +146,8 @@ _e36_defaire() {
     1) m26_restaurer_objet E36 policyexception essai-lucas-wb-pannes "$_E36_NS_EXC" ;;
     2) m26_git_defaire E36 ns _e36_i2 "revert(espaces): recette en restricted (M26-E36, annulation)" ;;
     3) m26_git_defaire E36 pol _e36_i3 "revert(validation): registres-autorises couvre wb-pannes (M26-E36, annulation)" ;;
-    4) m26_git_defaire E36 pol _e36_i4 "revert(validation): plus d'exemption des admins (M26-E36, annulation)" ;;
+    4) m26_git_defaire E36 pol _e36_i4 "revert(validation): plus d'exemption des admins (M26-E36, annulation)"
+       m26_oublier E36 groupe ;;
   esac
 }
 

@@ -27,7 +27,7 @@ Le palier 1 a construit les fondations : l'annuaire FreeIPA de `ipa01` et sa CA 
 
 > ⚠️ **Mémoire.** Le palier n'ajoute aucune VM. Il redémarre les serveurs d'API du cluster un par un (E16) et ajoute quelques pods (OAuth2 Proxy, E18) : vérifie `free -g` sur `pve01` avant E16, et n'enchaîne pas E16 avec une autre opération sur le plan de contrôle.
 
-Durée indicative du palier : 30 à 36 heures. Ordre conseillé :
+Durée indicative du palier : 40 à 46 heures (somme des durées des exercices : 43 h). Ordre conseillé :
 
 ```
 E10 (le modèle d'abord : chaque branchement l'applique)

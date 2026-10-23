@@ -283,7 +283,7 @@ m24_wb_exec() {
 read -r -d '' _M24_IPA_PRELUDE <<'PY' || true
 import json, sys
 from ipalib import api, errors
-api.bootstrap(context='cli', in_server=True, confdir='/etc/ipa')
+api.bootstrap(in_server=True, confdir='/etc/ipa')
 api.finalize()
 api.Backend.ldap2.connect()
 P = json.loads(sys.argv[1]) if len(sys.argv) > 1 else {}
@@ -299,6 +299,28 @@ m24_ipa_py() {
 journal "annuaire (cadre FreeIPA) : ${PARAMS:0:200}"
 python3 -I -c "$PY" "$PARAMS"
 EOF
+}
+
+# m24_heure HÔTE — heure de l'hôte (epoch). Sert aux « journalctl --since @… » : une horloge décalée
+# par une autre panne (astreinte M24-E43) ne doit pas faire manquer les lignes récentes.
+m24_heure() {
+  local d
+  d="$(remote "$1" 'date +%s' </dev/null 2>/dev/null)" || return 1
+  [[ "$d" =~ ^[0-9]+$ ]] || return 1
+  printf '%s\n' "$d"
+}
+
+# m24_kc_pret — Keycloak répond « UP » sur son interface de gestion, vu depuis idp01 (-k : sur l'hôte
+# même, seule la disponibilité compte ; la chaîne est vérifiée par HAProxy).
+m24_kc_pret() { m24_ssh "$_M24_IDP" 'curl -sk --max-time 5 https://127.0.0.1:9000/health/ready' 2>/dev/null | grep -q '"UP"'; }
+
+# m24_kc_redemarrer — redémarre keycloak.service sur idp01 et attend qu'il soit prêt (180 s au plus).
+m24_kc_redemarrer() {
+  m24_wb_exec "$_M24_IDP" <<'EOS' >/dev/null || return 1
+systemctl restart keycloak
+journal "keycloak redémarré"
+EOS
+  m24_attendre 180 m24_kc_pret
 }
 
 # m24_cp1 — premier nœud de contrôle (ceux par qui passe le kubectl d'administration).

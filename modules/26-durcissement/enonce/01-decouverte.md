@@ -6,7 +6,7 @@ Prérequis : module 25 terminé (`lab/bin/check 25 46` vert) ; module 24 (identi
 
 **Rappels du module**
 - Mesurer n'est pas modifier : au palier 1, aucune VM du socle n'est modifiée (Lynis audite, ssh-audit se connecte).
-- Auditer avant d'imposer, un espace à la fois ; jamais d'étiquette ni de politique sur `kube-system`, `kyverno`, `argocd`.
+- Auditer avant d'imposer, un espace à la fois ; jamais de politique sur `kube-system`, `kyverno`, `argocd`, et jamais d'étiquette Pod Security sur `kube-system` (celles de `kyverno` et `argocd` seulement après un essai à blanc).
 - Aucun secret dans les commandes, les dépôts ou les rapports ; les rapports de mesure sont relus avant le commit.
 - Mémoire : `durci-deb` et `durci-rocky` ajoutent 4 Go ; aucune autre VM temporaire en même temps.
 
@@ -218,7 +218,7 @@ Lynis refuse de démarrer s'il ne trouve pas son dossier `include/` à côté de
 Le rapport `lynis-report.dat` est un fichier texte `clé=valeur` ; les tableaux s'écrivent `clé[]=valeur`, une ligne par élément. Un `grep -c` et un `grep '^hardening_index='` suffisent à remplir ton tableau. Pour ssh-audit, la sortie de `-P` se termine par un verdict `PASS` ou `FAIL` et la liste des écarts à la politique.
 </details>
 
-**Pour aller plus loin** (facultatif) : `ssh-audit --get-hardening-guide "Debian 13"` affiche le guide de durcissement correspondant à la politique : compare-le à ce que fera le rôle `durcissement` en E11. Relance Lynis avec `--profile` et un fichier `custom.prf` qui ignore un test hors sujet (par exemple les antivirus) : l'indice change, la sécurité non. [Lynis](https://cisofy.com/documentation/lynis/) · [ssh-audit](https://github.com/jtesta/ssh-audit)
+**Pour aller plus loin** (facultatif) : `ssh-audit --get-hardening-guide "Debian 13 Server"` (noms exacts : `--list-hardening-guides`) affiche le guide de durcissement correspondant à la politique : compare-le à ce que fera le rôle `durcissement` en E11. Relance Lynis avec `--profile` et un fichier `custom.prf` qui ignore un test hors sujet (par exemple les antivirus) : l'indice change, la sécurité non. [Lynis](https://cisofy.com/documentation/lynis/) · [ssh-audit](https://github.com/jtesta/ssh-audit)
 
 ---
 

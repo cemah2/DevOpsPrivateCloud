@@ -49,9 +49,9 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 
 **Travail demandé**
 1. Constate sans rien toucher : la synchronisation échoue-t-elle à l'**admission** (message `admission webhook … denied the request`) ou les pods sont-ils **non prêts** ? `kubectl -n mediagenda-recette get events`, `kubectl get policyreports -n mediagenda-recette -o wide`, `kubectl -n argocd get application <recette> -o jsonpath='{.status.conditions}'`.
-2. Pour un refus : trouve la politique responsable et **pourquoi** elle refuse (lis son `validationActions`, ses `matchConditions`, sa `failurePolicy`). Rejoue la décision avec `kyverno test` ou un `kubectl apply --dry-run=server` d'un manifeste conforme.
+2. Pour un refus : trouve la politique responsable et **pourquoi** elle refuse (lis son `validationActions`, ses `validations`, ses `matchConditions`, sa `failurePolicy`). Rejoue la décision avec `kyverno test` ou un `kubectl apply --dry-run=server` d'un manifeste conforme.
 3. Pour des pods non prêts : `kubectl -n mediagenda-recette get ciliumnetworkpolicies` et `hubble observe --namespace mediagenda-recette --verdict DROPPED` ; la politique générée autorise-t-elle le DNS (port 53 vers `kube-dns`) et la collecte des sondes ?
-4. Trouve l'origine (commit de `lucas.martin`, marqueur `M26-E35`), corrige par MR : remets la politique en `Audit` si le `Deny` était prématuré, ou corrige la condition trop large, ou ajoute au refus réseau les flux DNS/sondes manquants. Vérifie qu'une charge conforme passe de nouveau et que la prod n'a jamais bougé.
+4. Trouve l'origine (commit de `lucas.martin`, marqueur `M26-E35`, ou objet posé hors de Git), corrige à la racine par MR, sans retirer ni affaiblir le contrôle légitime ; nettoie ce qui a été posé à la main. Vérifie qu'une charge conforme passe de nouveau et que la prod n'a jamais bougé.
 5. Préviens : un test `kyverno test` dans `plateforme/politiques/kyverno/tests/` qui vérifie qu'une charge conforme de recette est **admise** et qu'une charge non conforme est **refusée** ; complète le runbook concerné.
 
 **Critères de réussite**
@@ -92,7 +92,7 @@ Un échec de synchronisation Argo CD qui dit `denied the request` est un refus d
 **Prérequis** : M26-E06, M26-E07, M26-E17, M26-E18, M26-E23 ; `lab/bin/check 26 36` vert avant l'injection.
 **Durée indicative** : 45 min (temps cible).
 
-**Contexte technique** : `registres-autorises` (`ValidatingPolicy`, `Deny`) n'admet que `registry.par1.medisphere.internal/*` ; PSA `restricted` refuse un pod privilégié. Une `PolicyException` (`policies.kyverno.io/v1`) exempte des charges **ciblées** d'une politique ; mal écrite, elle exempte tout un espace. Un `namespaceSelector` en `NotIn` retire un espace du périmètre. Une `matchCondition` qui exclut `request.userInfo.groups` d'un groupe (`system:masters`, un compte de service) laisse passer tout ce que ce groupe soumet.
+**Contexte technique** : `registres-autorises` (`ValidatingPolicy`, `Deny`) n'admet que `registry.par1.medisphere.internal/*` ; PSA `restricted` refuse un pod privilégié. Une `PolicyException` (`policies.kyverno.io/v1`) exempte des charges **ciblées** d'une politique ; mal écrite, elle exempte tout un espace. Un `namespaceSelector` en `NotIn` retire un espace du périmètre. Une `matchCondition` qui exclut `request.userInfo.groups` d'un groupe (les administrateurs, un compte de service) laisse passer tout ce que ce groupe soumet.
 
 **Injection** : `lab/bin/break 26 36` (4 variantes).
 
@@ -104,7 +104,7 @@ Un échec de synchronisation Argo CD qui dit `denied the request` est un refus d
 5. Préviens : un test `kyverno test` qui vérifie que la politique couvre bien cet espace et ce groupe ; si une exception est légitime, inscris-la au registre `exceptions.md` (règle, périmètre, justification, risque résiduel, valideur, date de revue).
 
 **Critères de réussite**
-- [ ] Aucune `PolicyException` n'exempte tout un espace applicatif ; aucun espace applicatif n'est en PSA `privileged` ; `registres-autorises` couvre `wb-pannes` sans exclusion `NotIn` ; aucune politique ne saute `system:masters`.
+- [ ] Aucune `PolicyException` n'exempte tout un espace applicatif ; aucun espace applicatif n'est en PSA `privileged` ; `registres-autorises` couvre `wb-pannes` sans exclusion `NotIn` ; aucune politique ne saute un groupe d'utilisateurs.
 - [ ] Aucune violation « admise » ne subsiste dans les rapports des espaces applicatifs ; le pipeline de `plateforme/politiques` est vert.
 
 **Vérification** : `lab/bin/check 26 36`
@@ -148,7 +148,7 @@ Un échec de synchronisation Argo CD qui dit `denied the request` est un refus d
 5. Trouve l'origine (commit `M26-E37`), corrige par MR, rejoue l'essai jusqu'à voir l'alerte arriver. Si le vrai besoin était de réduire le bruit, fais-le par une **exception ciblée** (liste/macro), pas en coupant la règle. Complète **RB-260**.
 
 **Critères de réussite**
-- [ ] Le DaemonSet Falco couvre tous les nœuds ; la règle « shell interactif » est chargée et active ; la priorité minimale n'est pas remontée à `critical` ; falcosidekick vise `:9093` (pas `:9095`).
+- [ ] Le DaemonSet Falco couvre tous les nœuds ; la règle « shell interactif » est chargée et active ; la priorité minimale n'est pas remontée à `critical` ; falcosidekick vise le bon point d'entrée d'Alertmanager.
 - [ ] Un essai (shell + lecture de `/etc/shadow`) remonte dans Loki (`service="falco"`) ; le pipeline de `plateforme/politiques` est vert ; RB-260 contient sa section.
 
 **Vérification** : `lab/bin/check 26 37`
@@ -226,7 +226,7 @@ Depuis sudo 1.9.3, une **erreur de syntaxe** n'empêche plus sudo de tourner (l'
 **Prérequis** : M26-E13 ; `lab/bin/check 26 39` vert avant l'injection.
 **Durée indicative** : 45 min (temps cible).
 
-**Contexte technique** : sur `mon01` (Debian), Mailpit est confiné par un profil AppArmor (`/etc/apparmor.d/usr.local.bin.mailpit`) ; node_exporter est une unité systemd durcie. Sur un hôte Rocky (SELinux *enforcing*), node_exporter lit une clé TLS dont le **contexte** doit être correct. Un `ProtectSystem=strict` sans `ReadWritePaths` rend tout le système de fichiers en lecture seule pour le service.
+**Contexte technique** : sur `mon01` (Debian), Mailpit est confiné deux fois : par un profil AppArmor (`/etc/apparmor.d/usr.local.bin.mailpit`, E13) et par son unité systemd durcie (M19 : `ProtectSystem=strict` et ses exceptions). Sur les hôtes Rocky (SELinux *enforcing*), seuls les programmes qui ont un **domaine** sont confinés (la vérification AIDE tourne en `aide_t` ; ce qui est installé dans `/usr/local/bin` tourne en `unconfined_service_t`, E13) ; un domaine n'accède qu'aux fichiers dont le **contexte** le permet. Un `ProtectSystem=strict` rend tout le système de fichiers en lecture seule pour le service, sauf ce que l'unité excepte.
 
 > ⚠️ **Attention** : ne désactive pas le MAC pour « voir ». Un refus AppArmor/SELinux se lit dans les journaux ; la correction consiste à **autoriser le chemin légitime**, pas à retirer le confinement.
 
@@ -235,7 +235,7 @@ Depuis sudo 1.9.3, une **erreur de syntaxe** n'empêche plus sudo de tourner (l'
 **Travail demandé**
 1. Identifie le service en échec : `systemctl --failed`, `systemctl status <unité>`, `journalctl -u <unité> --since -20min`.
 2. Cherche le refus : AppArmor (`journalctl -k | grep apparmor` ou `dmesg | grep DENIED`), SELinux (`ausearch -m AVC -ts recent`, `sealert`), ou unité durcie (`systemd-analyze security <unité>`, `systemctl cat <unité>`).
-3. Trouve le chemin ou le contexte manquant : le profil AppArmor autorise-t-il `/var/lib/mailpit` ? Le contexte SELinux de la clé TLS est-il celui attendu (`ls -Z`) ? L'unité a-t-elle un `ReadWritePaths` pour son répertoire de données ?
+3. Trouve ce que le refus désigne : un chemin absent du profil (compare au profil du rôle), un contexte SELinux différent de celui que la politique attend (`ls -Z` contre `matchpathcon`), une restriction d'unité ajoutée (`systemctl cat <unité>` : quels drop-ins, dans quel ordre ?).
 4. Corrige en gardant le confinement : ajoute la règle au profil (`aa-logprof` en *complain* puis *enforce*), remets le bon contexte (`restorecon`, ou un `semanage fcontext` pour le rendre durable), ajoute le `ReadWritePaths`. Rejoue par le rôle `durcissement`. Redémarre le service, vérifie qu'il est `active`.
 5. Préviens : explique dans le runbook comment lire un refus de MAC, et pourquoi la correction se code (profil, contexte durable, drop-in d'unité) et non à la main.
 
@@ -255,7 +255,7 @@ Un service qui ne démarre pas « alors que les droits sont bons » : regarde **
 `systemd-analyze security <unité>` note l'exposition d'une unité et liste ce qui est restreint. `ProtectSystem=strict` rend `/usr`, `/boot` et `/etc` en lecture seule, et **tout le reste** sauf ce que `ReadWritePaths` autorise : un service qui écrit dans `/var/lib/…` a besoin que ce chemin y soit.
 </details>
 
-**Pour aller plus loin** : élabore un profil AppArmor en mode *complain*, laisse tourner le service un moment, puis génère les règles avec `aa-logprof` et passe en *enforce*. Qu'est-ce que cette méthode (observer puis durcir) a de commun avec le mode `audit` de Kyverno et le `policyAuditMode` de Cilium ?
+**Pour aller plus loin** : élabore un profil AppArmor en mode *complain*, laisse tourner le service un moment, puis génère les règles avec `aa-logprof` et passe en *enforce*. Qu'est-ce que cette méthode (observer puis durcir) a de commun avec le mode `Audit` de Kyverno et le mode audit du pare-feu d'hôte de Cilium (E27) ?
 
 ---
 
@@ -272,16 +272,16 @@ Un service qui ne démarre pas « alors que les droits sont bons » : regarde **
 **Prérequis** : M26-E26, M26-E27 ; M15 (Cilium, Hubble) ; `lab/bin/check 26 40` vert avant l'injection.
 **Durée indicative** : 45 min (temps cible).
 
-**Contexte technique** : le pare-feu d'hôte Cilium s'exprime par des `CiliumClusterwideNetworkPolicy` avec `nodeSelector` (`plateforme/k8s/composants/cilium/hote/` : `hote-commun`, `hote-plan-controle`, `hote-travailleurs`, qui sélectionnent les nœuds étiquetés `medisphere.internal/pare-feu-hote: "oui"`, M26-E27), posées **un nœud à la fois** après une phase en `policyAuditMode`. Les flux à autoriser entre nœuds : kubelet 10250, santé Cilium 4240, WireGuard 51871/UDP, VXLAN 8472 (si tunnel), API 6443/8443, BGP 179. Une MTU incohérente fait tomber les gros paquets (les petits passent : symptôme intermittent).
+**Contexte technique** : le pare-feu d'hôte Cilium s'exprime par des `CiliumClusterwideNetworkPolicy` avec `nodeSelector` (`plateforme/k8s/composants/cilium/hote/` : `hote-commun`, `hote-plan-controle`, `hote-travailleurs`, qui sélectionnent les nœuds étiquetés `medisphere.internal/pare-feu-hote: "oui"`, M26-E27), posées **un nœud à la fois** après une phase d'audit **du point de terminaison d'hôte** du nœud (`outils/pare-feu-hote.sh audit <nœud>`, RB-264 ; jamais l'option globale `policyAuditMode` du chart, qui mettrait aussi en audit toutes les politiques des pods). Les flux à autoriser entre nœuds : kubelet 10250, santé Cilium 4240, WireGuard 51871/UDP, VXLAN 8472 (si tunnel), API 6443/8443, BGP 179.
 
-> ⚠️ **Attention** : un seul nœud à la fois. Si tu repasses une politique de pare-feu d'hôte, remets d'abord le nœud en `policyAuditMode` (observe les refus `AUDIT`) avant d'appliquer. L'accès console Proxmox et l'agent QEMU restent ton recours.
+> ⚠️ **Attention** : un seul nœud à la fois. Si tu repasses une politique de pare-feu d'hôte, remets d'abord le point de terminaison d'hôte du nœud en audit (`outils/pare-feu-hote.sh audit <nœud>`, observe les verdicts `AUDIT`) avant d'appliquer. L'accès console Proxmox et l'agent QEMU restent ton recours.
 
 **Injection** : `lab/bin/break 26 40` (3 variantes).
 
 **Travail demandé**
 1. Identifie le nœud et le symptôme : `kubectl get nodes`, `hubble observe --verdict DROPPED --last 50`, `cilium-dbg status` (sur l'agent du nœud), `cilium encrypt status`.
-2. Classe : un **refus de pare-feu d'hôte** (une `CiliumClusterwideNetworkPolicy` oublie un flux : repasse le nœud en `policyAuditMode` et lis `hubble observe --verdict AUDIT`) ; un **filtrage nftables local** (`sudo nft list ruleset` sur le nœud, compteurs qui montent sur UDP 51871) ; une **MTU** incohérente (`ip link show eth0`, comparée aux autres nœuds).
-3. Trouve l'origine (politique posée à la main, table nftables, MTU changée) et corrige : complète la politique avec le flux manquant (par le code, `plateforme/k8s/composants/cilium/hote/` et `cluster/noeuds.yaml`), retire la table nftables qui n'a rien à faire là (et vérifie que le rôle ne la pose pas), rétablis la MTU cohérente.
+2. Classe : un refus **vu par Cilium** (Hubble le montre, avec la politique en cause ; le mode audit du point de terminaison d'hôte le confirme sans couper), une perte **hors de Cilium** (Hubble ne voit rien : compare ce qui sort d'un nœud et ce qui arrive sur l'autre, `tcpdump`, ce qui filtre localement sur le nœud), ou une perte qui dépend de la **taille** des paquets (petits paquets qui passent, gros qui disparaissent).
+3. Trouve l'origine en comparant le nœud touché à un nœud sain et au code (`plateforme/k8s/composants/cilium/hote/`, `cluster/noeuds.yaml`, rôles Ansible des nœuds), et corrige à la racine : ce qui vit dans Git par MR, ce qui a été posé à la main sur le nœud retiré (et vérifie que rien ne le reposera).
 4. Vérifie : tous les nœuds `Ready`, `cilium encrypt status` cohérent, `cilium_unreachable_nodes == 0`, Hubble sans refus inattendu.
 5. Préviens : complète **RB-264** (pare-feu d'hôte : toujours passer par le mode audit, un nœud à la fois, flux à autoriser listés) ; une alerte sur `cilium_unreachable_nodes > 0`.
 
@@ -301,7 +301,7 @@ Un service qui ne démarre pas « alors que les droits sont bons » : regarde **
 `cilium encrypt status` doit montrer des paires chiffrées cohérentes entre nœuds ; si un nœud ne chiffre plus, soupçonne le port WireGuard (51871/UDP) filtré localement. Une MTU incohérente se voit en comparant `ip link show eth0` entre nœuds : seuls les gros transferts tombent.
 </details>
 
-**Pour aller plus loin** : le mode `policyAuditMode` du pare-feu d'hôte laisse passer le trafic tout en journalisant ce qui **serait** refusé (`hubble observe --verdict AUDIT`). Explique pourquoi on applique toujours un pare-feu d'hôte en audit d'abord, nœud par nœud, et ce qui se passerait si on l'appliquait partout d'un coup en `enforce`.
+**Pour aller plus loin** : le mode audit du point de terminaison d'hôte (`PolicyAuditMode`, réglé par nœud dans l'agent) laisse passer le trafic tout en journalisant ce qui **serait** refusé (`hubble observe --verdict AUDIT`). Explique pourquoi on applique toujours un pare-feu d'hôte en audit d'abord, nœud par nœud, et ce qui se passerait si on l'appliquait partout d'un coup en `enforce`.
 
 ---
 
@@ -311,14 +311,14 @@ Un service qui ne démarre pas « alors que les droits sont bons » : regarde **
 > Je n'arrive plus à voir les journaux d'un pod : `kubectl logs` renvoie une erreur TLS (x509) ou reste bloqué ; `kubectl exec` aussi. Parfois ça marche, parfois non. C'est arrivé après la sécurisation des kubelets (certificats de service, approbation des CSR).
 
 **Objectifs pédagogiques**
-- Comprendre le chemin de `kubectl logs/exec` : apiserver → kubelet 10250 en TLS, vérification du **certificat de service** du kubelet par `--kubelet-certificate-authority`.
-- Diagnostiquer `serverTLSBootstrap` et kubelet-csr-approver : CSR `kubernetes.io/kubelet-serving` en attente, regex de l'approbateur, horloge, CA côté apiserver.
+- Comprendre le chemin de `kubectl logs/exec` : apiserver → kubelet 10250 en TLS, **certificat de service** du kubelet, et ce que change `--kubelet-certificate-authority` côté apiserver.
+- Diagnostiquer `serverTLSBootstrap` et kubelet-csr-approver : CSR `kubernetes.io/kubelet-serving` en attente ou refusée, configuration et état de l'approbateur, CA côté apiserver.
 - Réparer un seul nœud (de contrôle) à la fois, sans ouvrir de faille (ne jamais approuver une CSR sans comprendre).
 
 **Prérequis** : M26-E25 ; M14 (kubeadm, manifestes statiques) ; `lab/bin/check 26 41` vert avant l'injection.
 **Durée indicative** : 40 min (temps cible).
 
-**Contexte technique** : les kubelets ont `serverTLSBootstrap: true` ; leur certificat de service est signé après approbation d'une CSR `kubernetes.io/kubelet-serving` par **kubelet-csr-approver** (`providerRegex: ^k8s-(cp|w)0[1-9]$`, `providerIpPrefixes: 10.10.40.0/24`). kube-apiserver vérifie ce certificat via `--kubelet-certificate-authority`. Si la CSR n'est pas approuvée, si la regex ne correspond plus, si la CA est fausse, ou si l'horloge dérive, la poignée de main TLS entre apiserver et kubelet échoue.
+**Contexte technique** : les kubelets ont `serverTLSBootstrap: true` : sans certificat de service **signé**, un kubelet n'en présente aucun sur 10250. Ce certificat est signé après approbation d'une CSR `kubernetes.io/kubelet-serving` par **kubelet-csr-approver** (M26-E25 : Application Argo CD, valeurs dans `plateforme/gitops`). Côté serveur d'API, l'option `--kubelet-certificate-authority` (que kubeadm ne pose pas) lui fait **vérifier** ce certificat ; sans elle, il ne le vérifie pas. La poignée de main TLS de `logs`/`exec` dépend donc des deux bouts.
 
 > ⚠️ **Attention** : si tu touches à un manifeste statique du plan de contrôle, **un seul nœud à la fois**, et garde `admin.conf` (bris de glace) de côté. L'annulation du workbook passe par l'agent QEMU.
 
@@ -326,25 +326,25 @@ Un service qui ne démarre pas « alors que les droits sont bons » : regarde **
 
 **Travail demandé**
 1. Reproduis : `kubectl logs <pod>` ; lis l'erreur exacte (`x509: certificate signed by unknown authority`, `x509: certificate has expired or is not yet valid`, timeout). Note si c'est **constant** (un nœud) ou **intermittent** (un apiserver sur trois).
-2. Remonte : `kubectl get csr` (une CSR `kubelet-serving` `Pending` ?), `kubectl get csr <nom> -o yaml` (signer, username), l'état de l'approbateur, la regex (`providerRegex` dans `plateforme/politiques`), l'horloge du nœud (`chronyc tracking`), et sur un nœud de contrôle `grep kubelet-certificate-authority /etc/kubernetes/manifests/kube-apiserver.yaml`.
-3. Classe : CSR non approuvée (regex qui exclut le nœud + certificat renouvelé) ; horloge décalée (TLS « not yet valid ») ; CA fausse sur un nœud de contrôle (intermittent).
-4. Corrige au bon endroit : rétablis la regex de l'approbateur (par MR) et approuve la CSR en attente si elle est légitime ; resynchronise l'horloge ; restaure la bonne CA dans le manifeste (un nœud à la fois). Vérifie que `kubectl logs/exec` marche sur tous les pods.
+2. Remonte : `kubectl get csr` (une CSR `kubelet-serving` récente : quelle condition ?), `kubectl get csr <nom> -o yaml` (signer, username, condition et message), l'état et les journaux de l'approbateur, ses valeurs et leur historique dans `plateforme/gitops`, ce que présente le kubelet du nœud (`openssl s_client -connect <ip>:10250`), et sur chaque nœud de contrôle les options `--kubelet-*` du manifeste du serveur d'API.
+3. Classe le symptôme : **un nœud** touché en permanence (côté kubelet), ou **une requête sur trois** (côté serveur d'API) ; puis le maillon exact, preuve à l'appui.
+4. Corrige au bon endroit (MR pour ce qui vit dans Git ; un seul nœud de contrôle à la fois pour un manifeste statique) ; une CSR ne s'approuve à la main que si son origine et son contenu sont vérifiés. Vérifie que `kubectl logs/exec` marche sur tous les pods.
 5. Préviens : une alerte sur une CSR `kubelet-serving` en attente depuis plus de N minutes ; une alerte sur l'expiration des certificats de service des kubelets.
 
 **Critères de réussite**
-- [ ] Aucune CSR `kubelet-serving` en attente ; la regex de l'approbateur couvre tous les nœuds ; `--kubelet-certificate-authority` est correct sur les nœuds de contrôle ; les horloges sont synchrones ; `kubectl logs` d'un pod fonctionne.
-- [ ] Ton journal cite l'erreur x509 exacte et la cause.
+- [ ] Aucune CSR `kubelet-serving` en attente ; l'approbateur tourne et sa configuration couvre tous les nœuds ; la configuration des nœuds de contrôle vis-à-vis des kubelets est cohérente ; chaque kubelet présente un certificat de service ; `kubectl logs` d'un pod du nœud touché fonctionne.
+- [ ] Ton journal cite l'erreur TLS exacte et la cause.
 
 **Vérification** : `lab/bin/check 26 41`
 
 <details><summary>Indice 1</summary>
 
-`kubectl get csr` : une ligne `Pending` avec `SignerName kubernetes.io/kubelet-serving` et un `Requestor` `system:node:<nœud>` signifie que le kubelet a redemandé un certificat et que l'approbateur ne l'a pas (encore) approuvé. Pourquoi ? Regarde sa `providerRegex`.
+`kubectl get csr` : une ligne `kubelet-serving` récente d'un `Requestor` `system:node:<nœud>` signifie que le kubelet a redemandé un certificat. `Pending` : personne ne l'a traitée (l'approbateur tourne-t-il ?) ; `Denied` : l'approbateur l'a refusée (lis le message, puis sa configuration). `remote error: tls: internal error` côté client : le kubelet n'a **aucun** certificat à présenter.
 </details>
 
 <details><summary>Indice 2</summary>
 
-Une erreur **intermittente** (une fois sur trois) pointe vers **un** des trois kube-apiserver : celui dont le `--kubelet-certificate-authority` est faux. `x509: … is not yet valid` pointe vers une **horloge** (du nœud cible ou du nœud qui vérifie).
+Une erreur **intermittente** (une fois sur trois) pointe vers **un** des trois kube-apiserver : compare leurs manifestes (`diff` des trois). `x509: certificate signed by unknown authority` vient du côté qui **vérifie**.
 </details>
 
 **Pour aller plus loin** : `bypassDnsResolution` de kubelet-csr-approver. Pourquoi le résoudre (ou non) change-t-il la robustesse de l'approbation quand le DNS du cluster est perturbé ? Quel est le risque de sécurité d'une approbation automatique trop permissive ?

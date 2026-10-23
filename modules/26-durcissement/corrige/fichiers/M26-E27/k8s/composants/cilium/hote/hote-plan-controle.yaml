@@ -17,10 +17,17 @@ spec:
         operator: Exists
   ingress:
     # --- Entre nœuds de contrôle seulement ------------------------------------------------------------
-    # etcd (client 2379 depuis les serveurs d'API des AUTRES nœuds ; pairs 2380) et VRRP de keepalived
-    # (VIP 10.10.40.200, VRID 140, unicast entre les trois). VRRP n'a pas de port : protocole « VRRP »,
-    # accepté par l'agent grâce à enable-extended-ip-protocols (values du chart).
-    - fromEntities: [kube-apiserver]
+    # etcd (client 2379, etcdctl d'un nœud de contrôle vers les autres membres ; pairs 2380) et VRRP de
+    # keepalived (VIP 10.10.40.200, VRID 140, unicast entre les trois). VRRP n'a pas de port : protocole
+    # « VRRP », accepté par l'agent grâce à enable-extended-ip-protocols (values du chart).
+    # Source « remote-node » et NON « kube-apiserver » : l'identité kube-apiserver d'un nœud vient des
+    # Endpoints du Service « kubernetes » ; elle DISPARAÎT dès que le serveur d'API de ce nœud redémarre
+    # (E28, montée de version, panne). Avec « kube-apiserver », les pairs etcd de ce nœud seraient alors
+    # refusés (son serveur d'API, qui lit l'etcd local, ne revient plus : blocage) et, si c'est le porteur
+    # de la VIP, ses annonces VRRP aussi (deux VIP). Exposition acceptée (exceptions.md) : un travailleur
+    # atteint 2379-2380 (etcd exige un certificat client de sa CA) et peut émettre du VRRP (il faut déjà
+    # être root sur un nœud) ; les pods, eux, n'ont jamais l'identité remote-node.
+    - fromEntities: [remote-node]
       toPorts:
         - ports:
             - {port: "2379", protocol: TCP}

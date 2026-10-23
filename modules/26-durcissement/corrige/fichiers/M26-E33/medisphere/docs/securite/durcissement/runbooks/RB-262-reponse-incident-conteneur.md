@@ -65,7 +65,7 @@ Dossier de travail en mémoire sur `adm01` : `D=$(mktemp -d "$XDG_RUNTIME_DIR/in
 | 4 | Journaux du conteneur | `kubectl -n $NS logs $POD --all-containers --timestamps > $D/logs.txt` (et `--previous` s'il a redémarré) |
 | 5 | Événements de sécurité | export Loki (locataire `audit`) : `{service=~"falco\|tetragon"} \|= "<POD>"` et `{job="kubernetes-audit"} \|= "<POD>"` sur la période, en JSON (Grafana « Inspecter → Données » ou `logcli`) |
 | 6 | Flux réseau | `hubble observe --pod $NS/$POD --since 24h -o json > $D/hubble.json` (tampon limité : le faire tôt) |
-| 7 | *Checkpoint* du conteneur (si disponible) | API du kubelet `POST /checkpoint/<ns>/<pod>/<conteneur>` (fonction `ContainerCheckpoint` : statut en 1.36 et CRIU sur les nœuds **à vérifier** ; sinon sauter, et le noter) |
+| 7 | *Checkpoint* du conteneur (si disponible) | API du kubelet `POST /checkpoint/<ns>/<pod>/<conteneur>` (fonction `ContainerCheckpoint` : **bêta, activée par défaut** depuis 1.30, toujours bêta en 1.36 ; exige que le runtime l'implémente — containerd 2.x avec CRIU installé sur le nœud — sinon `500` : sauter, et le noter ; l'archive est écrite sur le nœud dans `/var/lib/kubelet/checkpoints/`, lisible par root seulement, à copier avec son empreinte) |
 | 8 | Instantané du disque du nœud | sur `pve01` : `vzdump <VMID> --storage pbs-par2 --mode snapshot --notes-template "INC-NNNN preuve"` (namespace PBS `par1/k8s`) ; noter l'identifiant de la sauvegarde |
 
 Empreintes et dépôt :

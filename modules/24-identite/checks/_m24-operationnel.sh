@@ -11,7 +11,8 @@
 #
 # Accès (tous en lecture) :
 #   - Keycloak : « keycloak_api » (client wb-checks du royaume medisphere : view-clients suffit pour
-#     lire la représentation des clients, jamais leur secret) ; découverte publique ;
+#     lire la représentation des clients ; en 26.7 elle contient le secret des clients confidentiels,
+#     retiré aussitôt par _m24d_kc_client et jamais affiché) ; découverte publique ;
 #   - GitLab : gitlab_api (jeton read_api) ; Grafana : grafana_api (compte de service Viewer) ;
 #     Harbor : harbor_api (robot de lecture) ; cluster : « kube » (wb-checks) ;
 #   - SSH en consultation : root@pve01 (WB_PVE_HOST), root@pbs01 (WB_PBS_HOST), admin@nbx01,

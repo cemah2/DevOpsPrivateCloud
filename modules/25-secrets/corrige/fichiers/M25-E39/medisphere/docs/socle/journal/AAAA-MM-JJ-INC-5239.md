@@ -6,7 +6,7 @@
 | Heure | Hypothèse | Commande | Résultat | Conclusion |
 |---|---|---|---|---|
 | 07:02 | — | `outils/etat-grappe.sh` (adm01) | vault01 429, vault02 000, vault03 429 ; VIP 000 ; aucun scellé | **aucun actif** : quorum ou verrou, pas le seal |
-| 07:03 | — | `bao operator raft list-peers -address=https://vault01…:8200` | `local node not active but active cluster node not found` | sans actif, la CLI ne voit plus Raft : lire les nœuds |
+| 07:03 | — | `bao operator raft list-peers` puis `autopilot state` (`BAO_ADDR` sur vault01) | trois pairs `follower`, aucun `leader` ; autopilot : `local node not active but active cluster node not found` | copie locale figée, aucun leader ; sans actif, la CLI ne dit plus rien de vivant : lire les nœuds |
 | 07:04 | kms01 | `curl …/kms01…/v1/sys/health` | 200 | `kms01` hors de cause, **on ne le touche pas** |
 | 07:06 | vault02 arrêté | `systemctl status openbao` (vault02) | `inactive (dead)` depuis 03:41, arrêt demandé (`Stopped openbao.service`) | arrêt volontaire, pas un plantage |
 | 07:08 | 2 sur 3 vivants : il devrait y avoir un leader | `journalctl -u openbao --since -1h` (vault01) | élections en boucle ; vers vault02 `connection refused`, vers vault03 `i/o timeout` | deux causes **différentes** |

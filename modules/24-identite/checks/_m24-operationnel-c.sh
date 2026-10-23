@@ -60,9 +60,10 @@ _m24c_sur_main() {
 # _m24c_kc CHEMIN — API d'administration du royaume medisphere (sortie vide en cas d'erreur).
 _m24c_kc() { keycloak_api "$1" 2>/dev/null || true; }
 
-# _m24c_kc_client CLIENT_ID — représentation JSON du client (vide si absent ou illisible).
+# _m24c_kc_client CLIENT_ID — représentation JSON du client (vide si absent ou illisible), sans son
+# secret (Keycloak 26.7 le livre à view-clients : voir _m24d_kc_client).
 _m24c_kc_client() {
-  _m24c_kc "clients?clientId=$(_m24c_uri "$1")" | jq -c '.[0] // empty' 2>/dev/null || true
+  _m24c_kc "clients?clientId=$(_m24c_uri "$1")" | jq -c '.[0] // empty | del(.secret)' 2>/dev/null || true
 }
 
 # _m24c_kc_utilisateur IDENTIFIANT — identifiant interne Keycloak de la personne (vide si absente).

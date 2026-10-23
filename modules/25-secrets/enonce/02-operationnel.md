@@ -88,7 +88,7 @@ E22, puis E23 en fin de palier    la revue et le runbook s'appuient sur tout le 
 
 **Critères de réussite**
 - [ ] La méthode `gitlab/` est de type `jwt`, configurée par découverte OIDC avec l'émetteur lié ; tout est sur `main` de `plateforme/secrets` et `tofu plan` est vide.
-- [ ] Le rôle `ci-mediagenda-api` lie l'audience `openbao.medisphere.internal`, le `project_id` réel de `mediagenda/api`, `ref_protected` = `"true"`, et émet des jetons de 10 minutes au plus ; sa politique ne lit que `mediagenda/ci/*` et le robot Harbor.
+- [ ] Le rôle `ci-mediagenda-api` lie l'audience `openbao.medisphere.internal`, le `project_id` réel de `mediagenda/api`, `ref_protected` = `"true"`, et émet des jetons de 10 minutes au plus ; sa politique ne lit que le robot Harbor et le jeton de release (pas le jeton de promotion).
 - [ ] Un job d'une branche non protégée est refusé à la connexion, le même job sur `main` lit son secret (`~/m25/e10/essais.md`).
 - [ ] Le dernier pipeline de `main` de `mediagenda/api` est vert avec le composant `securite` v2.9.0 ; plus aucune variable `HARBOR_ROBOT_*`, `DEPLOIEMENT_TOKEN`, `GITLAB_TOKEN` ni `COSIGN_*` dans le projet ni dans le groupe `mediagenda`.
 - [ ] Le dernier `apply` de `plateforme/secrets` a été fait par son pipeline.
@@ -826,7 +826,7 @@ Quand l'audit ne peut plus écrire, ce n'est pas l'audit qui le dit (il ne peut 
 
 <details><summary>Indice 1</summary>
 
-Dans le KV v2, `kv/data/…` porte les valeurs, `kv/metadata/…` les versions et la suppression **définitive** ; `+` remplace exactement **un** segment ; un `deny` l'emporte sur tout ; `sudo` ne sert que sur les chemins qui l'exigent (et il y donne beaucoup).
+Dans le KV v2, `kv/data/…` porte les valeurs, `kv/metadata/…` les versions et la suppression **définitive** ; `+` remplace exactement **un** segment ; un `deny` l'emporte sur les capacités accordées au **même** chemin (même chaîne), pas sur une règle plus précise d'une autre politique ; `sudo` ne sert que sur les chemins qui l'exigent (et il y donne beaucoup).
 </details>
 
 <details><summary>Indice 2</summary>

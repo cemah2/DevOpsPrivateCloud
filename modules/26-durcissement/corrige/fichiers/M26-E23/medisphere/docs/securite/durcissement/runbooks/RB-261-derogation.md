@@ -75,6 +75,22 @@ la justification dans le rapport HTML.
   soir sur la production.
 - Revue mensuelle du registre (voir `exceptions.md`).
 
+## Urgence technique : un contrôle bloque la production
+
+Une politique refuse des pods légitimes (déploiement, redémarrage après un `drain`) et l'incident ne peut
+pas attendre une dérogation normale. Ouvrir un ticket `INC-`, prévenir la RSSI, puis, du moins large au
+plus large :
+
+| Contrôle | Retour arrière normal (Argo CD ou `task appliquer` disponible) | Si Argo CD est indisponible ou bloqué (`admin.conf`, Ansible Vault `critique`) |
+|---|---|---|
+| Politique Kyverno (`ValidatingPolicy`, `ImageValidatingPolicy`…) | MR qui remet `validationActions: [Audit]` ; Argo CD synchronise en moins d'une minute | `kubectl patch validatingpolicy <nom> --type merge -p '{"spec":{"validationActions":["Audit"]}}'` (`imagevalidatingpolicy` pour une politique d'images) ; l'Application `politiques` a `selfHeal` : la MR doit suivre **avant** le retour d'Argo CD, sinon il remet `Deny` (ou `argocd app set politiques --sync-policy none` le temps de la MR) |
+| Contrôleur d'admission de Kyverno hors service, webhook en `Fail` | rétablir les pods de `kyverno` (`kubectl -n kyverno get pods`, événements) | `kubectl delete validatingwebhookconfiguration,mutatingwebhookconfiguration -l webhook.kyverno.io/managed-by=kyverno` : plus rien n'est vérifié par Kyverno jusqu'à son redémarrage (il les recrée) |
+| VAP ou MAP native | `git revert` dans `plateforme/k8s`, `task appliquer` | `kubectl delete validatingadmissionpolicybinding <nom>` (la politique sans liaison ne fait rien), puis la MR |
+| Pod Security | ancienne étiquette dans `espaces/`, `task appliquer` | `kubectl label ns <espace> pod-security.kubernetes.io/enforce=<ancien niveau> --overwrite` (identité `kubeadm:cluster-admins` : la VAP des étiquettes d'espace la laisse passer), puis la MR |
+
+Ensuite : dérogation temporaire (7 jours au plus, section 3) **ou** correction, ligne au registre, et
+post-mortem. Une désactivation d'urgence non suivie d'une MR dans l'heure est un écart en soi.
+
 ## Retrait
 
 MR qui supprime le code de l'exception et déplace la ligne du registre dans « Exceptions closes » avec la

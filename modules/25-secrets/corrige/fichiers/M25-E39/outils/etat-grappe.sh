@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # outils/etat-grappe.sh — état de la grappe OpenBao, nœud par nœud, SANS jeton et sans rien modifier
 # (M25-E39, INC-5239). À lancer depuis adm01. Sert quand la VIP ne répond plus : la CLI « bao » ne
-# sait alors plus rien dire d'utile (list-peers et autopilot sont transmis à un actif qui n'existe pas).
+# sait alors plus rien dire d'utile (autopilot est transmis à un actif qui n'existe pas, list-peers ne
+# montre que la copie locale, figée, du nœud interrogé).
 #
 # Pour chaque nœud et pour la VIP : code de sys/health (200 actif, 429 en attente, 503 scellé, 000
 # rien), scellé ou non, ce que le nœud croit savoir du leader (sys/leader, lu dans SA copie locale du

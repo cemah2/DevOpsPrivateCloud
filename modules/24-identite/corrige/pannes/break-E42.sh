@@ -171,7 +171,7 @@ fi
 EOF
 }
 
-# _e42_pg_refus DEPUIS — PostgreSQL a refusé des connexions à Keycloak depuis DEPUIS (journal de Keycloak).
+# _e42_pg_refus DEPUIS — PostgreSQL a refusé des connexions à Keycloak depuis DEPUIS (heure d'idp01).
 _e42_pg_refus() {
   m24_ssh "$_M24_IDP" "journalctl -u keycloak --since @$1 --no-pager -o cat | grep -Eqi 'too many clients|remaining connection slots|too many connections'"
 }
@@ -191,7 +191,8 @@ _e42_charge() {
 _m24E42_une() {
   local n="$1" lb rc=0
   m24_ecrire E42 variante "$n"
-  m24_ecrire E42 depuis "$(m24_maintenant)"
+  # Heure d'idp01 (journalctl --since) : son horloge peut être décalée par M24-E38 pendant l'astreinte.
+  m24_ecrire E42 depuis "$(m24_heure "$_M24_IDP" || m24_maintenant)"
   case "$n" in
     1)
       m24_sain_hote "$_M24_IDP" || return 1

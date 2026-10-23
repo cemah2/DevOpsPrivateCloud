@@ -88,7 +88,7 @@ Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 25 XX`). Elles 
 
 <details><summary>Indice 1</summary>
 
-Un nœud en attente répond à presque tout : il **transmet** la requête au nœud actif par le port de grappe (8201). C'est pour cela que la boucle peut écrire par n'importe quel nom pendant que la grappe est saine. Ce qu'il ne fait pas : répondre 200 à `sys/health`. Lis les paramètres `standbyok` et `perfstandbyok` de `sys/health` et demande-toi pourquoi le script de keepalived ne doit **pas** les utiliser.
+Un nœud en attente répond à presque tout : il **transmet** les écritures au nœud actif par le port de grappe (8201), et sert lui-même certaines lectures (lis la page [cohérence](https://openbao.org/docs/concepts/consistency/)). C'est pour cela que la boucle peut écrire par n'importe quel nom pendant que la grappe est saine. Ce qu'il ne fait pas : répondre 200 à `sys/health`. Lis les paramètres `standbyok` et `perfstandbyok` de `sys/health` et demande-toi pourquoi le script de keepalived ne doit **pas** les utiliser.
 </details>
 
 <details><summary>Indice 2</summary>
@@ -101,7 +101,7 @@ Pour le défi ACME : au M07, le port 80 de chaque répartiteur relaie `/.well-kn
 L'arrêt brutal est le plus long : le leader Raft disparu, les suiveurs attendent l'expiration de leur délai d'élection, puis le nouveau leader doit encore **prendre le verrou** d'actif et reconstruire son état (montages, baux) avant de répondre 200 — et keepalived doit le voir (intervalle × nombre d'échecs). Additionne ces délais avant de mesurer, puis compare.
 </details>
 
-**Pour aller plus loin** (facultatif) : ajoute un nœud **non électeur** permanent (`bao operator raft join -non-voter`) dans une VM jetable et observe-le dans autopilot ; lis la section *Performance standby* de la documentation : est-ce disponible dans OpenBao ? Qu'est-ce que ça changerait pour la charge de lecture d'ESO ?
+**Pour aller plus loin** (facultatif) : ajoute un nœud **non électeur** permanent (`bao operator raft join -non-voter`) dans une VM jetable et observe-le dans autopilot ; lis ce que la documentation d'OpenBao dit des lectures servies par les nœuds en attente (et des *performance standby* de Vault Enterprise) : qu'est-ce que ça change, ou pourrait changer, pour la charge de lecture d'ESO, qui passe par la VIP ?
 
 ---
 
@@ -161,7 +161,7 @@ Le jeton du seal `transit` est renouvelé par le serveur lui-même tant que le p
 Avec un seal `transit`, le serveur a besoin de `kms01` **au démarrage**, pour configurer le seal, avant même d'ouvrir son écouteur : si `kms01` ne répond pas, le processus s'arrête en erreur. L'unité du paquet a `Restart=on-failure`, `RestartSec=5`, `StartLimitIntervalSec=60` et `StartLimitBurst=3` : fais le calcul.
 </details>
 
-**Pour aller plus loin** (facultatif) : lis la documentation du seal `static` (clé AES fournie par fichier) et du *Seal High Availability* ; écris dans ton journal ce que chacun protégerait et ne protégerait pas dans le lab. Ces éléments serviront l'ADR-0250 (E31).
+**Pour aller plus loin** (facultatif) : lis la documentation du seal `static` (clé AES fournie par fichier) et vérifie si OpenBao sait utiliser **deux** seals actifs à la fois, comme le *Seal High Availability* de Vault Enterprise (essaie deux blocs `seal` sur un serveur jetable) ; écris dans ton journal ce que chacun protégerait et ne protégerait pas dans le lab. Ces éléments serviront l'ADR-0250 (E31).
 
 ---
 

@@ -23,7 +23,7 @@ Prérequis : module 23 terminé (`lab/bin/check 23 25` vert) ; module 06 (racine
 
 > **Mémoire** : les deux VMs du palier ajoutent 7 Go. Le palier ne touche pas au cluster : si `pve01` manque de mémoire, arrête `k8s-par1` (procédure du M14) le temps du palier, jamais une VM du socle.
 
-**Durée** : 16 à 20 heures. **Ordre conseillé** : celui de la carte, E01 → E09 (voir l'introduction).
+**Durée** : 21 à 25 heures. **Ordre conseillé** : celui de la carte, E01 → E09 (voir l'introduction).
 
 ---
 
@@ -123,7 +123,7 @@ Pour les questions d'exploitation, mets-toi à la place de Nadia un lundi à 8 h
 - Conduire et consigner une cérémonie de signature d'autorité subordonnée.
 - Contrôler un annuaire : services, Kerberos, chaîne de certificats, flux.
 
-**Prérequis** : M06-E02 (racine hors ligne, `~/pki-racine`), M06-E13 (PowerDNS en API depuis OpenTofu), M08-E02 (module `vm-noeud`, image `rocky10`), M04 (rôles, Vault `critique`), M07 (rôle `pare_feu` des passerelles).
+**Prérequis** : M06-E02 (racine hors ligne, `~/pki-racine`), M06-E14 (PowerDNS par API et par OpenTofu, module `enregistrement-dns`), M08-E02 (module `vm-noeud`, image `rocky10`), M04 (rôles, Vault `critique`), M07 (rôle `pare_feu` des passerelles).
 **Durée indicative** : 4 h.
 
 **Contexte technique**
@@ -208,7 +208,7 @@ Sans DNS intégré, l'installateur ne publie rien : il écrit seulement, à la f
 
 <details><summary>Indice 2</summary>
 
-Le rôle `ipaserver` sait faire les deux passages : avec `ipaserver_external_ca: true`, il s'arrête après avoir écrit `/root/ipa.csr` ; avec `ipaserver_external_cert_files_from_controller`, il copie les fichiers que tu lui donnes dans `/root/` et termine. Ton rôle n'a qu'à décider de la phase (un `stat` sur `/etc/ipa/default.conf`, un autre sur le certificat signé dans le dépôt) et rapatrier la CSR. C'est exactement la logique du rôle `step_ca` du M06.
+Le rôle `ipaserver` sait faire les deux passages : avec `ipaserver_external_ca: true`, il s'arrête après avoir écrit `/root/ipa.csr` ; avec `ipaserver_external_cert_files_from_controller`, il copie les fichiers que tu lui donnes dans `/root/` et termine. Ton rôle n'a qu'à décider de la phase (FreeIPA est-il **complètement** installé ? le certificat signé est-il dans le dépôt ?) et rapatrier la CSR. Attention au premier test : la phase 1 laisse déjà sur `ipa01` des fichiers d'une installation (`/etc/ipa/default.conf`, une instance 389-ds) ; demande plutôt à FreeIPA ce qu'il en pense (`ipactl status` répond « IPA is not configured » tant que l'installation n'est pas terminée). C'est exactement la logique du rôle `step_ca` du M06.
 </details>
 
 <details><summary>Indice 3</summary>
@@ -434,7 +434,7 @@ HAProxy compare les chemins **tels qu'ils arrivent** : `/realms/%6Daster` n'est 
    ```
    admin@adm01:~$ lab/bin/check 24 05
    ```
-   Ce check obtient un jeton par `client_credentials` puis lit l'API d'administration. Que se passerait-il si `wb-checks` avait `manage-users` et que son secret fuyait ?
+   Ce check obtient un jeton par `client_credentials` puis lit l'API d'administration. Que se passerait-il si `wb-checks` avait `manage-users` et que son secret fuyait ? Et avec ses seuls rôles de lecture : que lit-il exactement d'un client **confidentiel** comme `essai-oidc` (représentation complète, `…/clients/<id>/client-secret`) ? Qu'en déduis-tu sur la protection de `keycloak-checks.env` ?
 6. Note dans `~/m24/e05/notes.md` chaque objet créé et son identifiant (dans l'URL de la console) : E08 en aura besoin.
 
 **Critères de réussite**

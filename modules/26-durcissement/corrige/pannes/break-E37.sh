@@ -25,15 +25,18 @@ _e37_t1() {
   yq '.nodeSelector = {"node-role.kubernetes.io/control-plane": ""}
       | .nodeSelector head_comment = "PLAT-2737 (Lucas) : limiter Falco aux nœuds de contrôle (essai)"'
 }
-_e37_i1() { yq 'del(.nodeSelector)'; }
+_e37_i1() { yq 'with(select((.nodeSelector // {}) | has("node-role.kubernetes.io/control-plane")); del(.nodeSelector))'; }
 _e37_t3() {
   yq '.falcosidekick.config.alertmanager.hostport |= sub(":9093$"; ":9095")'
 }
 _e37_i3() {
   yq '.falcosidekick.config.alertmanager.hostport |= sub(":9095$"; ":9093")'
 }
-_e37_t4() { yq '.falco.priority = "critical"'; }
-_e37_i4() { yq '.falco.priority = "notice"'; }
+_e37_t4() { yq '.falco.priority = "critical" | .falco.priority line_comment = "PLAT-2737 (Lucas) : moins de bruit"'; }
+# Inverse : seulement si la marque est encore là ; « notice » est la valeur d'E08/E19.
+_e37_i4() {
+  yq 'with(select((.falco.priority | line_comment) | test("PLAT-2737")); .falco.priority = "notice" | .falco.priority line_comment = "")'
+}
 # v2 : désactiver une règle MédiSphère par une surcharge ajoutée à la fin du bloc customRules.
 _E37_REGLE="MédiSphère — shell interactif dans un conteneur applicatif"
 _e37_t2() {
@@ -50,11 +53,18 @@ _e37_i2() {
 _e37_falco_cm() { wb_kubectl -n "$_M26_NS_FALCO" get configmap -o json 2>/dev/null; }
 _e37_effet() {
   case "$1" in
+    # Effet réel : le DaemonSet porte le nodeSelector ET aucun pod Falco ne tourne sur un travailleur.
+    # (Comparer desiredNumberScheduled au nombre de TRAVAILLEURS ne marchait pas : 3 nœuds de contrôle
+    # tolérés = 3 travailleurs.)
     1)
-      local prog dispo
-      prog="$(wb_kubectl -n "$_M26_NS_FALCO" get daemonset falco -o jsonpath='{.status.desiredNumberScheduled}' 2>/dev/null)" || return 1
-      dispo="$(wb_kubectl get nodes -l '!node-role.kubernetes.io/control-plane' -o name 2>/dev/null | wc -l)"
-      [[ -n "$prog" ]] && ((prog < dispo))
+      local t nb=0
+      wb_kubectl -n "$_M26_NS_FALCO" get daemonset falco -o jsonpath='{.spec.template.spec.nodeSelector}' 2>/dev/null \
+        | grep -q 'node-role.kubernetes.io/control-plane' || return 1
+      for t in $(wb_kubectl get nodes -l '!node-role.kubernetes.io/control-plane' -o name 2>/dev/null); do
+        nb=$((nb + $(wb_kubectl -n "$_M26_NS_FALCO" get pods -l app.kubernetes.io/name=falco \
+          --field-selector "spec.nodeName=${t#node/}" --no-headers 2>/dev/null | grep -c Running)))
+      done
+      ((nb == 0))
       ;;
     2) _e37_falco_cm | jq -e '[.items[].data // {} | to_entries[] | .value | select(test("shell interactif dans un conteneur applicatif"; "i") and test("enabled: *false"))] | length > 0' >/dev/null 2>&1 ;;
     # La configuration de falcosidekick est dans un Secret (variables d'environnement) : on la décode.

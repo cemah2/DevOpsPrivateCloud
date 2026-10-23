@@ -57,7 +57,7 @@ Champs utiles d'une ligne (`| json` aplatit `request.path` en `request_path`…)
 
 Les valeurs sont en HMAC : on calcule le HMAC de la valeur **avec le sel du dispositif**, puis on le cherche (droit `sys/audit-hash/fichier`, `securite-audit` et `plateforme-admin`) :
 ```
-admin@adm01:~$ read -rs v; jq -n --arg v "$v" '{input: $v}' | bao write -field=hash sys/audit-hash/fichier - ; unset v
+admin@adm01:~$ read -rs v; printf '%s' "$v" | jq -Rs '{input: .}' | bao write -field=hash sys/audit-hash/fichier - ; unset v
 hmac-sha256:3a5f…
 ```
 ```logql

@@ -257,7 +257,7 @@ Si `ping -M do -s 1472` d'hôte à hôte échoue après l'activation alors que 1
 
 <details><summary>Indice 1</summary>
 
-Le premier exemple de la documentation (`lock-down-ingress`) autorise **tout** depuis `remote-node` et `health` : c'est un point de départ, pas une fin. Pour un nœud de contrôle, distingue ce qui ne doit venir que des autres nœuds de contrôle (etcd, VRRP), ce qui vient de tout le cluster (pods compris : l'API par le Service `kubernetes`), et ce qui vient de l'extérieur (MGMT, `vault01-03`, `mon01`, la bordure).
+Le premier exemple de la documentation (`lock-down-ingress`) autorise **tout** depuis `remote-node` et `health` : c'est un point de départ, pas une fin. Pour un nœud de contrôle, distingue ce qui ne vient que des autres nœuds de contrôle (etcd, VRRP : par quelle identité les reconnaître, et la portent-ils **encore** pendant le redémarrage de leur serveur d'API ?), ce qui vient de tout le cluster (pods compris : l'API par le Service `kubernetes`), et ce qui vient de l'extérieur (MGMT, `vault01-03`, `mon01`, la bordure).
 </details>
 
 <details><summary>Indice 2</summary>

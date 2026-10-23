@@ -35,10 +35,21 @@
   check_mode: false
   failed_when: "'Leap status     : Normal' not in _freeipa_serveur_chrony.stdout"
 
-- name: FreeIPA est-il déjà installé ?
-  ansible.builtin.stat:
-    path: /etc/ipa/default.conf
-  register: _freeipa_serveur_installe
+# Pas de « stat » sur /etc/ipa/default.conf : la PHASE 1 l'écrit déjà (ipaserver_prepare, comme
+# install_check d'ipa-server-install) ; il ne prouve donc pas une installation terminée. La seule
+# réponse fiable est celle de FreeIPA lui-même (état « installation complete » de sysrestore),
+# celle qu'interroge aussi « ipactl » (code 4 : « IPA is not configured »).
+- name: FreeIPA est-il complètement installé ?
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - "import sys\ntry:\n    from ipalib.facts import is_ipa_configured\nexcept ImportError:\n    sys.exit(1)\nsys.exit(0 if is_ipa_configured() else 1)"
+  register: _freeipa_serveur_configure
+  changed_when: false
+  failed_when: _freeipa_serveur_configure.rc not in [0, 1]
+  check_mode: false
+
 
 - name: Le certificat signé par la racine est-il dans le dépôt ?
   ansible.builtin.stat:
@@ -54,7 +65,7 @@
 
 - name: Phase 1 — installation jusqu'à la CSR de la CA (CA externe)
   when:
-    - not _freeipa_serveur_installe.stat.exists
+    - _freeipa_serveur_configure.rc != 0
     - not _freeipa_serveur_crt_local.stat.exists
   block:
     # Rejouer la phase 1 créerait une NOUVELLE clé de CA : la CSR déjà signée (ou en cours de
@@ -97,7 +108,7 @@
 
 - name: Phase 2 — fin de l'installation avec le certificat signé
   when:
-    - not _freeipa_serveur_installe.stat.exists
+    - _freeipa_serveur_configure.rc != 0
     - _freeipa_serveur_crt_local.stat.exists
   block:
     - name: Phase 2 — le certificat signé correspond à la CSR et à la racine (sur le contrôleur)

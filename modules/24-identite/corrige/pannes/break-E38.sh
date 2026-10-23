@@ -112,7 +112,7 @@ symptome_E38() {
   local detail
   case "$WB_VAR" in
     1) detail="Grafana, Argo CD et kubectl : je me connecte, et tout de suite « token expired » / « jeton expiré ». Karim ajoute que son code OTP est refusé." ;;
-    2) detail="Je me connecte à Argo CD, ça marche dix secondes, puis l'interface me renvoie au SSO en boucle ; kubectl redemande le navigateur sans arrêt." ;;
+    2) detail="Je me connecte à Argo CD, ça marche dix secondes, puis l'interface me renvoie au SSO en boucle, sans même me redemander mon mot de passe." ;;
     *) detail="kubectl marche… une fois sur trois. Les autres fois : « Unauthorized ». Les interfaces web, elles, vont bien." ;;
   esac
   wb_symptome "Ticket INC-5138 — De : Karim Benali" \

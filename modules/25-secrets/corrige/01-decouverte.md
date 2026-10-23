@@ -5,7 +5,7 @@
 Ce corrigé suit l'ordre de l'énoncé. Les questionnaires (E01, E09) sont argumentés et les QCM expliquent pourquoi les autres options sont fausses. Les fichiers complets sont dans [`fichiers/`](fichiers/), exercice par exercice ; chaque dossier reproduit l'arborescence du projet concerné : `infra/` pour `plateforme/infra`, `ansible/` pour `plateforme/ansible`, `identite/` pour `plateforme/identite`, `secrets/` pour `plateforme/secrets`, `outils/` pour `plateforme/outils`, `medisphere/` pour la documentation. Un fichier n'apparaît que dans l'exercice qui le crée ou le modifie : `M25-E02/` (inventaire), `M25-E03/` (VM, rôles `openbao` et `outils_openbao`, outil des parts, garde des parts), `M25-E04/` (conventions KV), `M25-E05/` (modèle d'accès), `M25-E06/` (client Keycloak), `M25-E07/` (`medictl`), `M25-E08/` (projet `plateforme/secrets` complet, dont les **politiques** écrites en E05 et E07, dans leur version finale).
 
 **Ce qui a été vérifié à la rédaction** :
-- **OpenBao 2.6.4 réel** (paquet `openbao_2.6.4_linux_amd64.deb` de la publication, empreinte comparée à `checksums.txt`) : contenu du paquet (`openbao.hcl` d'exemple en stockage `file`, unité `Type=notify`, `ProtectSystem=full`, `MemorySwapMax=0`, `ExecReload` par `SIGHUP` ; `preinst` en `useradd --system --user-group`, `postinst` qui génère un certificat auto-signé dans `/opt/openbao/tls`) ; serveur lancé avec la configuration rendue par le rôle (Raft, TLS par une hiérarchie de test racine EC → feuille aux deux noms) ; `bao operator validate-config` (0 succès, 2 avertissement, 1 échec) ; **`disable_mlock` refusé** (« unknown or unsupported field ») ;
+- **OpenBao 2.6.4 réel** (paquet `openbao_2.6.4_linux_amd64.deb` de la publication, empreinte comparée à `checksums.txt`) : contenu du paquet (`openbao.hcl` d'exemple en stockage `file`, unité `Type=notify`, `ProtectSystem=full`, `MemorySwapMax=0`, `ExecReload` par `SIGHUP` ; `preinst` en `useradd --system --user-group`, `postinst` qui génère un certificat auto-signé dans `/opt/openbao/tls`) ; serveur lancé avec la configuration rendue par le rôle (Raft, TLS par une hiérarchie de test racine EC → feuille aux deux noms) ; `bao operator validate-config` (0 succès, 2 avertissement, 1 échec) ; **`disable_mlock` ignoré avec un avertissement** (« unknown or unsupported field ») au démarrage, donc **refusé** par la validation du rôle (code 2) ;
 - **l'initialisation complète d'E03** par `outils/openbao-parts.sh` : `bao operator init -format=json` → chiffrement `age` des cinq parts et du jeton racine → `ansible-vault encrypt` lisant l'entrée standard ; `resume` ; descellement par trois dépositaires (refus clair avec la mauvaise identité) ; `jeton-racine` vers `~/.vault-token` ; redémarrage → scellé (`bao status` code 2, `sys/health` 503, toute requête « Vault is sealed ») ; contenu de `/var/lib/openbao` (chemins internes lisibles, valeurs chiffrées, la valeur d'un secret introuvable dans les fichiers) ;
 - **E04 à E07 contre ce serveur** : KV v2 (versions, `delete`/`undelete`/`destroy`, CAS, métadonnées, `kv patch` des métadonnées, valeur par l'entrée standard, API par `curl -K`) ; politiques et `bao token capabilities` (dont la **priorité entre motifs** qui masque une écriture, `sudo` exigé pour `sys/auth/*` et `sys/audit` mais pas pour `sys/mounts/*`, une liste qui vise le chemin à barre finale, `*` qui couvre la chaîne vide) ; jetons (TTL, période, orphelin refusé sans sudo, révocation en cascade par accessor, `generate-root -status` avec une politique sur `sys/generate-root-token/*`) ; **OIDC contre un Keycloak 26.7.5** (royaume, portée `groupes`, client confidentiel PKCE S256) : flux complet scripté, OpenBao envoie bien `code_challenge_method=S256`, groupes externes → `identity_policies`, la configuration relue ne contient pas le secret ; **AppRole** (`secret_id_ttl` ramené à 768 h, jetons *batch* liés à une adresse, sans `default`) ; `bao_api` de `check-lib.sh` avec la politique `wb-checks`, refus de `kv/data` ;
 - **`medictl`** : `coffre.py` et `config.py` sur la base du M02-E20 : 115 tests verts (`pytest`), `ruff check` et `ruff format` propres ; lecture réelle d'un secret avec l'AppRole `medictl`, et refus propre (« 403 : 1 error occurred: * permission denied ») hors de son chemin ;
@@ -20,7 +20,7 @@ Ce corrigé suit l'ordre de l'énoncé. Les questionnaires (E01, E09) sont argum
 - la **liaison d'adresse** des AppRole à 10.10.10.10 : elle suppose que `vault01` voit l'adresse réelle d'`adm01` (pas de traduction d'adresse entre VLAN, M07) ;
 - l'effet de la **réappartenance à un groupe** pendant la vie d'un jeton OIDC (E06, étape 8) : décrit d'après la documentation de l'identité, non chronométré ;
 - la synchronisation NetBox du M06 avec le secret lu dans le coffre (unité non relancée ici) ;
-- le comportement du fournisseur OpenTofu avec le **jeton racine** : il a échoué (`lookup-self` 403 sur le jeton enfant) quand on l'a essayé avec la racine, et fonctionné avec un jeton OIDC d'administrateur ; on ne s'en sert de toute façon jamais avec la racine.
+- le comportement du fournisseur OpenTofu avec le **jeton racine** : un échec (`lookup-self` 403 sur le jeton enfant) a été vu à la rédaction, mais la relecture n'a pas pu le reproduire (plan et apply acceptés avec la racine contre un serveur `-dev` 2.6.4) ; on ne s'en sert de toute façon jamais avec la racine.
 
 **Ce qui reste promis** (modules précédents) : le M02-E19 annonçait que `medictl` lirait son secret dans le coffre : **tenu** en E07 pour les jetons Proxmox (le jeton NetBox et la clé PowerDNS de `medictl` suivent le même chemin, laissé en « Pour aller plus loin » et repris au mini-projet M25-E46). Le M04 annonçait que le mot de passe d'Ansible Vault sortirait du disque d'`adm01` : c'est M25-E11. Le registre des secrets du M01 (`docs/socle/registre-secrets.md`) est complété, pas remplacé, par l'inventaire d'E02. Le client `openbao` annoncé par le M24 est créé en E06.
 
@@ -165,7 +165,7 @@ admin@adm01:~$ curl -s -o /dev/null -w '%{http_code}\n' $BAO_ADDR/v1/sys/health
 501
 ```
 
-Code 2 de `bao status` : « scellé » (0 = descellé, 1 = erreur). `sys/health` encode l'état dans le code HTTP pour les répartiteurs et les sondes : **200** actif, **429** en attente (*standby*, M25-E24), **472**/**473** réplication et lecture seule, **501** non initialisé, **503** scellé ; chaque code se règle par paramètre (`?sealedcode=…`, `?standbyok=true`).
+Code 2 de `bao status` : « scellé » (0 = descellé, 1 = erreur). `sys/health` encode l'état dans le code HTTP pour les répartiteurs et les sondes : **200** actif, **429** en attente (*standby*, M25-E24), **501** non initialisé, **503** scellé (les codes 472/473 de Vault, liés à sa réplication Enterprise, n'existent pas dans OpenBao) ; chaque code se règle par paramètre (`?sealedcode=…`, `?uninitcode=…`, `?standbyok=true`).
 
 *C. Les dépositaires.* Identités créées et chiffrées d'un seul tube, aucune clé privée en clair ne touche le disque :
 
@@ -368,7 +368,7 @@ admin@adm01:~$ bao kv get -mount=kv -output-curl-string plateforme/essai/demo
 curl -H "X-Vault-Token: $(bao print token)" -H "X-Vault-Request: true" "https://openbao.par1.medisphere.internal:8200/v1/kv/data/plateforme/essai/demo"
 ```
 
-`max_versions: 0` sur le secret veut dire « valeur du moteur » (10) ; `-output-curl-string` montre l'appel exact, et `-output-policy` la politique qu'il faudrait (utile en E05). Document : [`conventions-kv.md`](fichiers/M25-E04/medisphere/docs/securite/secrets/conventions-kv.md).
+`max_versions: 0` sur le secret veut dire « valeur du moteur » (10) ; `-output-curl-string` montre l'appel exact (à ne pas relancer tel quel : le jeton y passerait en argument de `curl`), et `-output-policy` la politique qu'il faudrait (utile en E05). Document : [`conventions-kv.md`](fichiers/M25-E04/medisphere/docs/securite/secrets/conventions-kv.md).
 
 **Explications**
 
@@ -486,6 +486,7 @@ admin@adm01:~$ bao policy delete essai-e05; unset T P E; rm -f ~/m25/e05/acc-*
 - Écrire la politique de lecture avec des motifs plus précis que celle d'administration : les administrateurs perdent leurs droits (étape 4).
 - `path "kv/*"` « pour simplifier » : lecture **et** écriture de tous les secrets, configuration du moteur comprise.
 - Oublier `kv/metadata/…` (liste, versions) ou `kv/delete/…`, `kv/undelete/…` dans une politique KV v2 : l'équipe écrit mais ne voit pas ses secrets, ou ne peut pas annuler une erreur.
+- Donner `delete` sur `kv/metadata/<équipe>/*` « pour faire le ménage » : supprimer les métadonnées efface le secret **et toutes ses versions**, sans retour ; c'est une destruction déguisée (d'où son absence de `mediagenda-dev`).
 - Une règle de liste sans barre finale (`auth/+/role`) : elle ne sert à rien pour `LIST auth/approle/role/`.
 - Tester une politique avec le jeton racine : tout passe. Toujours avec un jeton de la politique.
 - Laisser traîner des jetons d'essai périodiques ou orphelins : ils ne meurent jamais seuls.
@@ -556,7 +557,7 @@ create, delete, list, read, update
 deny
 ```
 
-Les droits sont dans `identity_policies` : ils viennent de l'**entité** (la personne) par ses groupes externes, pas du jeton lui-même (`policies` ne contient que `default`, celle du rôle). Keycloak a demandé l'OTP (flux `navigateur-medisphere` du M24, membre de `plateforme-admins`). Lucas (`plateforme`) : `identity_policies [plateforme-lecture]`, la liste des secrets s'affiche, l'ouverture d'un secret est refusée ; Julien (`mediagenda`) : écriture dans `kv/mediagenda/dev/`, refus ailleurs. Retiré de `plateforme` dans l'annuaire, Lucas garde ses droits tant que son jeton vit sans se reconnecter ; à la connexion suivante (ou au renouvellement, qui relit les groupes de l'entité), il ne les a plus. Ce qu'OpenBao a créé : une **entité** par personne (à la première connexion), avec un **alias** `oidc` à son identifiant ; les groupes externes n'ont pas de membres écrits : leur appartenance est recalculée à chaque connexion d'après la revendication `groups`.
+Les droits sont dans `identity_policies` : ils viennent de l'**entité** (la personne) par ses groupes externes, pas du jeton lui-même (`policies` ne contient que `default`, celle du rôle). Keycloak a demandé l'OTP (flux `navigateur-medisphere` du M24, membre de `plateforme-admins`). Lucas (`plateforme`) : `identity_policies [plateforme-lecture]`, la liste des secrets s'affiche, l'ouverture d'un secret est refusée ; Julien (`mediagenda`) : écriture dans `kv/mediagenda/dev/`, refus ailleurs. Retiré de `plateforme` dans l'annuaire, Lucas garde ses droits tant qu'il ne se reconnecte pas : son jeton vit jusqu'à 8 h, et un renouvellement réapplique les groupes reçus **à la connexion** (OpenBao ne redemande rien à Keycloak ; vérifié dans le code d'OpenBao 2.6.4, `RenewToken`). À la connexion suivante, la revendication `groups` ne contient plus `plateforme` : l'entité quitte le groupe externe, et comme les politiques d'identité sont relues à chaque requête, **tous** ses jetons perdent `plateforme-lecture` (un renouvellement d'un ancien jeton réappliquerait toutefois ses anciens groupes). Pour couper tout de suite : révoquer ses jetons par accessor, ou désactiver son entité. Ce qu'OpenBao a créé : une **entité** par personne (à la première connexion), avec un **alias** `oidc` à son identifiant ; les groupes externes n'ont pas de membres écrits : leur appartenance est recalculée à chaque connexion d'après la revendication `groups`.
 
 **Explications**
 
@@ -610,7 +611,7 @@ admin@adm01:~$ lab/bin/check 25 04 | head -3
 Preuve qu'elle ne lit aucune valeur :
 
 ```
-admin@adm01:~$ J=$( ( . ~/.config/workbook/openbao-checks.env; jq -nc --arg r "$BAO_ROLE_ID" --arg s "$BAO_SECRET_ID" '{role_id: $r, secret_id: $s}' ) \
+admin@adm01:~$ J=$( ( set -a; . ~/.config/workbook/openbao-checks.env; jq -nc '{role_id: env.BAO_ROLE_ID, secret_id: env.BAO_SECRET_ID}' ) \
 >   | curl -s --data @- $BAO_ADDR/v1/auth/approle/login | jq -r .auth.client_token )
 admin@adm01:~$ curl -s -K <(printf 'header = "X-Vault-Token: %s"\n' "$J") $BAO_ADDR/v1/kv/data/plateforme/openbao/oidc | jq -c .errors
 ["1 error occurred:\n\t* permission denied\n\n"]
@@ -619,7 +620,7 @@ admin@adm01:~$ curl -s -K <(printf 'header = "X-Vault-Token: %s"\n' "$J") -X LIS
 admin@adm01:~$ unset J
 ```
 
-Une identité de vérification qui pourrait émettre des `secret_id` pourrait se **multiplier** (et créer des identités pour d'autres rôles si le chemin était large) : elle deviendrait une identité d'administration. Limites d'un `secret_id` (rôle `essai-e07`) : usage unique → second login refusé (« invalid secret id ») ; 2 minutes → refusé après ; lié à `10.10.20.15/32` → « source address unauthorized ». Et `secret_id_ttl=2160h` est ramené à **768 h** (maximum des baux de la méthode) : relire ce qu'OpenBao a enregistré.
+Une identité de vérification qui pourrait émettre des `secret_id` pourrait se **multiplier** (et créer des identités pour d'autres rôles si le chemin était large) : elle deviendrait une identité d'administration. Limites d'un `secret_id` (rôle `essai-e07`) : usage unique → second login refusé (« invalid secret id ») ; 2 minutes → refusé après ; lié à `10.10.20.15/32` → « source address unauthorized ». Et `secret_id_ttl=2160h` : le rôle relu affiche bien 2160 h, mais chaque `secret_id` émis ne vaut que **768 h** (maximum des baux de la méthode) : c'est le `secret_id_ttl` de la **réponse** à `…/secret-id` qu'il faut relire.
 
 *B. `medictl`.*
 
@@ -766,7 +767,7 @@ Le jeton racine chiffré qui reste dans `secrets/openbao-init.yml` est révoqué
 
 **Pièges classiques**
 
-- Appliquer avec la racine « parce qu'elle marche » : l'audit perd l'auteur, et (constaté) le fournisseur échoue sur `lookup-self` de son jeton enfant.
+- Appliquer avec la racine « parce qu'elle marche » : l'audit perd l'auteur, et le jeton le plus puissant du coffre sert à une opération courante.
 - Un `VAULT_TOKEN` oublié dans le shell (la racine d'un essai) qui passe avant la session OIDC : `charger-acces.sh` le refuse.
 - `vault_kv_secret_v2` en **ressource** pour « initialiser » un secret : la valeur dans l'état.
 - Liste des politiques construite à la main dans le code au lieu de `fileset()` : un fichier ajouté n'est pas appliqué, ou une politique supprimée du dépôt reste sur le serveur.
@@ -801,7 +802,7 @@ Pipeline authentifié par le jeton d'identité de GitLab (M25-E10), plan sur cha
 
 **9. Chemins et montages.** KV v2 sépare les **données** (`kv/data/…`, valeur d'une version) des **métadonnées** (`kv/metadata/…`, versions, dates, réglages, métadonnées personnalisées) et des opérations (`delete`, `undelete`, `destroy`) pour que les politiques donnent l'un sans l'autre (voir sans lire, supprimer sans détruire). Un second montage `kv-mediagenda/` serait un espace de chemins distinct : les politiques doivent le nommer (`kv-mediagenda/data/…`), les règles sur `kv/` ne s'y appliquent pas ; on peut le désactiver ou le régler séparément. `sys/` : administration du serveur (montages, politiques, santé, scellement, baux) ; `auth/` : méthodes d'authentification et leurs rôles ; `identity/` : entités, groupes, alias (qui est qui, à travers les méthodes) ; `cubbyhole/` : un espace privé **par jeton**, détruit avec lui (support de l'enveloppement).
 
-**10. Réponse B.** Les deux règles correspondent ; la plus précise (`kv/data/mediagenda/prod/*`) s'applique seule, et elle refuse ; et `deny` l'emporterait de toute façon. A est faux : seules des règles de **même chaîne** se cumulent ; C et D sont faux : l'ordre des politiques ne compte pas.
+**10. Réponse B.** Les deux règles correspondent ; la plus précise (`kv/data/mediagenda/prod/*`) s'applique seule, et elle refuse. Attention à la généralisation « `deny` l'emporte toujours » : c'est vrai entre règles de **même chaîne** ; avec les capacités inversées (`deny` sur `kv/data/mediagenda/*`, `read` sur `kv/data/mediagenda/prod/*`), la règle la plus précise permettrait la lecture (vérifié avec `bao token capabilities`). A est faux : seules des règles de **même chaîne** se cumulent ; C et D sont faux : l'ordre des politiques ne compte pas.
 
 **11. `sys/`.** Utilisés : `sys/seal-status` et `sys/health` (état, sans jeton), `sys/unseal` (parts), `sys/mounts/<chemin>` (monter un moteur, pas de sudo), `sys/auth/<chemin>` (activer une méthode, **sudo**), `sys/policies/acl/<nom>` (politiques), `sys/capabilities-self`, `sys/generate-root-token/attempt` (régénération authentifiée) ; `sys/seal` et `sys/audit` exigent **sudo**. `sys/health` répond sans jeton parce qu'il sert aux répartiteurs, à keepalived et aux sondes, qui n'ont pas d'identité, et il ne révèle que l'état ; ses **codes HTTP** (200 actif, 429 en attente, 501 non initialisé, 503 scellé…) permettent de décider sans lire le corps (keepalived au M25-E24, blackbox au M25-E27).
 

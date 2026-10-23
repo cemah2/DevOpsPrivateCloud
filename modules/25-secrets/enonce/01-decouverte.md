@@ -399,7 +399,7 @@ En KV v2, la CLI cache les vrais chemins : `bao kv put -mount=kv plateforme/x` �
 10. Écris `modele-acces-coffre.md` : principes, table groupes → politiques (peut / ne peut pas), règles d'écriture des politiques (dont la priorité entre motifs et ce que tu as constaté à l'étape 4), types et durées de jetons par usage. MR, fusion.
 
 **Critères de réussite**
-- [ ] Les quatre politiques existent ; `mediagenda-dev` ne vise que `kv/…/mediagenda/dev/` (et la liste de `kv/metadata/mediagenda/`), sans destruction ni `sudo` ; les politiques de lecture ne lisent aucune valeur ni n'écrivent ; `plateforme-admin` n'a ni chemin global, ni `sys/raw`, ni `kv/data` des applications, et peut sceller.
+- [ ] Les quatre politiques existent ; `mediagenda-dev` ne vise que `kv/…/mediagenda/dev/` (et la liste de `kv/metadata/mediagenda/`), sans aucune forme de destruction ni `sudo` ; les politiques de lecture ne lisent aucune valeur ni n'écrivent ; `plateforme-admin` n'a ni chemin global, ni `sys/raw`, ni `kv/data` des applications, et peut sceller.
 - [ ] Un jeton portant `plateforme-admin` et `plateforme-lecture` garde les droits d'écriture de l'administration.
 - [ ] Aucune politique ni aucun jeton d'essai ne subsiste.
 - [ ] `modele-acces-coffre.md` est sur `main` et explique la priorité entre motifs.
@@ -506,7 +506,7 @@ Un groupe **externe** reçoit ses membres de la méthode d'authentification, à 
 
 <details><summary>Indice 3</summary>
 
-Les droits d'un groupe ne changent qu'à la **prochaine** connexion (ou au prochain renouvellement du jeton, qui relit les groupes) : un jeton déjà délivré garde les politiques d'identité calculées pour l'entité, mises à jour quand la personne se reconnecte. C'est une raison de garder des jetons courts.
+L'appartenance aux groupes externes est recalculée à la **connexion**, d'après la revendication `groups` reçue de Keycloak à ce moment-là ; un renouvellement de jeton ne redemande rien à Keycloak. Les politiques d'identité, elles, sont relues à chaque requête à partir de l'entité. Demande-toi donc ce qui se passe pour Lucas tant qu'il ne se reconnecte pas, puis quand il se reconnecte. C'est une raison de garder des jetons courts.
 </details>
 
 **Pour aller plus loin** (facultatif) : essaie le mode `callbackmode=device` de la CLI (flux d'appareil : pas de tunnel, un code à saisir), et dis ce qu'il faut activer côté Keycloak et côté rôle. [OpenBao : *JWT/OIDC auth*](https://openbao.org/docs/auth/jwt/) · [*Identity: entities and groups*](https://openbao.org/docs/concepts/identity/) · [Keycloak : *OIDC clients*](https://www.keycloak.org/docs/latest/server_admin/#_oidc_clients)
@@ -732,7 +732,7 @@ Réponds aux 12 questions.
 
 10. *(QCM)* Une personne a deux politiques. L'une contient `path "kv/data/mediagenda/*" { capabilities = ["read"] }`, l'autre `path "kv/data/mediagenda/prod/*" { capabilities = ["deny"] }`. Peut-elle lire `kv/data/mediagenda/prod/db` ?
     - A. Oui : les capacités s'additionnent
-    - B. Non : la règle la plus précise s'applique, et elle refuse ; de plus `deny` l'emporte toujours
+    - B. Non : la règle la plus précise s'applique, et elle refuse
     - C. Oui : la première politique chargée l'emporte
     - D. Cela dépend de l'ordre des politiques dans le jeton
 

@@ -69,6 +69,7 @@ Le nœud cesse de jeter ; l'agent retrouve l'API et ses politiques. **Puis** l'�
 | Symptôme | Piste |
 |---|---|
 | Deux ou trois nœuds de contrôle portent 10.10.40.200 | VRRP jeté : `enable-extended-ip-protocols` absent de `cilium-config`, ou VRRP absent de `hote-plan-controle` ; `cilium-dbg monitor --type drop` (`DROP_CT_UNKNOWN_PROTO` ou `Policy denied`) |
+| Après le redémarrage d'un serveur d'API, son membre etcd est isolé (le serveur d'API ne revient pas), ou la VIP se dédouble | etcd 2379-2380 ou VRRP autorisés depuis `kube-apiserver` seulement : cette identité vient des Endpoints du Service `kubernetes` et disparaît pendant le redémarrage ; les autoriser depuis `remote-node` (`hote-plan-controle`) |
 | Nœud `NotReady`, kubelet sans API | 8443 refusé depuis `remote-node` (travailleur) ou 6443 depuis `cluster` (nœud de contrôle) |
 | `kubectl logs`/`exec` en erreur vers un nœud | 10250 refusé depuis `kube-apiserver` |
 | Cibles Prometheus d'un nœud à 0 | ports de `supervision` (9100, 9962, 9964, 9965, 10250, 2112 ; 2381, 10257, 10259, 8405 sur les nœuds de contrôle) |

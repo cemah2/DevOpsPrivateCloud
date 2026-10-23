@@ -67,7 +67,8 @@ check_cmd "kv/wb-essais/premier-secret existe" _m25o_kv_existe wb-essais/premier
 check_cmd "wb-checks lit les ExternalSecret (ClusterRole wb-checks-securite étendue)" \
   _m25o_peut list externalsecrets.external-secrets.io wb-essais
 check_cmd "wb-checks lit les ClusterSecretStore" _m25o_peut list clustersecretstores.external-secrets.io
-_m25o_e12_pas_secrets() { ! _m25o_peut get secrets wb-essais; }
+# Réponse « no » explicite : une API injoignable (réponse vide) ne doit pas passer pour un refus.
+_m25o_e12_pas_secrets() { [[ "$(_m25o_k auth can-i get secrets -n wb-essais)" == no ]]; }
 check_cmd "wb-checks ne lit toujours PAS les Secrets" _m25o_e12_pas_secrets
 
 # --- Notes -----------------------------------------------------------------------------------------

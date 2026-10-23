@@ -75,7 +75,7 @@ Ce que tu dérouleras à la main en E07, et que chaque service fera à ta place 
 4. Keycloak ouvre une **session SSO** (cookie sur `sso.par1…`), lit les groupes de la personne dans l'annuaire, et redirige le navigateur vers Grafana avec un **code** à usage unique.
 5. Grafana échange le code, de serveur à serveur, contre des **jetons** signés (ID token, access token) en prouvant qu'il est le bon client (secret, et verifier PKCE).
 6. Grafana vérifie la signature avec les clés publiques de Keycloak (JWKS), lit `preferred_username` et `groups`, et en déduit un **rôle** (`plateforme` → Editor). La personne est connectée.
-7. Une heure plus tard, elle ouvre Argo CD : redirection vers Keycloak, la **session SSO existe**, aucun formulaire, code, jetons. C'est l'authentification unique.
+7. Dix minutes plus tard, elle ouvre Argo CD : redirection vers Keycloak, la **session SSO existe** (elle expire après 30 minutes sans activité, 10 heures au plus), aucun formulaire, code, jetons. C'est l'authentification unique.
 
 L'annuaire dit **qui existe** et à quels groupes il appartient. Keycloak dit **comment on prouve qui on est** et fabrique les jetons. Chaque service décide **ce qu'on a le droit de faire**, à partir des groupes. Trois rôles, trois composants.
 
@@ -210,7 +210,7 @@ E01 ─ E02 ─ E03 ─ E04 ─ E05 ─ E06 ─ E07 ─ E08 ─ E09
 
 L'ordre de la carte est l'ordre de travail : chaque exercice s'appuie sur le précédent (l'annuaire avant ses personnes, Keycloak avant son royaume, la fédération avant le flux OIDC, la console avant le code). E07 peut se faire avant E06 si tu crées un second utilisateur local d'essai, mais tu perdrais la revendication `groups` dans les jetons : garde l'ordre.
 
-Durée indicative du palier 1 : 16 à 20 heures.
+Durée indicative du palier 1 : 21 à 25 heures (somme des durées des exercices : 22 h 30).
 
 ## Pour aller plus loin
 

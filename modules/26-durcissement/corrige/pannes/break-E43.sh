@@ -11,7 +11,7 @@
 #                 restent aléatoires. --annuler annule tout (couple + dérive).
 # Règles : au plus UNE parmi {E40, E41} (toutes deux au niveau du nœud) ; au plus UNE parmi {E38, E39}
 # (toutes deux au niveau des services d'hôte). Ordre d'injection : admission (E35/E36/E37), puis hôtes
-# (E38/E39), puis nœuds (E40/E41/E42), puis la dérive ; annulation dans l'ordre inverse.
+# (E38/E39), puis nœuds (E40/E41/E42) ; la dérive est posée AVANT (sudo intact) et retirée APRÈS.
 #
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
@@ -46,24 +46,31 @@ _E43_couples() {
 
 _e43_derive_poser() {
   m26_hote_sain "$_E43_DERIVE_VM" || return 1
-  m26_wb_exec "$_E43_DERIVE_VM" >/dev/null <<'EOF' || return 1
-d=/etc/ssh/sshd_config.d/99-wb-derive.conf
+  # Mémorisé AVANT l'injection : une injection à moitié faite s'annule aussi (sauvegardes sur la VM).
+  m26_ecrire E43 derive "$_E43_DERIVE_VM"
+  # WB_EX fixé : les sauvegardes de la dérive ne se mêlent pas à celles d'une panne E38 sur la même VM.
+  WB_EX=M26-E43 m26_wb_exec "$_E43_DERIVE_VM" >/dev/null <<'EOF' || return 1
+# sshd garde la PREMIÈRE valeur lue : le fichier doit être lu avant 00-durcissement.conf (rôle, E10/E11),
+# d'où un nom qui le précède dans l'ordre alphabétique (sinon la dérive serait sans effet).
+d=/etc/ssh/sshd_config.d/00-acces-urgence.conf
 sauver "$d"
-printf 'PermitRootLogin yes\nX11Forwarding yes\n' > "$d"
+printf '# ajouté à la main pendant un dépannage\nPermitRootLogin yes\nX11Forwarding yes\n' > "$d"
+sshd -t 2>/dev/null || { rm -f "$d"; echo "configuration sshd invalide" >&2; exit 1; }
 s=/etc/sysctl.d/99-wb-derive.conf
 sauver "$s"
 printf 'kernel.dmesg_restrict = 0\n' > "$s"
 sysctl -qw kernel.dmesg_restrict=0 2>/dev/null || true
 systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+# Effet constaté (§11.10) : sshd applique bien la dérive.
+sshd -T 2>/dev/null | grep -qi '^permitrootlogin yes' || { echo "dérive sans effet sur sshd" >&2; exit 1; }
 journal "dérive de conformité : PermitRootLogin yes, X11Forwarding yes, kernel.dmesg_restrict=0"
 EOF
-  m26_ecrire E43 derive "$_E43_DERIVE_VM"
 }
 _e43_derive_defaire() {
   local vm
   vm="$(m26_lire E43 derive)"
   [[ -n "$vm" ]] || return 0
-  m26_wb_exec "$vm" >/dev/null <<'EOF' || wb_avert "annulation de la dérive incomplète sur $vm"
+  WB_EX=M26-E43 m26_wb_exec "$vm" >/dev/null <<'EOF' || wb_avert "annulation de la dérive incomplète sur $vm"
 restaurer_fichiers
 sysctl -qw kernel.dmesg_restrict=1 2>/dev/null || true
 systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
@@ -80,7 +87,6 @@ _E43_annuler() {
     ex="${_E43_ORDRE[i]}"
     if [[ " $liste " == *" $ex:"* ]] || wb_marqueur_existe "M26-$ex"; then actives+=("$ex"); fi
   done
-  _e43_derive_defaire
   for ex in "${actives[@]}"; do
     var="$(wb_marqueur_lire "M26-$ex")"
     [[ -n "$var" ]] || var="$(sed -n "s/.*$ex:\([0-9]*\).*/\1/p" <<<"$liste")"
@@ -89,6 +95,8 @@ _E43_annuler() {
     "annuler_$ex" || true
     wb_marqueur_suppr "M26-$ex"
   done
+  # La dérive en DERNIER : si E38 a cassé sudo sur la même VM, il faut d'abord l'avoir annulée.
+  _e43_derive_defaire
   wb_marqueur_suppr M26-E43
   echo "Astreinte M26-E43 annulée : pannes ${actives[*]:-aucune} et dérive retirées. Contrôle : lab/bin/check 26 43"
 }
@@ -131,6 +139,12 @@ main() {
 
   local -a choisies=() lignes=()
   local liste="" v
+  # La dérive d'abord, tant que sudo fonctionne partout (E38 peut ensuite casser sudo sur la même VM).
+  if ! _e43_derive_poser; then
+    echo "Dérive de conformité impossible à poser : remise en état." >&2
+    _E43_annuler >/dev/null
+    return 1
+  fi
   for ex in "${_E43_ORDRE[@]}"; do
     [[ "$ex" == "$a" || "$ex" == "$b" ]] || continue
     v=$((RANDOM % ${_E43_NB[$ex]} + 1))
@@ -152,12 +166,6 @@ main() {
     fi
     choisies+=("$ex")
   done
-
-  if ! _e43_derive_poser; then
-    echo "Dérive de conformité impossible à poser : remise en état." >&2
-    _E43_annuler >/dev/null
-    return 1
-  fi
 
   for ex in "${choisies[@]}"; do
     WB_EX="M26-$ex"

@@ -69,7 +69,8 @@ if P["action"] == "lire":
 elif P["action"] == "restreindre":
     if cat != ["all"] or hotes:
         sortie({"etat": "deja-restreinte", "categorie": cat, "hotes": hotes}); sys.exit(0)
-    api.Command.sudorule_mod(P["regle"], hostcategory=None)
+    # Vider la catégorie comme « ipa sudorule-mod --hostcat= » (chaîne vide, forme des tests de FreeIPA).
+    api.Command.sudorule_mod(P["regle"], hostcategory="")
     api.Command.sudorule_add_host(P["regle"], host=[P["hote"]])
     sortie({"etat": "restreinte"})
 elif P["action"] == "retablir":
@@ -261,7 +262,7 @@ symptome_E40() {
   case "$WB_VAR" in
     1)
       qui="Nadia Roussel"
-      detail="Je fais « step ssh login » (OK, OTP compris), puis « ssh nadia.roussel@mon01… » : la connexion se ferme tout de suite, sans message. Pareil sur nbx01. Hier, ça marchait."
+      detail="Je fais « step ssh login » (OK, certificat reçu), puis « ssh nadia.roussel@mon01… » : la connexion se ferme tout de suite, sans message. Pareil sur nbx01. Hier, ça marchait."
       ;;
     2)
       qui="Lucas Martin"

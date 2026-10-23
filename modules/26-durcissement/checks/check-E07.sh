@@ -48,10 +48,12 @@ fi
 check_cmd "Application Argo CD politiques : Synced et Healthy" _m26d_app_saine politiques
 _m26d_e07_vpol="$(_m26d_k get validatingpolicies.v1.policies.kyverno.io -o json)"
 for _m26d_e07_pol in registres-autorises exiger-etiquettes; do
-  check_cmd "ValidatingPolicy $_m26d_e07_pol (policies.kyverno.io/v1) prête, en [Audit, Warn] sans Deny, failurePolicy Ignore" \
+  # Au palier 1 : [Audit, Warn] et Ignore. Le passage en refus (Deny) vient plus tard, par décision
+  # écrite (README de plateforme/politiques, mini-projet) : il n'est pas un échec de cet exercice.
+  check_cmd "ValidatingPolicy $_m26d_e07_pol (policies.kyverno.io/v1) prête, en audit avec failurePolicy Ignore (ou passée en Deny depuis)" \
     _m26d_json "$_m26d_e07_vpol" '[.items[] | select(.metadata.name == $n)] | length == 1 and (.[0] |
-        (.spec.validationActions | index("Audit") != null and index("Deny") == null)
-        and .spec.failurePolicy == "Ignore"
+        ((.spec.validationActions | index("Deny") != null)
+         or ((.spec.validationActions | index("Audit") != null) and .spec.failurePolicy == "Ignore"))
         and ((.status.conditionStatus.ready // false) | tostring) == "true")' --arg n "$_m26d_e07_pol"
 done
 # _m26d_e07_aucune_ancienne — aucune ClusterPolicy ni Policy de kyverno.io dans le cluster.

@@ -125,7 +125,8 @@ durcissement_modules_interdits:
   dccp: kernel_module_dccp_disabled
   rds: kernel_module_rds_disabled
   tipc: kernel_module_tipc_disabled
-  # sctp : Cilium peut s'en servir (désactivé par défaut chez nous) ; exception sur les nœuds K8s.
+  # sctp : Cilium peut s'en servir (option sctp.enabled, désactivée chez nous) ; si on l'active un jour,
+  # exception kernel_module_sctp_disabled sur k8s_par1 AVANT (RB-261).
   sctp: kernel_module_sctp_disabled
 
 # --- systemd ---------------------------------------------------------------------------------------
@@ -189,7 +190,10 @@ durcissement_ssh_groupes:
 # Groupes en plus sur certains hôtes (git01 : git ; ceph0x : cephadm ; gw0x, lb0x : supervision).
 durcissement_ssh_groupes_supplementaires: []
 # Comptes locaux qui ont des clés SSH mais ne doivent PAS se connecter (contrôle anti-oubli).
-durcissement_ssh_comptes_sans_ssh: []
+# root : cloud-init dépose dans /root/.ssh/authorized_keys une clé à commande forcée (« Please login
+# as the user admin… », M04-E35) et PermitRootLogin no (ssh_durci) le refuse déjà ; sans cette ligne,
+# le garde-fou n° 1 arrêterait le rôle sur chaque VM issue des images dorées.
+durcissement_ssh_comptes_sans_ssh: [root]
 durcissement_ssh_max_sessions: 10
 durcissement_ssh_banniere: /etc/issue.net
 durcissement_banniere_texte: |
@@ -277,6 +281,7 @@ durcissement_aide_exclusions:
   - /var/lib/dnf
   - /var/lib/containerd
   - /var/lib/kubelet
+  - /var/lib/etcd
   - /var/lib/docker
   - /var/lib/ceph
   - /var/lib/containers
@@ -288,6 +293,9 @@ durcissement_aide_exclusions:
   - /var/lib/alloy
   - /var/lib/sss
   - /var/lib/systemd
+  - /var/lib/kea
+  - /var/lib/powerdns
+  - /srv/seaweedfs
   - /run
   - /proc
   - /sys

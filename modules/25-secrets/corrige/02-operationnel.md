@@ -50,7 +50,7 @@ Fichiers : `plateforme/secrets` : [`tofu/auth-gitlab.tf`](fichiers/M25-E10/secre
    $ bao token capabilities kv/data/mediagenda/ci/promotion      # dans le job, rôle ci-mediagenda-api
    deny
    ```
-4. **Recopier sans afficher.** La plateforme **dépose** les secrets des applications sans pouvoir les relire : [extrait de `plateforme-admin`](fichiers/M25-E10/secrets/politiques/plateforme-admin.hcl.extrait), écriture seule (`create`, `update`) sur `kv/data/mediagenda/*` et `kv/data/medidoc/*` (essayé : `kv put` réussit, `kv get` est refusé ; et une règle `kv/data/+/ci/*` aurait perdu face au `kv/metadata/*` du palier 1, les `+` abaissant la priorité d'une règle). Depuis l'interface de GitLab, la valeur d'une variable *cachée* n'est plus lisible : c'est l'occasion de **régénérer** (jeton `ci-promotion` de `mediagenda/deploiement`, robot Harbor par OpenTofu `registre/`, jeton `bot-release`). La nouvelle valeur va directement au coffre, par l'entrée standard :
+4. **Recopier sans afficher.** La plateforme **dépose** les secrets des applications sans pouvoir les relire : [extrait de `plateforme-admin`](fichiers/M25-E10/secrets/politiques/plateforme-admin.hcl.extrait), écriture seule (`create`, `update`) sur `kv/data/mediagenda/*` et `kv/data/medidoc/*` (essayé : `kv put` réussit, `kv get` est refusé ; et, pour les métadonnées, une règle `kv/metadata/+/ci/*` aurait perdu face au `kv/metadata/*` du palier 1 : à position de premier joker égale, chaque `+` abaisse la priorité d'une règle ; d'où des chemins écrits en clair par application). Depuis l'interface de GitLab, la valeur d'une variable *cachée* n'est plus lisible : c'est l'occasion de **régénérer** (jeton `ci-promotion` de `mediagenda/deploiement`, robot Harbor par OpenTofu `registre/`, jeton `bot-release`). La nouvelle valeur va directement au coffre, par l'entrée standard :
    ```
    admin@adm01:~$ read -rs -p "jeton ci-promotion : " v; printf '{"jeton":"%s"}' "$v" | bao kv put -mount=kv mediagenda/ci/promotion -; unset v
    admin@adm01:~$ bao kv metadata put -mount=kv -max-versions=10 -custom-metadata=ticket=SEC-2610 mediagenda/ci/promotion
@@ -64,7 +64,7 @@ Fichiers : `plateforme/secrets` : [`tofu/auth-gitlab.tf`](fichiers/M25-E10/secre
 
 **Explications**
 
-Le jeton d'identité inverse le modèle : le job ne **détient** rien, il **prouve** qui il est par une signature de GitLab, et le coffre décide. OpenBao vérifie la signature (clés lues par la découverte), l'émetteur, l'audience, les dates, puis chaque revendication liée ; il délivre un jeton OpenBao de dix minutes porteur des seules politiques du rôle. Un jeton d'identité volé dans un journal ne sert à rien ailleurs (audience) ni longtemps (5 min) ; un jeton OpenBao volé dure dix minutes et se révoque par son accesseur. Ce qui reste critique : GitLab lui-même (qui peut pousser sur `main` peut lire ces secrets) — d'où la protection des branches, les approbations, et l'audit des lectures (E21).
+Le jeton d'identité inverse le modèle : le job ne **détient** rien, il **prouve** qui il est par une signature de GitLab, et le coffre décide. OpenBao vérifie la signature (clés lues par la découverte), l'émetteur, l'audience, les dates, puis chaque revendication liée ; il délivre un jeton OpenBao de dix minutes porteur des seules politiques du rôle. Un jeton d'identité volé dans un journal ne sert à rien ailleurs (audience), mais il reste valable jusqu'à son `exp`, c'est-à-dire la **durée maximale du job** (une heure par défaut : GitLab calcule `exp` à partir du *timeout* du job) ; d'où des *timeouts* de jobs courts et un jeton jamais affiché ; un jeton OpenBao volé dure dix minutes et se révoque par son accesseur. Ce qui reste critique : GitLab lui-même (qui peut pousser sur `main` peut lire ces secrets) — d'où la protection des branches, les approbations, et l'audit des lectures (E21).
 
 **Alternatives**
 - `secrets:vault` de GitLab : la même chose en déclaratif, **Premium** ; écarté (CE).
@@ -770,11 +770,11 @@ Fichiers : rôle `openbao` [`defaults/main.yml.extrait`](fichiers/M25-E21/ansibl
    ```
 3. **Lire une ligne** (`sudo jq -c 'select(.request.path=="kv/data/mediagenda/prod/valkey")' /var/log/openbao/audit.log`) : `type`, `time`, `auth` (`display_name` comme `oidc-<identifiant>` ou `approle`, `policies`, `metadata`, `accessor` en clair), `request` (`id`, `operation`, `path`, `remote_address`, `mount_type`), `response.data` (valeurs des secrets en `hmac-sha256:…` ; nombres et booléens jamais hachés — `version`, `destroyed` — et quelques chaînes laissées en clair par le moteur, comme `created_time`). Un refus a `error: "permission denied"`. HMAC d'une valeur :
    ```
-   admin@adm01:~$ read -rs v; jq -n --arg v "$v" '{input: $v}' | bao write -field=hash sys/audit-hash/fichier - ; unset v
+   admin@adm01:~$ read -rs v; printf '%s' "$v" | jq -Rs '{input: .}' | bao write -field=hash sys/audit-hash/fichier - ; unset v
    hmac-sha256:242806242596c6817c300f509415d80712f33cf78884431ddc492ed1cf1cb7ec
    root@vault01:~# grep -c 'hmac-sha256:242806242596c6817c' /var/log/openbao/audit.log
    ```
-   Jamais audités : `sys/init`, `sys/seal-status`, `sys/seal`, `sys/unseal`, `sys/leader`, `sys/health`, `sys/storage/raft/bootstrap`, `sys/storage/raft/join` (et `sys/metrics` non authentifié).
+   Jamais audités (liste de la documentation) : `sys/init`, `sys/seal-status`, `sys/unseal`, `sys/leader`, `sys/health`, `sys/storage/raft/bootstrap`, `sys/storage/raft/join` (et `sys/metrics` non authentifié). La documentation cite aussi `sys/seal`, mais OpenBao 2.6.4 journalise bel et bien la **requête** de scellement (ligne `request`, sans `response` : vérifié sur un serveur de développement) — heureusement, puisque c'est un geste d'incident.
 4. **Acheminer.** Alloy (groupe `openbao`) lit le fichier et l'envoie au locataire `audit` (`loki.source.file` → `loki.write` dédié) ; `tail_from_end` évite de renvoyer l'historique au premier démarrage. Après `logrotate -f`, aucune ligne ne manque : logrotate **renomme** le fichier (Alloy finit de lire l'ancien) puis en crée un neuf, et SIGHUP fait rouvrir le fichier à OpenBao ; avec `copytruncate`, des lignes écrites entre la copie et la troncature seraient perdues.
 5. **Interroger** : requêtes de [`audit-openbao.md`](fichiers/M25-E21/medisphere/docs/securite/secrets/audit-openbao.md), par exemple :
    ```logql
@@ -840,7 +840,7 @@ Revue, du plus grave au moins grave (fichiers de [`ressources/M25-E22/`](../ress
 | 11 | `medidoc-dev.hcl`, `kv/data/medidoc/dev/+` | à corriger (fonctionnel) | `+` remplace **un** segment : `kv/data/medidoc/dev/api/db` n'y correspond pas (le commentaire dit « tout l'arbre ») | masqué aujourd'hui par le défaut 2 ; une fois 2 corrigé, l'équipe ne lit plus rien | `kv/data/medidoc/dev/*` |
 | 12 | `medidoc-ci.hcl`, `sudo` sur `kv/data/medidoc/prod/*` | remarque | `sudo` ne sert que sur les chemins protégés (`sys/…`) ; ici il ne fait rien, mais dit qu'on ne sait pas ce qu'on donne | — | retirer ; même rôle et même politique pour la CI, ESO et la purge (défauts 5 et 6) : une politique par identité (`medidoc-ci`, `eso-medidoc-dev`, `medidoc-purge`) |
 
-**Ce qui est correct** (à ne pas signaler) : le `deny` explicite sur `kv/data/medidoc/prod/*` dans `medidoc-dev.hcl` (redondant, il l'emporte sur toute autre politique du jeton : une ceinture utile) ; `sys/capabilities-self` (diagnostic de ses propres droits) ; `token_type = "batch"` pour ESO (jetons légers, non renouvelables, adaptés à des connexions fréquentes).
+**Ce qui est correct** (à ne pas signaler) : le `deny` explicite sur `kv/data/medidoc/prod/*` dans `medidoc-dev.hcl` (redondant, et efficace contre toute règle de même chaîne ou moins précise d'une autre politique du jeton, comme `*` ou `kv/data/*` ; pas contre une règle plus précise, par exemple un chemin exact `kv/data/medidoc/prod/db` : une ceinture utile, pas une garantie absolue) ; `sys/capabilities-self` (diagnostic de ses propres droits) ; `token_type = "batch"` pour ESO (jetons légers, non renouvelables, adaptés à des connexions fréquentes).
 
 Preuves (OpenBao de développement, une politique par jeton) :
 ```
@@ -866,7 +866,7 @@ Pour Lucas, trois règles : (1) **un droit = un chemin exact pour une identité 
 
 **Explications**
 
-Une politique OpenBao est une liste blanche de chemins ; la plus spécifique l'emporte entre politiques d'un même jeton, et `deny` l'emporte toujours. Les rôles des méthodes d'authentification font le lien entre une identité externe (un job, un pod, une machine) et des politiques : la plupart des fuites viennent de rôles trop larges (qui peut se connecter) plus que de politiques trop larges (ce qu'on peut faire une fois connecté). Les deux défauts ensemble (1 et 4, ou 1 et 6) sont ce qui transforme une erreur en incident.
+Une politique OpenBao est une liste blanche de chemins ; la plus spécifique l'emporte entre politiques d'un même jeton, et `deny` l'emporte sur les autres capacités d'une règle de **même chaîne** (pas sur une règle plus précise). Les rôles des méthodes d'authentification font le lien entre une identité externe (un job, un pod, une machine) et des politiques : la plupart des fuites viennent de rôles trop larges (qui peut se connecter) plus que de politiques trop larges (ce qu'on peut faire une fois connecté). Les deux défauts ensemble (1 et 4, ou 1 et 6) sont ce qui transforme une erreur en incident.
 
 **Alternatives**
 

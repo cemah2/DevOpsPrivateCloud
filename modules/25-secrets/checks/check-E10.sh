@@ -47,10 +47,10 @@ check_cmd "rôle ci-plateforme-secrets : références protégées, politique tof
   '([.data.bound_claims.ref_protected] | flatten == ["true"]) and (.data.token_policies | index("tofu-secrets")) != null'
 
 # --- Politiques ------------------------------------------------------------------------------------
-check_cmd "politique ci-mediagenda-api : lit le robot Harbor et kv/data/mediagenda/ci/" \
+check_cmd "politique ci-mediagenda-api : lit le robot Harbor" \
   _m25o_politique_contient ci-mediagenda-api 'kv/data/plateforme/harbor/robot-ci'
-check_cmd "politique ci-mediagenda-api : ni joker global sur kv/, ni accès au jeton de promotion" \
-  _m25o_politique_exclut ci-mediagenda-api '"kv/(data/)?\*"|"kv/data/\+|mediagenda/ci/promotion|"\*"'
+check_cmd "politique ci-mediagenda-api : ni joker global sur kv/, ni accès au jeton de promotion (même par mediagenda/ci/*)" \
+  _m25o_politique_exclut ci-mediagenda-api '"kv/(data/)?\*"|"kv/data/\+|mediagenda/(ci/)?(promotion|\*|\+)|"\*"'
 check_cmd "politique ci-mediagenda-api-promotion : ne lit que le jeton de promotion" \
   _m25o_politique_exclut ci-mediagenda-api-promotion 'harbor|release|"\*"'
 check_cmd "politique wb-checks étendue : configuration des rôles lisible, aucune donnée KV" \

@@ -37,8 +37,10 @@ restante) est posée par `<le rôle / l'objet qui la remplace>`.
 
 ## Limites assumées (non couvert)
 
-- **Un seul `kms01`**, sur le même hyperviseur que la grappe : sa perte définitive impose la migration
-  vers Shamir avec les clés de récupération (RB-251). Seal HA et HSM : options de l'ADR-0250.
+- **Un seul `kms01`**, sur le même hyperviseur que la grappe : sans sa sauvegarde PBS, sa perte définitive
+  ne laisse **aucune** migration possible (la migration vers Shamir exige l'ancien seal) : exporter ce qui
+  peut l'être tant que la grappe tourne et reconstruire (RB-251 § 7). HSM (PKCS#11) : option de
+  l'ADR-0250 ; plusieurs seals actifs : Vault Enterprise seulement.
 - **Un seul site** : pas de réplication du coffre vers PAR2 (F5).
 - **etcd** chiffré par `secretbox` (clé sur les nœuds de contrôle) : aucun plugin KMS v2 maintenu pour
   OpenBao (ADR-0251) ; la KEK de `ceph-rbd-chiffre` reste dans le cluster.

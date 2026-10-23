@@ -45,7 +45,7 @@ check_cmd "medidoc-recette : Deployment medidoc annoté pour medidoc-s3" \
 _m25o_e15_es="$(_m25o_k get externalsecrets.external-secrets.io -n medidoc-recette -o json)"
 check_cmd "medidoc-recette : ExternalSecret medidoc-s3 rafraîchi toutes les 5 min au plus, Ready" _m25o_json "$_m25o_e15_es" '
   any(.items[]; (.spec.target.name // .metadata.name) == "medidoc-s3"
-      and ((.spec.refreshInterval // "1h") | test("^([1-5]m|[0-9]+s|[1-5]m0s)$"))
+      and ((.spec.refreshInterval // "1h") | test("^([1-5]m|[1-5]m0s|[1-9][0-9]?s|[12][0-9]{2}s|300s)$"))
       and ([.status.conditions[]? | select(.type == "Ready" and .status == "True")] | length) > 0)'
 check_cmd "kv/medidoc/recette/s3 : au moins une rotation (version >= 2)" \
   bash -c '[[ "$1" -ge 2 ]]' _ "$(_m25o_kv_version medidoc/recette/s3)"

@@ -22,9 +22,10 @@ sur un nœud du coffre.
 
 ## Plus de leader : reconnaître
 
-- La VIP ne répond plus ; aucun nœud ne répond 200 à `sys/health` ; `bao operator raft list-peers` et
-  `autopilot state` échouent (`local node not active but active cluster node not found`) : ils sont
-  transmis à un actif qui n'existe pas.
+- La VIP ne répond plus ; aucun nœud ne répond 200 à `sys/health` ; `bao operator raft list-peers`,
+  servi par le nœud interrogé depuis sa copie locale, ne montre que des `follower` ; `autopilot state`,
+  les connexions et les écritures échouent (`local node not active but active cluster node not found`) :
+  ils sont transmis à un actif qui n'existe pas.
 - `sys/leader` d'un nœud en attente peut encore citer l'**ancien** actif (copie locale du verrou) :
   ne pas s'y fier seul.
 - `outils/etat-grappe.sh` donne l'état sans jeton ; les journaux (`journalctl -u openbao`) disent le

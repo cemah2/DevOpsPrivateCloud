@@ -20,8 +20,8 @@ if [[ -z "$_m25d_e04_montages" ]]; then
 else
   check_cmd "Moteur KV version 2 monté en kv/" _m25d_json "$_m25d_e04_montages" \
     '(.data // .)["kv/"] | .type == "kv" and .options.version == "2"'
-  check_cmd "Aucun moteur KV version 1 ni montage « secret/ » par défaut" _m25d_json "$_m25d_e04_montages" \
-    '[(.data // .) | to_entries[] | select(.value.type == "kv" and (.value.options.version // "1") != "2")] | length == 0'
+  check_cmd "Aucun autre moteur KV que kv/ (ni version 1, ni montage « secret/ » par défaut)" _m25d_json "$_m25d_e04_montages" \
+    '[(.data // .) | to_entries[] | select(.value.type == "kv" and .key != "kv/")] | length == 0'
 fi
 check_cmd "kv/config : 10 versions gardées par secret" _m25d_json "$(_m25d_api kv/config)" '.data.max_versions == 10'
 

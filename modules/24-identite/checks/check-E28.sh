@@ -26,7 +26,7 @@ check_output "Ruler de Loki (audit) : au moins trois alertes de bris de glace" '
   _m24p_nb_lignes "$_m24p_e28_regles" '^BrisDeGlace'
 check_cmd "Loki (audit) : une connexion de kc-secours au royaume master dans les 31 derniers jours (essai)" \
   _m24p_compare "$(_m24p_loki_lignes '{service="keycloak"} |= "kc-secours" |= "realmName"' audit 744h)" '>' 0
-check_output "master : kc-secours actif" '^true$' \
+check_output "master : kc-secours actif" '^t(rue)?$' \
   _m24p_sql "SELECT u.enabled FROM user_entity u JOIN realm r ON r.id = u.realm_id WHERE r.name = 'master' AND u.username = 'kc-secours'"
 check_output "master : kc-secours sans OTP (second facteur lié à un téléphone : inutilisable le jour J)" '^0$' \
   _m24p_sql "SELECT count(*) FROM credential c JOIN user_entity u ON u.id = c.user_id JOIN realm r ON r.id = u.realm_id WHERE r.name = 'master' AND u.username = 'kc-secours' AND c.type = 'otp'"
