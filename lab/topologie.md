@@ -202,6 +202,17 @@ Règle du PLAN §3.3 : le socle est permanent, **un seul profil lourd** tourne �
 | `ceph04` (essai d'extension) | 2084 | **détruit** au M08-E46 | — | — |
 | Instances Molecule | 2046, 2047 (M12), 2149 (M14) | jetables | — | scénarios Molecule des rôles |
 
+## Ajouts des finaux F1 à F4
+
+| Élément | Valeur | Final |
+|---|---|---|
+| `k8s-par1` | reconstruit à blanc depuis le code, mêmes VMID et adresses ; `k8s-w03` installé par l'usine PXE (adresse de provisioning 10.10.60.163, puis 10.10.40.63) | F1 |
+| VM d'essai de l'usine | 3101 `f1-usine-essai` (VLAN 60, 10.10.60.191), détruite ; restaurations de test PBS 5310-5319 | F1 |
+| `statistiques-db` (équipe Data) | Service `LoadBalancer` **10.10.41.66** pour le moteur `db-data` d'OpenBao (flux `vault01-03` → 10.10.41.66:5432) | F2 |
+| Locataires Capsule | `medivisio` (`medivisio-dev`, `-recette`, `-prod`), `data` (`data-traitements`), `legacy` (`legacy-rdv-recette`, `-prod`) | F2, F4 |
+| VMs migrées d'InfoGér | 3401 `legacy-rdv01` (10.10.20.44, décommissionnée en F4-S14), 3402 `ftp-part01` (10.10.20.45), 3403 `stats01` (10.10.20.46) ; MAC `BC:24:11:20:34:01..03` ; 3499 restauration d'essai | F4 |
+| Legacy-RDV | nom des cabinets `rdv.par1.medisphere.internal` (VIP de `lb01`/`lb02`), routes internes `legacy-rdv(-recette).apps.par1.medisphere.internal` ; mariadb-operator 26.6 (`mariadb-system`) | F4 |
+
 ## Qui gère quoi (fin du bloc G)
 
 | Couche | Outil | Où |
