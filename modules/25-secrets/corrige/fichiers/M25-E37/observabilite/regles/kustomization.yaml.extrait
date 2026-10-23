@@ -1,0 +1,5 @@
+# plateforme/observabilite — regles/kustomization.yaml : EXTRAIT (M25-E37). Ajouter la ligne aux
+# « resources » existantes ; le reste du fichier est inchangé.
+resources:
+  # … ressources existantes …
+  - external-secrets.yaml            # M25-E37

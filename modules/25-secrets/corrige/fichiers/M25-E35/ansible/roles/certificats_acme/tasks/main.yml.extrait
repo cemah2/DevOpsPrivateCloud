@@ -1,0 +1,18 @@
+# roles/certificats_acme/tasks/main.yml — EXTRAIT (M25-E35, INC-5235) : à placer entre « Vérifier
+# chaque certificat » et « Émettre les certificats manquants ou invalides ».
+#
+# Pourquoi : en --check, la réémission est INCLUSE (« included: emettre.yml ») mais ses tâches
+# « command » sont sautées (skipped) et les tâches « file » ne changent rien : le récapitulatif ne
+# compte aucun « changed », et le job « derive » (M04-E29) déclare l'hôte conforme alors que le
+# certificat ne couvre plus son nom. Cette tâche rend l'écart visible dans le récapitulatif, en
+# simulation comme en application.
+
+- name: Certificats à réémettre (compté comme un changement, visible en --check)
+  ansible.builtin.debug:
+    msg: >-
+      {{ item.item.id }} : {{ item.item.certificat }} ne se vérifie plus pour {{ item.item.noms[0] }}
+      (autre nom, expiré, autre autorité ou durée hors politique) : réémission par ACME.
+  loop: "{{ _certificats_acme_verif.results | selectattr('rc', 'ne', 0) | list }}"
+  loop_control:
+    label: "{{ item.item.id }}"
+  changed_when: true

@@ -1,0 +1,34 @@
+# roles/openbao/tasks/configuration.yml — EXTRAIT (M25-E35, INC-5235) : à placer JUSTE APRÈS la tâche
+# « Surcharge systemd de MédiSphère ». Variable ajoutée dans defaults/main.yml (voir
+# ../defaults/main.yml.extrait).
+#
+# Pourquoi : le rôle pose medisphere.conf, mais un fichier qu'il ne connaît pas (override.conf laissé
+# par « systemctl edit openbao » pendant une maintenance, essai oublié…) restait invisible : ni
+# appliqué, ni signalé, ni retiré. systemd lit les surcharges d'un même dossier par ORDRE ALPHABÉTIQUE
+# et la dernière valeur l'emporte : « override.conf » passe après « medisphere.conf » et annule ses
+# réglages sans que le fichier du rôle change d'un octet.
+# Effet en --check --diff (job « derive » de M04-E29) : chaque fichier en trop apparaît comme
+# « changed » (suppression prévue), donc comme une DÉRIVE.
+# Effet en application : le fichier est retiré ; la prise en compte suit la règle du rôle
+# (gestionnaire « configuration openbao modifiee » : redémarrage seulement avec openbao_redemarrer=true,
+# un nœud EN ATTENTE à la fois).
+
+- name: Surcharges systemd présentes sur le nœud
+  ansible.builtin.find:
+    paths: /etc/systemd/system/openbao.service.d
+    file_type: any
+    hidden: true
+  register: _openbao_surcharges
+
+- name: Retirer les surcharges systemd non déclarées (essais, « systemctl edit »)
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: >-
+    {{ _openbao_surcharges.files
+       | rejectattr('path', 'in', openbao_surcharges_declarees
+                                  | map('regex_replace', '^', '/etc/systemd/system/openbao.service.d/') | list)
+       | list }}
+  loop_control:
+    label: "{{ item.path }}"
+  notify: configuration openbao modifiee

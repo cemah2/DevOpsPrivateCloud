@@ -1,0 +1,50 @@
+# plateforme/observabilite — loki/regles/audit/openbao.yaml : EXTRAIT, règles AJOUTÉES au groupe
+# « openbao.audit » (M25-E38, INC-5238), après celles de M25-E21. Même locataire (audit), même forme :
+# on compte les RÉPONSES (type="response"), qui portent le champ « error » quand la requête échoue.
+# Le champ « error » est absent d'une réponse réussie : après « | json », erreur="" la désigne.
+      # Le coffre ne fabrique plus d'identifiant dynamique (connexion refusée par la base, base
+      # injoignable, rôle mal écrit). Le demandeur est presque toujours ESO : l'application tombera à
+      # la fin du bail en cours (1 h au plus). Groupé par chemin : on sait quelle base et quel rôle.
+      - alert: IdentifiantsDynamiquesEnEchec
+        expr: |
+          sum by (chemin) (count_over_time({service="openbao"} | json type="type", chemin="request.path", erreur="error"
+            | type="response" | chemin=~"db-[a-z0-9-]+/creds/.+" | erreur!="" [10m])) > 0
+        for: 5m
+        labels:
+          gravite: critique
+          equipe: plateforme
+        annotations:
+          resume: "OpenBao ne délivre plus d'identifiant sur {{ $labels.chemin }}"
+          description: >-
+            Les demandes d'identifiants dynamiques échouent depuis plus de 5 min. Lire l'erreur dans
+            l'audit (password authentication failed : mot de passe d'openbao ; timeout : réseau ou base).
+            Les comptes en service meurent à la fin de leur bail : l'application suit. Démarche :
+            docs/securite/secrets/identifiants-dynamiques.md § 6.
+          runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/secrets/identifiants-dynamiques.md"
+      # Révocation par préfixe (ou forcée) RÉUSSIE : un geste d'incident (RB-250), jamais de ménage.
+      - alert: OpenBaoBauxRevoquesEnMasse
+        expr: |
+          sum by (host, chemin) (count_over_time({service="openbao"} | json type="type", chemin="request.path", erreur="error"
+            | type="response" | chemin=~"sys/leases/revoke-(prefix|force)/.+" | erreur="" [5m])) > 0
+        labels:
+          gravite: avertissement
+          equipe: plateforme
+        annotations:
+          resume: "OpenBao : baux révoqués en masse ({{ $labels.chemin }})"
+          description: >-
+            Tous les secrets délivrés sous ce préfixe ont été détruits (comptes PostgreSQL supprimés,
+            certificats révoqués). Vérifier qu'un incident ouvert le justifie (RB-250) et que les
+            consommateurs ont été réapprovisionnés (ExternalSecret forcé, redémarrages).
+          runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/secrets/runbooks/RB-250-fuite-de-secret.md"
+      # Configuration d'un moteur database modifiée (connexion, rôle, rotation de la racine) : à
+      # rapprocher d'une MR de plateforme/secrets ou d'un incident ; le pipeline passe aussi ici.
+      - alert: MoteurDatabaseModifie
+        expr: |
+          sum by (host, chemin) (count_over_time({service="openbao"} | json type="type", chemin="request.path", operation="request.operation", erreur="error"
+            | type="response" | operation=~"create|update|delete" | chemin=~"db-[a-z0-9-]+/(config|roles|rotate-root)/.+" | erreur="" [5m])) > 0
+        labels:
+          gravite: avertissement
+          equipe: plateforme
+        annotations:
+          resume: "OpenBao : configuration de {{ $labels.chemin }} modifiée"
+          description: "Vérifier la MR de plateforme/secrets correspondante (ou le ticket d'incident)."

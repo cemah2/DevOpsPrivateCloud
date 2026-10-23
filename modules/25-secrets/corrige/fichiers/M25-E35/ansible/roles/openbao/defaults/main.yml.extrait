@@ -1,0 +1,6 @@
+# roles/openbao/defaults/main.yml — EXTRAIT (M25-E35) : variable AJOUTÉE.
+
+# Seules surcharges admises dans /etc/systemd/system/openbao.service.d/ ; tout autre fichier est
+# retiré par le rôle (tasks/configuration.yml). Ajouter un nom ici passe par une MR relue.
+openbao_surcharges_declarees:
+  - medisphere.conf
