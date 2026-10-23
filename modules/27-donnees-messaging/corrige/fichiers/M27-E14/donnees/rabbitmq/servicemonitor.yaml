@@ -36,3 +36,9 @@ spec:
           - medinotif-prod
       interval: 30s
       scrapeTimeout: 25s
+      # Deux cibles sur le même port : sans étiquette distincte, leurs séries « up » et
+      # « scrape_* » porteraient exactement les mêmes étiquettes (échantillons en double).
+      relabelings:
+        - action: replace
+          targetLabel: metrics_path
+          replacement: /metrics/detailed

@@ -9,7 +9,8 @@
 #   1. ACL SETUSER mediagenda resetkeys ~session:* : l'utilisateur de l'API ne peut plus toucher
 #      « mediagenda:* » (NOPERM … no permissions to access one of the keys) ; les lectures du cache échouent
 #      (« cache indisponible », mediagenda_cache_total{resultat="erreur"}), l'API recalcule depuis la base.
-#   2. CONFIG SET maxmemory-policy noeviction et maxmemory = mémoire utilisée : toute écriture est refusée
+#   2. CONFIG SET maxmemory-policy noeviction et maxmemory = moitié de la mémoire utilisée (les clés qui
+#      expirent ne libèrent jamais assez pour repasser sous le plafond) : toute écriture est refusée
 #      (« OOM command not allowed when used memory > 'maxmemory' ») ; plus rien n'entre dans le cache.
 #   Annulation : les règles ACL d'origine (ACL LIST sauvegardé, empreintes comprises) et les valeurs
 #   CONFIG d'origine, seulement si les valeurs injectées sont encore en vigueur.
@@ -84,31 +85,36 @@ _e22_v1_defaire() {
 # --- Variante 2 : plus d'éviction, mémoire au plafond --------------------------------------------------
 
 _e22_v2_poser() {
-  local pol max used
+  local pol max used inj
   _e22_admin_ok || return 10
   pol="$(_e22_cli CONFIG GET maxmemory-policy | tail -n 1)" || return 1
   max="$(_e22_cli CONFIG GET maxmemory | tail -n 1)" || return 1
   [[ "$pol" == *lru* || "$pol" == *lfu* || "$pol" == *random* ]] || return 10
   used="$(_e22_cli INFO memory | tr -d '\r' | sed -n 's/^used_memory:\([0-9]*\)$/\1/p')"
   [[ "$used" =~ ^[0-9]+$ ]] || return 1
-  m27_ecrire E22 v2-config "$pol|$max|$used"
+  inj=$((used / 2))
+  ((inj > 0)) || return 10
+  m27_ecrire E22 v2-config "$pol|$max|$inj"
   _e22_cli CONFIG SET maxmemory-policy noeviction >/dev/null || return 1
-  _e22_cli CONFIG SET maxmemory "$used" >/dev/null || return 1
-  m27_journal E22 "maxmemory-policy noeviction, maxmemory $used (au lieu de $pol, $max)"
+  _e22_cli CONFIG SET maxmemory "$inj" >/dev/null || return 1
+  m27_journal E22 "maxmemory-policy noeviction, maxmemory $inj pour $used utilisés (au lieu de $pol, $max)"
 }
 _e22_v2_constat() {
   [[ "$(_e22_cli CONFIG GET maxmemory-policy 2>/dev/null | tail -n 1)" == noeviction ]] || return 1
-  # Une écriture de test est refusée (clé du témoin, vie courte).
-  _e22_cli SET wb:m27:e22 1 EX 10 2>&1 | grep -q '^OOM'
+  # Une écriture de test est refusée (clé du témoin, vie courte). Sortie capturée : sous « pipefail », un
+  # code non nul de valkey-cli ne doit pas masquer la réponse.
+  local r
+  r="$(_e22_cli SET wb:m27:e22 1 EX 10 2>&1)" || true
+  [[ "$r" == *OOM* ]]
 }
 _e22_v2_defaire() {
-  local pol max used
-  IFS='|' read -r pol max used <<<"$(m27_lire E22 v2-config)"
+  local pol max inj
+  IFS='|' read -r pol max inj <<<"$(m27_lire E22 v2-config)"
   [[ -n "$pol" ]] || return 0
   if [[ "$(_e22_cli CONFIG GET maxmemory-policy 2>/dev/null | tail -n 1)" == noeviction ]]; then
     _e22_cli CONFIG SET maxmemory-policy "$pol" >/dev/null 2>&1 || wb_avert "CONFIG SET maxmemory-policy $pol à rejouer"
   fi
-  if [[ "$(_e22_cli CONFIG GET maxmemory 2>/dev/null | tail -n 1)" == "$used" ]]; then
+  if [[ "$(_e22_cli CONFIG GET maxmemory 2>/dev/null | tail -n 1)" == "$inj" ]]; then
     _e22_cli CONFIG SET maxmemory "$max" >/dev/null 2>&1 || wb_avert "CONFIG SET maxmemory $max à rejouer"
   fi
   m27_journal E22 "configuration mémoire rétablie"

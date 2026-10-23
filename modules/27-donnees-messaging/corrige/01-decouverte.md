@@ -20,7 +20,7 @@ Ce corrigé suit l'ordre de l'énoncé. Les fichiers complets sont dans [`fichie
 - la **connexion du Topology Operator** à l'API de gestion **en TLS** (15671) avec la racine montée dans `/etc/ssl/certs` (programme Go) : si l'opérateur préfère 15672, la CNP le permet aussi ;
 - la relecture par RabbitMQ d'un certificat **renouvelé** (72 h) sans redémarrage (cache PEM d'Erlang) : à observer en E03 avec `cmctl renew` ;
 - la connexion SSO à l'interface de gestion (chemin exact de la page de rappel de la 4.3 : d'où le joker `https://rabbitmq.apps…/*` dans le client Keycloak) et le contenu réel du jeton (`resource_access.rabbitmq.roles`) ;
-- la version de PgBouncer embarquée par défaut dans CloudNativePG 1.30.1 (le corrigé suppose qu'elle est antérieure à 1.26.1 et l'épingle) ;
+- la version de PgBouncer réellement servie par l'image par défaut (le code de l'opérateur 1.30.1 désigne `pgbouncer:1.25.2` ; le corrigé épingle 1.26.1) ;
 - Kyverno : refus du Pooler de prod sans l'extension de l'exception `cnpg-operateur-sans-condense` (déduit de la source de CNPG et de la politique du M26, pas observé).
 
 ---
@@ -104,7 +104,7 @@ Fichiers : `plateforme/k8s` : [`rbac/wb-checks-services.yaml`](fichiers/M27-E02/
    admin@adm01:~$ kubectl -n mediagenda-recette get pooler mediagenda-db-pooler-rw -o jsonpath='{.status.image}{"\n"}'
    admin@adm01:~$ kubectl -n mediagenda-recette exec deploy/mediagenda-db-pooler-rw -c pgbouncer -- pgbouncer --version
    ```
-   La dernière corrective publiée par CloudNativePG au 23/10 est **1.26.1** (la 1.26 corrige trois CVE) : on l'épingle par `spec.pgbouncer.image`, étiquette **et** empreinte, depuis le cache `ghcr`. Les ressources déclarées sur le conteneur `pgbouncer` ne sont **pas** recopiées sur le conteneur d'initialisation `bootstrap-controller` (l'opérateur lui donne `spec.template.spec.resources`, au niveau du pod) : c'est la `LimitRange` de l'espace qui lui donne des valeurs, ce qui satisfait la règle Kyverno `exiger-limites`.
+   L'opérateur 1.30.1 utilise par défaut `ghcr.io/cloudnative-pg/pgbouncer:1.25.2` (`DefaultPgbouncerImage`, `pkg/versions/versions.go` à l'étiquette) ; la dernière corrective publiée par CloudNativePG au 23/10 est **1.26.1** (la 1.26 corrige trois CVE) : on l'épingle par `spec.pgbouncer.image`, étiquette **et** empreinte, depuis le cache `ghcr`. Les ressources déclarées sur le conteneur `pgbouncer` ne sont **pas** recopiées sur le conteneur d'initialisation `bootstrap-controller` (l'opérateur lui donne `spec.template.spec.resources`, au niveau du pod) : c'est la `LimitRange` de l'espace qui lui donne des valeurs, ce qui satisfait la règle Kyverno `exiger-limites`.
 8. Les pods du pooler portent `cnpg.io/cluster: mediagenda-db` : ils héritent de `postgresql-sortie` (API Kubernetes, instances), de `postgresql-entree` (opérateur) et de `mediagenda-acces-base` (entrée depuis l'API, port 5432 — le pooler écoute sur 5432) ; la sortie de l'API vers `cnpg.io/cluster` (politique du chart) les couvre aussi. Il ne manque que la collecte de Prometheus sur **9127** : port ajouté à la politique de cluster [`collecte-prometheus`](fichiers/M27-E02/k8s/composants/reseau/politiques/collecte-prometheus.yaml).
 9. [`podmonitor-pooler.yaml`](fichiers/M27-E02/mediagenda-deploiement/components/supervision/podmonitor-pooler.yaml), dans le component `supervision` (tous les environnements ; en dev il ne sélectionne rien). `enablePodMonitor` du Pooler (comme celui du Cluster) est marqué **déprécié** dans la CRD 1.30.1 (« will be removed in an upcoming release »).
 10. Le modèle de l'ExternalSecret `mediagenda-db-api` fabrique l'URL : hôte `mediagenda-db-pooler-rw` ([fichier](fichiers/M27-E02/mediagenda-deploiement/components/identifiants-dynamiques/externalsecrets.yaml)) ; celui du migrateur garde `mediagenda-db-rw`. Le Secret change → Reloader redémarre le Rollout (M25-E15). Preuve :
@@ -119,7 +119,7 @@ Fichiers : `plateforme/k8s` : [`rbac/wb-checks-services.yaml`](fichiers/M27-E02/
 
 11. `kubectl cnpg promote mediagenda-db mediagenda-db-2 -n mediagenda-recette` : l'opérateur arrête proprement l'ancien primaire (*fast shutdown*, WAL envoyé), promeut la cible, reconfigure l'ancien en réplique. Quelques secondes sans écriture. Côté pooler : les connexions serveur vers l'ancien primaire sont coupées, PgBouncer se reconnecte au Service `-rw` (qui pointe déjà sur le nouveau) ; les clients voient quelques erreurs (`server conn crashed?`, `SSL connection has been closed unexpectedly`) sur les transactions **en cours** à ce moment, puis tout repart **sans** redémarrer l'API (psycopg-pool écarte les connexions mortes).
 12. Drainage d'un nœud de réplique : l'instance évincée reste `Pending` (trois travailleurs, anti-affinité **requise**, les deux autres en portent déjà une) jusqu'à `uncordon`, puis revient sur son PVC et rattrape par la réplication ; le PDB des réplicas n'en laisse partir qu'une à la fois. Nœud du **primaire** : le PDB du primaire retient l'éviction, l'opérateur fait d'abord une **bascule**, puis l'ancien primaire (devenu réplique) est évincé.
-13. Image reconstruite par empreinte : l'opérateur met à jour les **réplicas** une par une (redémarrage sur la nouvelle image), puis fait une **bascule** vers une réplique à jour et redémarre l'ancien primaire en dernier (`primaryUpdateStrategy: unsupervised`, `primaryUpdateMethod: switchover`). Avec `supervised`, il s'arrêterait avant la bascule et attendrait un `kubectl cnpg promote` humain — intéressant en prod. Montée 18.4 → 18.6 sur [`essai-maj`](fichiers/M27-E02/essais/essai-maj.yaml) : même séquence ; une montée **mineure** de PostgreSQL ne change pas le format des données, d'où ce simple remplacement d'image (une montée **majeure** demanderait `pg_upgrade` ou une réplication logique).
+13. Image reconstruite par empreinte : l'opérateur met à jour les **réplicas** une par une (redémarrage sur la nouvelle image), puis fait une **bascule** vers une réplique à jour et redémarre l'ancien primaire en dernier (`primaryUpdateStrategy: unsupervised`, `primaryUpdateMethod: switchover`). Avec `supervised`, il s'arrêterait avant la bascule et attendrait un `kubectl cnpg promote` humain — intéressant en prod. Le changement d'image passe dans une application **à part** de celui de `pg_stat_statements` (étape 5) : avec `primaryUpdateMethod: switchover`, le webhook refuse de changer `imageName` et un paramètre PostgreSQL dans la même mise à jour (« Can't change image name and configuration at the same time », `internal/webhook/v1/cluster_webhook.go` de la 1.30.1). Montée 18.4 → 18.6 sur [`essai-maj`](fichiers/M27-E02/essais/essai-maj.yaml) : même séquence ; une montée **mineure** de PostgreSQL ne change pas le format des données, d'où ce simple remplacement d'image (une montée **majeure** demanderait `pg_upgrade` ou une réplication logique).
 
 *E. Prod.* MR de `mediagenda/deploiement` ([pooler.yaml](fichiers/M27-E02/mediagenda-deploiement/overlays/prod/pooler.yaml), [paramètres](fichiers/M27-E02/mediagenda-deploiement/overlays/prod/base-pg-stat-statements.yaml), [extrait](fichiers/M27-E02/mediagenda-deploiement/overlays/prod/kustomization.extrait-E02.yaml)) **et** MR de `plateforme/politiques` : l'exception `cnpg-operateur-sans-condense` (M26-E18) ne couvrait que les pods `podRole=instance` ; le Pooler de prod porte le même conteneur d'initialisation à l'image de l'opérateur par **étiquette**, la politique `exiger-digest` refuserait la création de son Deployment ([exception étendue](fichiers/M27-E02/politiques/kyverno/exceptions/cnpg-operateur-sans-condense.yaml) ; ligne du registre des exceptions mise à jour). Sauvegarde `Completed`, MR approuvée, synchronisation manuelle, sonde de `/pret`.
 
@@ -137,6 +137,7 @@ Le pooler ne rend pas la base plus rapide : il **découple** le nombre de client
 
 **Pièges classiques**
 - Changer `spec.cluster` d'un Pooler ou d'une Database : refusé (immuable) ; on crée un autre objet.
+- Appliquer d'un coup `pg_stat_statements` et la nouvelle `imageName` : refusé par le webhook quand `primaryUpdateMethod` vaut `switchover` ; deux applications successives.
 - Faire passer le Job de migration par le pooler en mode transaction : verrou consultatif de session libéré au mauvais moment, deux migrations concurrentes possibles.
 - Oublier `inRoles` sur un rôle géré qui a des appartenances posées par SQL : révoquées à la réconciliation suivante.
 - Laisser `validUntil` à une date passée **et** `ensure: present` : le rôle existe, sans connexion possible — préférer `absent` à l'échéance.
@@ -230,11 +231,12 @@ Fichiers : `plateforme/donnees` : [`topologie/`](fichiers/M27-E04/donnees/topolo
 1. Pour chaque application :
    ```
    admin@adm01:~$ umask 077; openssl rand -base64 30 | tr -d '/+=\n' | head -c 32 > /dev/shm/mdp
-   admin@adm01:~$ bao kv put -mount=kv medinotif/recette/amqp utilisateur=medinotif-recette mot_de_passe=@/dev/shm/mdp \
-       url="amqps://medinotif-recette:$(cat /dev/shm/mdp)@rabbitmq.messagerie.svc:5671/medinotif-recette"
+   admin@adm01:~$ MDP="$(cat /dev/shm/mdp)" jq -n '{utilisateur: "medinotif-recette", mot_de_passe: env.MDP,
+         url: ("amqps://medinotif-recette:" + env.MDP + "@rabbitmq.messagerie.svc:5671/medinotif-recette")}' \
+       | bao kv put -mount=kv medinotif/recette/amqp -
    admin@adm01:~$ shred -u /dev/shm/mdp
    ```
-   (Mot de passe alphanumérique : il finit dans une URL, aucun caractère à encoder. La commande passe le mot de passe en argument de `bao` le temps de l'appel : acceptable sur `adm01` mono-utilisateur, sinon `bao kv put … url=@fichier`.) Exception écrite dans `eso-plateforme.hcl` : deux chemins précis, validés par Sophie.
+   (Mot de passe alphanumérique : il finit dans une URL, aucun caractère à encoder. Il passe par l'environnement de `jq` et l'entrée standard de `bao` (`-` : données JSON lues sur l'entrée), jamais en argument d'un processus, visible par `ps`.) Exception écrite dans `eso-plateforme.hcl` : deux chemins précis, validés par Sophie.
 
 *B. La topologie.*
 

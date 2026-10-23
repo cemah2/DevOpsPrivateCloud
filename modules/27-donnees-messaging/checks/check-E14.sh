@@ -32,7 +32,7 @@ check_cmd "alerte « réplication en retard » (avec runbook)" _m27p_alerte_fami
 check_cmd "alerte « primaire absent » (avec runbook)" _m27p_alerte_famille 'cnpg_pg_replication_in_recovery'
 check_cmd "alerte « réplication synchrone sans réplica » (avec runbook)" _m27p_alerte_famille 'cnpg_pg_replication_streaming_replicas'
 check_cmd "alerte « clients du pooler en attente » (avec runbook)" _m27p_alerte_famille 'cnpg_pgbouncer_pools_(cl_waiting|maxwait)'
-check_cmd "alerte « file qui grossit » (avec runbook)" _m27p_alerte_famille 'queue_messages(_ready)?\{'
+check_cmd "alerte « file qui grossit » (avec runbook)" _m27p_alerte_famille 'queue_messages(_ready)?([^_a-z]|$)'
 check_cmd "alerte « file sans consommateur » (avec runbook)" _m27p_alerte_famille 'queue_consumers'
 check_cmd "alerte « alarme mémoire ou disque de RabbitMQ » (avec runbook)" _m27p_alerte_famille 'rabbitmq_alarms_'
 check_cmd "alerte « cache plein ou en erreur » (avec runbook)" _m27p_alerte_famille 'redis_memory_used_bytes|redis_evicted_keys|mediagenda_cache_total'

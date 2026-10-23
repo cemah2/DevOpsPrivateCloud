@@ -1,11 +1,14 @@
 # plateforme/k8s — espaces/mediagenda-recette/50-mediagenda-db.yaml (M16-E18, E19 ; M25-E14 ; M27-E02, PLAT-2802)
-# M27-E02 modifie le Cluster sur quatre points, marqués « M27-E02 » (le reste est INCHANGÉ depuis
+# M27-E02 modifie le Cluster sur trois points, marqués « M27-E02 » (le reste est INCHANGÉ depuis
 # M25-E14 : garde TON fichier et reporte seulement ces blocs) :
 #   imageName                   reconstruction la plus récente de 18.6, PAR EMPREINTE (étape 13)
 #   postgresql.parameters       pg_stat_statements.* : l'opérateur ajoute la bibliothèque à
 #                               shared_preload_libraries et crée l'extension dans chaque base
 #   managed.roles               mediagenda_lecture (groupe, sans connexion) et lucas_lecture
 #                               (connexion, expire seule à J+7)
+# ⚠️ Applique-les en DEUX fois (étape 5, puis étape 13) : avec primaryUpdateMethod: switchover, le
+#    webhook de CloudNativePG 1.30 REFUSE un changement simultané de imageName et des paramètres
+#    PostgreSQL (« Can't change image name and configuration at the same time… »).
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:

@@ -155,7 +155,7 @@ Trois chiffres disent presque tout : `consumers`, `messages_ready` et `messages_
 `repair` supprime les lignes en échec **et** réaligne les sommes de contrôle sur les fichiers de l'image. Avant de le lancer, demande-toi : la migration en cause a-t-elle produit ses effets dans le schéma ? Que fera `migrate` juste après `repair` ? Une session `idle in transaction` qui tient un verrou exclusif ne fait rien : elle attend un `COMMIT` qui ne viendra pas.
 </details>
 
-**Pour aller plus loin** : Flyway attend son propre verrou consultatif pendant `lockRetryCount` essais ; PostgreSQL, lui, attend un verrou de table sans limite si `lock_timeout` n'est pas posé. Ajoute `lock_timeout` à la connexion du Job (option de session ou `initSql` de Flyway) et observe la différence sur la même panne.
+**Pour aller plus loin** : Flyway attend son propre verrou consultatif pendant `lockRetryCount` essais ; PostgreSQL, lui, attend un verrou de table sans limite si `lock_timeout` n'est pas posé. Ajoute `lock_timeout` à la connexion du Job (option de session de la connexion JDBC, ou rappel `afterConnect` de Flyway ; l'ancien `initSql` est déprécié) et observe la différence sur la même panne.
 
 ---
 

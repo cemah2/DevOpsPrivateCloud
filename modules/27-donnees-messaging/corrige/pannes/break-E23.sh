@@ -67,7 +67,20 @@ _e23_l3() {
     m27_journal E23 "L3 non posée : rebut absent ou non « at-least-once » (des messages pourraient être perdus)"
     return 0
   fi
+  # Le rebut ne doit avoir AUCUNE durée de vie : un message qui y expirerait serait renvoyé vers le même
+  # échange de rebut (cycle : RabbitMQ le supprime) ou détruit. On exige donc qu'aucune TTL n'y soit déjà
+  # en vigueur et que la Policy visée ne s'applique pas à la file de rebut (motif « ^notifications »…).
+  if ! m27_rmq_file "$_M27_REBUT" 2>/dev/null | jq -e '(.effective_policy_definition["message-ttl"] // .arguments["x-message-ttl"]) == null' >/dev/null; then
+    m27_journal E23 "L3 non posée : la file de rebut est introuvable ou a déjà une durée de vie"
+    return 0
+  fi
   lieu="$(m27_rmq_politique_trouver)" || { m27_journal E23 "L3 non posée : aucune Policy de la file dans la topologie"; return 0; }
+  if m27_gl_fichier "$_M27_DEPOT_DONNEES" "${lieu%%$'\t'*}" 2>/dev/null |
+    IDX="${lieu##*$'\t'}" yq -o=json -I=0 'select(documentIndex == (strenv(IDX) | to_number)) | .spec.pattern' 2>/dev/null |
+    jq -e --arg r "$_M27_REBUT" '. as $p | $r | test($p)' >/dev/null 2>&1; then
+    m27_journal E23 "L3 non posée : la Policy de la file s'applique aussi au rebut (une TTL y perdrait des messages)"
+    return 0
+  fi
   m27_rmq_modifier_doc E23 l3 "${lieu%%$'\t'*}" "${lieu##*$'\t'}" \
     '.spec.definition["message-ttl"] = 60000' \
     "topologie recette : notifications périmées après une minute (pas d'envoi en retard)" || return 1
@@ -76,7 +89,9 @@ _e23_l3_vivant() {
   [[ -d "$(m27_etat E23)/git-l3" ]] || return 0   # L3 non posée (pas de rebut sûr ou pas de Policy)
   m27_rmq_file 2>/dev/null | jq -e '.effective_policy_definition["message-ttl"] == 60000
     and .effective_policy_definition["dead-letter-strategy"] == "at-least-once"
-    and .effective_policy_definition["overflow"] == "reject-publish"' >/dev/null 2>&1
+    and .effective_policy_definition["overflow"] == "reject-publish"' >/dev/null 2>&1 || return 1
+  # Contrôle de sûreté sur place : le rebut, lui, n'a toujours aucune durée de vie.
+  m27_rmq_file "$_M27_REBUT" 2>/dev/null | jq -e '(.effective_policy_definition["message-ttl"] // .arguments["x-message-ttl"]) == null' >/dev/null 2>&1
 }
 
 _e23_tout_vivant() {

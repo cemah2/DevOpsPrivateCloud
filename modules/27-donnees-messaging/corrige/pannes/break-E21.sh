@@ -25,6 +25,8 @@ source "$WB_ROOT/modules/27-donnees-messaging/corrige/pannes/_m27-commun.sh"
 _E21_MARQUE=ticket_lucas
 
 # _e21_derniere — « installed_rank|version|checksum » de la dernière migration versionnée SQL réussie.
+# _e21_decale SOMME — la somme de contrôle injectée (int4 : +1, ou −1 à la borne haute).
+_e21_decale() { if (($1 >= 2147483647)); then echo $(($1 - 1)); else echo $(($1 + 1)); fi; }
 _e21_derniere() {
   m27_psql "SELECT installed_rank || '|' || version || '|' || checksum FROM flyway_schema_history
             WHERE success AND type = 'SQL' AND version IS NOT NULL AND checksum IS NOT NULL
@@ -64,11 +66,19 @@ _e21_v1_constat() {
     _e21_job_en_echec 'lock timeout|canceling statement due to lock'
 }
 _e21_v1_defaire() {
-  local pid
+  local pid p
   pid="$(_e21_v1_session 2>/dev/null)" || pid=""
   if [[ -n "$pid" ]]; then
     m27_psql "SELECT pg_terminate_backend($pid);" >/dev/null 2>&1 || true
     m27_journal E21 "session $pid terminée"
+  fi
+  # Le « sleep » qui tenait l'entrée de psql ouverte est arrêté (psql reçoit la fin de fichier et sort) :
+  # aucun processus de la panne ne reste dans le conteneur.
+  p="$(m27_lire E21 v1-primaire)"
+  if [[ -n "$p" ]]; then
+    wb_kubectl -n "$_M27_NS_AGENDA" exec "$p" -c postgres -- sh -c \
+      'for d in /proc/[0-9]*; do tr "\0" " " <"$d/cmdline" 2>/dev/null | grep -q "^sleep 21600" && kill "${d#/proc/}"; done; exit 0' \
+      >/dev/null 2>&1 || true
   fi
   m27_oublier E21 v1-primaire
 }
@@ -84,7 +94,7 @@ _e21_v23_poser() {
     m27_psql "UPDATE flyway_schema_history SET success = false WHERE installed_rank = $rang AND success;" >/dev/null || return 1
     m27_journal E21 "migration $version (rang $rang) marquée en échec"
   else
-    m27_psql "UPDATE flyway_schema_history SET checksum = $((somme + 1)) WHERE installed_rank = $rang AND checksum = $somme;" >/dev/null || return 1
+    m27_psql "UPDATE flyway_schema_history SET checksum = $(_e21_decale "$somme") WHERE installed_rank = $rang AND checksum = $somme;" >/dev/null || return 1
     m27_journal E21 "somme de contrôle de la migration $version (rang $rang) décalée"
   fi
   m27_argo_synchroniser "$_M27_APP_AGENDA" || return 1
@@ -96,7 +106,7 @@ _e21_v23_altere() {
   if [[ "$n" == 2 ]]; then
     [[ "$(m27_psql "SELECT success FROM flyway_schema_history WHERE installed_rank = $rang;")" == f ]]
   else
-    [[ "$(m27_psql "SELECT checksum FROM flyway_schema_history WHERE installed_rank = $rang;")" == "$((somme + 1))" ]]
+    [[ "$(m27_psql "SELECT checksum FROM flyway_schema_history WHERE installed_rank = $rang;")" == "$(_e21_decale "$somme")" ]]
   fi
 }
 _e21_v23_defaire() {
@@ -106,7 +116,7 @@ _e21_v23_defaire() {
     if [[ "$n" == 2 ]]; then
       m27_psql "UPDATE flyway_schema_history SET success = true WHERE installed_rank = $rang AND NOT success;" >/dev/null 2>&1 || true
     else
-      m27_psql "UPDATE flyway_schema_history SET checksum = $somme WHERE installed_rank = $rang AND checksum = $((somme + 1));" >/dev/null 2>&1 || true
+      m27_psql "UPDATE flyway_schema_history SET checksum = $somme WHERE installed_rank = $rang AND checksum = $(_e21_decale "$somme");" >/dev/null 2>&1 || true
     fi
     m27_journal E21 "historique Flyway remis (rang $rang) s'il portait encore la valeur de la panne"
   fi

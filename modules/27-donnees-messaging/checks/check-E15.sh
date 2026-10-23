@@ -37,6 +37,13 @@ check_cmd "une alerte surveille le retard du réplica de secours" _m27p_alerte_f
 
 check_cmd "wb-essais : aucun Cluster CNPG d'essai restant (copie de production)" _m27p_absent clusters.postgresql.cnpg.io wb-essais
 check_cmd "wb-essais : aucune grappe RabbitMQ d'essai restante" _m27p_absent rabbitmqclusters.rabbitmq.com wb-essais
+# Les PVC d'un RabbitmqCluster supprimé RESTENT (StatefulSet) : ceux de l'essai contiennent des messages.
+_m27_e15_pvc() {
+  _m27p_cluster_joignable || return 1
+  kube get namespace wb-essais >/dev/null 2>&1 || return 0
+  _m27p_kq '[.items[] | select(.metadata.name | test("rabbitmq-essai|secours-essai"))] | length == 0' -n wb-essais persistentvolumeclaims
+}
+check_cmd "wb-essais : aucun volume restant des essais (rabbitmq-essai, secours-essai)" _m27_e15_pvc
 
 _m27_e15_export() {
   kube -n messagerie get cronjob export-definitions -o json 2>/dev/null |

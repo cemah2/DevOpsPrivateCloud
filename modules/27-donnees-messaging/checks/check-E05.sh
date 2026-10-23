@@ -38,10 +38,10 @@ for _m27d_e05_env in "$_M27D_ENV_RECETTE" "$_M27D_ENV_PROD"; do
   check_cmd "$_m27d_e05_env : dernier Job réussi" _m27d_json "$_m27d_e05_job" '(.status.succeeded // 0) >= 1'
   check_cmd "$_m27d_e05_env : image medisphere/mediagenda-migrations" _m27d_json "$_m27d_e05_job" \
     'any(.spec.template.spec.containers[]; .image | test("^registry\\.par1\\.medisphere\\.internal/medisphere/mediagenda-migrations[:@]"))'
-  check_cmd "$_m27d_e05_env : Flyway va directement au primaire (mediagenda-db-rw), TLS vérifié, jamais par le pooler" _m27d_json "$_m27d_e05_job" \
+  check_cmd "$_m27d_e05_env : FLYWAY_URL du Job vers le primaire (mediagenda-db-rw), TLS vérifié, jamais par le pooler" _m27d_json "$_m27d_e05_job" \
     'any(.spec.template.spec.containers[].env[]?; .name == "FLYWAY_URL"
-       and (.value | test("^jdbc:postgresql://mediagenda-db-rw[.:/]")) and (.value | test("sslmode=verify-(full|ca)"))
-       and (.value | test("pooler") | not))'
+       and ((.value // "") | test("^jdbc:postgresql://mediagenda-db-rw[.:/]")) and ((.value // "") | test("sslmode=verify-(full|ca)"))
+       and ((.value // "") | test("pooler") | not))'
   check_cmd "$_m27d_e05_env : compte du migrateur dynamique (Secret mediagenda-db-migrateur)" _m27d_json "$_m27d_e05_job" \
     'any(.spec.template.spec.containers[].env[]?; .name == "FLYWAY_USER" and .valueFrom.secretKeyRef.name == "mediagenda-db-migrateur")
      and any(.spec.template.spec.containers[].env[]?; .name == "FLYWAY_PASSWORD" and .valueFrom.secretKeyRef.name == "mediagenda-db-migrateur")'

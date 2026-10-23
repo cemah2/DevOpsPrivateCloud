@@ -18,11 +18,11 @@ mediagenda=# SELECT application_name, sent_lsn, write_lsn, flush_lsn, replay_lsn
 ------------------+------------+------------+------------+------------+------------
  mediagenda-db-1  | 0/1A3F6D58 | 0/1A3F6D58 | 0/1A3F6D58 | 0/1A3F6D58 | quorum
  mediagenda-db-3  | 0/1A3F6D58 | 0/1A3F6D58 | 0/1A3F6D58 | 0/1A3F6D20 | quorum
-mediagenda=# SHOW synchronous_standby_names;    -- ANY 1 ("mediagenda-db-1","mediagenda-db-3")
+mediagenda=# SHOW synchronous_standby_names;    -- ANY 1 ("mediagenda-db-1","mediagenda-db-3","mediagenda-db-2")
 mediagenda=# SHOW synchronous_commit;           -- on
 ```
 
-- `synchronous_standby_names` est **écrit par CNPG** à partir de `.spec.postgresql.synchronous` (`method: any`, `number: 1`) : les noms des autres instances, réplicas sains d'abord ; avec `dataDurability: required`, la liste n'est jamais vide (les instances indisponibles y restent, en fin de liste), d'où l'attente des validations sans réplica (M27-E19).
+- `synchronous_standby_names` est **écrit par CNPG** à partir de `.spec.postgresql.synchronous` (`method: any`, `number: 1`) : les réplicas sains d'abord, puis les réplicas indisponibles, puis le primaire lui-même (documentation CNPG 1.30, « Required Data Durability ») ; avec `dataDurability: required`, la liste n'est jamais vide (les instances indisponibles y restent), d'où l'attente des validations sans réplica (M27-E19).
 - Avec `synchronous_commit = on`, le `COMMIT` revient quand **un** réplica (`ANY 1`) a **écrit et synchronisé sur disque** le WAL jusqu'au LSN du commit : c'est `flush_lsn` qui compte. `remote_write` se contente de `write_lsn` (écrit, pas synchronisé : perdu si le réplica et sa machine tombent), `remote_apply` attend `replay_lsn` (lecture cohérente sur le réplica), `local` n'attend aucun réplica.
 - `sync_state = quorum` : les deux réplicas sont candidats ; n'importe lequel suffit.
 
@@ -68,7 +68,7 @@ Sur disque (`rabbitmq-diagnostics status` → *Data directory*) : `quorum/<nœud
 
 ## 4. Khepri
 
-Depuis RabbitMQ 4.2, les métadonnées (vhosts, utilisateurs, files, liaisons, politiques) sont dans **Khepri**, un magasin arborescent répliqué par **Ra** (le même Raft que les files quorum). En partition, seul le côté majoritaire peut modifier la topologie ; il n'y a rien à « réconcilier » au retour, contrairement à Mnesia et à `cluster_partition_handling`. Commande d'état du magasin de métadonnées trouvée dans `rabbitmq-diagnostics --help` de la version : <À-RELEVER>.
+Depuis RabbitMQ 4.2, les métadonnées (vhosts, utilisateurs, files, liaisons, politiques) sont dans **Khepri**, un magasin arborescent répliqué par **Ra** (le même Raft que les files quorum). En partition, seul le côté majoritaire peut modifier la topologie ; il n'y a rien à « réconcilier » au retour, contrairement à Mnesia et à `cluster_partition_handling`. Commande d'état du magasin de métadonnées trouvée dans `rabbitmq-diagnostics --help` de la 4.3 : `rabbitmq-diagnostics metadata_store_status` (membres Ra de Khepri, leader, terme, index) ; `check_if_metadata_store_is_initialized` sert de contrôle de santé. Depuis la 4.3, Khepri est le **seul** magasin pris en charge (Mnesia et `cluster_partition_handling` retirés).
 
 ## Schéma des deux chemins d'une écriture confirmée
 

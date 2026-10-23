@@ -3,6 +3,10 @@
 # avec un message clair (« canceling statement due to lock timeout ») au lieu de pendre jusqu'à
 # activeDeadlineSeconds. initSql est joué à chaque connexion ouverte par Flyway (option « initSql » de
 # Flyway, variable FLYWAY_INIT_SQL) ; lockRetryCount borne l'attente du verrou consultatif propre à Flyway.
+# initSql est DÉPRÉCIÉ (Flyway 13.11 affiche un avis au démarrage : remplacé par un rappel « afterConnect »,
+# vérifié dans le code de flyway-13.11.1) ; il fonctionne encore. Remplaçants durables : un fichier
+# afterConnect.sql à côté des migrations (image construite par mediagenda/api), ou l'option de session de
+# la connexion JDBC : FLYWAY_URL=…&options=-c%20lock_timeout%3D30s (paramètre « options » de pgJDBC).
 spec:
   template:
     spec:

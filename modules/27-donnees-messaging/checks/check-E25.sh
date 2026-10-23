@@ -24,8 +24,9 @@ check_cmd "notifications ($_m27p_vhost_prod) : rebut et limite de livraison en p
 check_cmd "notifications.rebut ($_m27p_vhost_prod) : vide ou presque (≤ 5)" \
   _m27p_file "$_m27p_vhost_prod" notifications.rebut '(.messages // 0) <= 5'
 check_cmd "MédiNotif (prod) disponible, sans redémarrage récent" _m27x_medinotif_sain medinotif-prod
-check_cmd "notifications envoyées en production dans les dernières 24 h" \
-  _m27p_prom_positif 'sum(increase(medinotif_messages_total{namespace="medinotif-prod", resultat="envoye"}[24h]))'
+# Sept jours : la démonstration (seul trafic de prod garanti au lab) peut dater de quelques jours.
+check_cmd "notifications envoyées en production dans les 7 derniers jours" \
+  _m27p_prom_positif 'sum(increase(medinotif_messages_total{namespace="medinotif-prod", resultat="envoye"}[7d]))'
 _m27_e25_publication_prod() {
   rabbitmq_api "exchanges/$_m27p_vhost_prod/notifications" 2>/dev/null | jq -e '(.message_stats.publish_in // 0) > 0' >/dev/null 2>&1
 }

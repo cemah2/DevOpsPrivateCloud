@@ -126,13 +126,14 @@ Notes 9.0/9.1 qui comptent : Lua devient un **module** chargé par défaut (`MOD
 *B. Le component.* Mots de passe (hexadécimaux : sûrs dans une URL et dans le fichier ACL) :
 ```
 admin@adm01:~$ for env in recette prod dev; do
-  m=$(openssl rand -hex 24); a=$(openssl rand -hex 24); e=$(openssl rand -hex 24); s=$(openssl rand -hex 24)
-  bao kv put -mount=kv mediagenda/$env/valkey mot_de_passe="$m" mot_de_passe_admin="$a" \
-    mot_de_passe_exportateur="$e" mot_de_passe_sonde="$s" \
-    url="rediss://mediagenda:$m@valkey.mediagenda-$env.svc:6379/0" >/dev/null
-done; unset m a e s
+  M=$(openssl rand -hex 24) A=$(openssl rand -hex 24) E=$(openssl rand -hex 24) S=$(openssl rand -hex 24) ENV=$env \
+    jq -n '{mot_de_passe: env.M, mot_de_passe_admin: env.A, mot_de_passe_exportateur: env.E,
+            mot_de_passe_sonde: env.S,
+            url: ("rediss://mediagenda:" + env.M + "@valkey.mediagenda-" + env.ENV + ".svc:6379/0")}' |
+    bao kv put -mount=kv "mediagenda/$env/valkey" - >/dev/null
+done
 ```
-(Les valeurs passent par des variables, pas par la ligne de commande enregistrée ; `bao kv put` les reçoit en arguments du processus `bao` le temps de l'appel, sur `adm01` seulement. Avec `-` et un fichier JSON en entrée standard, même pas.)
+(Les mots de passe ne passent ni par l'historique ni par la ligne de commande d'un processus (visible par `ps`) : ils sont dans l'environnement de `jq`, puis sur l'entrée standard de `bao` — `-` : données JSON lues sur l'entrée.)
 
 Fichiers ([`mediagenda-deploiement/`](fichiers/M27-E07/mediagenda-deploiement/)) :
 - [`components/valkey/`](fichiers/M27-E07/mediagenda-deploiement/components/valkey/) : `valkey.conf` (ConfigMap générée), [`externalsecrets.yaml`](fichiers/M27-E07/mediagenda-deploiement/components/valkey/externalsecrets.yaml) (le fichier ACL est construit par le modèle : `#{{ .mot_de_passe | sha256sum }}`), [`statefulset.yaml`](fichiers/M27-E07/mediagenda-deploiement/components/valkey/statefulset.yaml) (sondes qui authentifient avec `sonde` et vérifient `PONG`, exportateur), `service.yaml`, `reseau.yaml`, `podmonitor.yaml`, et dans `kustomization.yaml` le correctif de l'API (`MEDIAGENDA_VALKEY_URL` lue dans `mediagenda-valkey`, `value: null`) et l'annotation de Reloader du Rollout ;
@@ -313,20 +314,20 @@ Rien de Kafka ne reste. La question revient dans l'ADR-0270 avec ses critères d
 | 6 | `60-rappels-db.yaml` | `enableSuperuserAccess: true` | crée un Secret `rappels-db-superuser` exploitable par quiconque lit les Secrets de l'espace | majeur | accepté | `false` (défaut) |
 | 7 | `60-rappels-db.yaml`, `62-…` | `imageName: ghcr.io/…:18` ; `image: bitnami/rabbitmq:4.1` | registre externe (le cluster ne tire **que** par Harbor : la VAP du M14 refuse les **pods**), étiquette mobile, pas d'empreinte (Kyverno en prod), **Bitnami interdit** (catalogue gratuit figé) | majeur | CR acceptées, **pods refusés** à la création (l'opérateur boucle en erreur) | images du cache Harbor, épinglées ; RabbitMQ officiel (`library/rabbitmq`) |
 | 8 | `60-rappels-db.yaml` | `instances: 1` | aucune tolérance de panne ; contredit la règle « trois instances, synchrone » de MédiSphère pour une base de service | majeur | accepté | 3 instances… ou pas de base dédiée |
-| 9 | `60-rappels-db.yaml` | `max_connections: 1000`, `shared_buffers: 2GB`, aucune ressource | `shared_buffers` plus gros que ce qu'un pod obtiendra ; sans `resources`, Kyverno (`exiger-limites`, espaces d'équipe) **refuse les pods** ; 1000 connexions = mémoire non bornée | majeur | CR acceptée, pods refusés | `resources` (requêtes = limites), paramètres dimensionnés (E16) |
+| 9 | `60-rappels-db.yaml` | `max_connections: 1000`, `shared_buffers: 2GB`, aucune ressource | sans `resources`, la `LimitRange` de l'espace (M14-E10) donne au conteneur 512 Mio de limite : `shared_buffers` de 2 Go ne tient pas, l'instance ne démarre pas ou est tuée (`OOMKilled`) — `exiger-limites` ne dit rien, les valeurs par défaut sont posées **avant** Kyverno ; 1000 connexions = mémoire non bornée | majeur | accepté (CR et pods), échec au démarrage | `resources` (requêtes = limites), paramètres dimensionnés (E16) |
 | 10 | `60-rappels-db.yaml` | `monitoring.enablePodMonitor: true` | déprécié dans CloudNativePG 1.30 (« will be removed ») ; MédiSphère déclare ses `PodMonitor` (sélecteur `supervision: "oui"`) | mineur | accepté | `PodMonitor` explicite |
-| 11 | `62-rabbitmq-rappels.yaml` | deuxième grappe RabbitMQ, 1 réplica, `service.type: LoadBalancer` | une grappe par application = double exploitation ; 1 nœud = file quorum impossible à répliquer ; `LoadBalancer` exposerait AMQP **en clair** hors du cluster (quota de l'espace : `services.loadbalancers: 0` → **refusé**) ; pas de TLS | **bloquant** | Service refusé par le quota | vhost/file dans la grappe `messagerie/rabbitmq` |
+| 11 | `62-rabbitmq-rappels.yaml` | deuxième grappe RabbitMQ, 1 réplica, `service.type: LoadBalancer` | une grappe par application = double exploitation ; 1 nœud = file quorum impossible à répliquer ; `LoadBalancer` exposerait AMQP **en clair** hors du cluster (adresse LB IPAM annoncée en BGP) ; pas de TLS | **bloquant** | Service refusé par le quota `services.loadbalancers: "0"` de l'espace (M14-E10) — s'il a été relevé pour le Service `mediagenda-db-openbao` du M25, **accepté** : vérifie ton quota | vhost/file dans la grappe `messagerie/rabbitmq` |
 | 12 | `63-topologie-rappels.yaml` | file `classic`, `durable: false`, `autoDelete: true` | les rappels disparaissent au redémarrage du nœud ou au départ du dernier consommateur ; pas de réplication | majeur | accepté (webhook : valide) | file **quorum** durable |
 | 13 | `63-topologie-rappels.yaml` | `tags: [administrator]`, permission `.*/.*/.*` sur `/` | le compte de l'application administre toute la grappe | **bloquant** (sécurité) | accepté | aucun tag ; permissions minimales sur un vhost dédié (modèle `medinotif-<env>`) |
 | 14 | tous | dans `plateforme/k8s/espaces/mediagenda-recette/` | objets **applicatifs** dans le dépôt de la plateforme, appliqués à la main (`task appliquer`), hors d'Argo CD | mineur | — | dépôt de l'application et Argo CD ; topologie dans `plateforme/donnees` |
 
-Preuves à blanc (dans `wb-essais`, sans rien créer) : les trois CR passent l'API (validation de schéma) — c'est le piège : « accepté » ne veut pas dire « fonctionnera ». Le `LoadBalancer` est refusé par le quota de l'espace d'équipe (`exceeded quota … services.loadbalancers`) ; un **pod** construit avec l'image `bitnami/rabbitmq:4.1` est refusé par la VAP de registre du M14. (Dans `wb-essais`, vérifie quels contrôles s'appliquent : les politiques d'équipe de Kyverno visent les espaces étiquetés.)
+Preuves à blanc (dans `wb-essais`, sans rien créer) : les trois CR passent l'API (validation de schéma) — c'est le piège : « accepté » ne veut pas dire « fonctionnera ». Le `LoadBalancer` est refusé par un quota `services.loadbalancers: "0"` (`exceeded quota … services.loadbalancers`), comme celui des espaces d'équipe depuis le M14 ; un **pod** construit avec l'image `bitnami/rabbitmq:4.1` est refusé par la VAP de registre du M14. (Dans `wb-essais`, vérifie quels contrôles s'appliquent : les politiques d'équipe de Kyverno visent les espaces étiquetés.)
 
 Réponse à Lucas (extrait) : « Merci d'avoir tout isolé pour ne rien casser — l'intention est la bonne, et la base déclarée par CloudNativePG, les ressources nommées, c'est propre. Trois choses bloquent : ton *pooler* et ton archivage visent **notre** base `mediagenda-db` ; deux mots de passe sont dans Git ; le compte RabbitMQ est administrateur. Pour la suite, pas besoin d'une base ni d'une messagerie à toi : une table `rappels` dans la base de MédiAgenda (migration Flyway `V5__`, *expand* seulement), et une file quorum `rappels-veille` dans le vhost `medinotif-<env>`, déclarée dans `plateforme/donnees/topologie/` avec une liaison et une permission d'écriture pour `mediagenda-<env>`. Je te montre demain comment on écrit les deux. »
 
 **Explications**
 
-La revue la plus utile classe : ce qui met en danger **une autre** application ou les données d'abord, la sécurité ensuite, puis ce qui ne tiendra pas en production, puis le style. Et elle sépare « refusé à l'admission » (Lucas le verra tout de suite) de « accepté » (le danger silencieux : ici les n° 1, 2, 4, 12, 13).
+La revue la plus utile classe : ce qui met en danger **une autre** application ou les données d'abord, la sécurité ensuite, puis ce qui ne tiendra pas en production, puis le style. Et elle sépare « refusé à l'admission » (Lucas le verra tout de suite) de « accepté » (le danger silencieux : ici les n° 1, 2, 4, 9, 12, 13).
 
 **Alternatives**
 

@@ -15,7 +15,7 @@
 #   3. « Moindre privilège » de Lucas : un script SQL commité dans plateforme/k8s
 #      (espaces/mediagenda-recette/sql/moindre-privilege.sql) et joué sur la recette retire INSERT, UPDATE
 #      et DELETE au rôle de groupe mediagenda_api : les écritures de l'API échouent (permission denied),
-#      les lectures passent. Annulation : les mêmes droits rendus sur les mêmes tables.
+#      les lectures passent. Annulation : chaque droit rendu sur les tables qui l'avaient (état noté avant).
 # Aucune donnée n'est touchée ; jamais mediagenda-prod.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
@@ -125,14 +125,24 @@ _e19_v2_defaire() {
 
 # --- Variante 3 : droits d'écriture retirés -----------------------------------------------------------
 
-_e19_v3_poser() {
-  local tables tmp
-  [[ "$(m27_psql "SELECT count(*) FROM pg_roles WHERE rolname = 'mediagenda_api';")" == 1 ]] || return 10
-  tables="$(m27_psql "SELECT string_agg(format('%I.%I', schemaname, tablename), ',') FROM pg_tables
+# _e19_v3_tables PRIVILÈGE — tables de public (hors historique Flyway) où mediagenda_api a PRIVILÈGE.
+_e19_v3_tables() {
+  m27_psql "SELECT coalesce(string_agg(format('%I.%I', schemaname, tablename), ','), '') FROM pg_tables
     WHERE schemaname = 'public' AND tablename <> 'flyway_schema_history'
-      AND has_table_privilege('mediagenda_api', format('%I.%I', schemaname, tablename), 'INSERT');")" || return 1
-  [[ -n "$tables" ]] || return 10
-  m27_ecrire E19 v3-tables "$tables"
+      AND has_table_privilege('mediagenda_api', format('%I.%I', schemaname, tablename), '$1');"
+}
+
+_e19_v3_poser() {
+  local tmp p t etat=""
+  [[ "$(m27_psql "SELECT count(*) FROM pg_roles WHERE rolname = 'mediagenda_api';")" == 1 ]] || return 10
+  # État d'origine noté PRIVILÈGE PAR PRIVILÈGE (« INSERT=t1,t2;UPDATE=…;DELETE=… ») : l'annulation rend
+  # exactement ce qui existait, rien de plus.
+  for p in INSERT UPDATE DELETE; do
+    t="$(_e19_v3_tables "$p")" || return 1
+    etat+="$p=$t;"
+  done
+  [[ "$etat" != "INSERT=;"* ]] || return 10   # aucune table où l'API écrit : variante sans objet
+  m27_ecrire E19 v3-droits "$etat"
   tmp="$(m27_etat E19)/tmp"
   mkdir -p "$tmp"
   cat >"$tmp/moindre-privilege.sql" <<SQL
@@ -142,22 +152,29 @@ REVOKE INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public FROM mediagenda_api
 SQL
   m27_commit E19 v3 "$_M27_DEPOT_K8S" "recette : moindre privilège pour mediagenda_api" \
     "$_E19_SQL_CHEMIN" "$tmp/moindre-privilege.sql" || return 1
-  m27_psql "REVOKE INSERT, UPDATE, DELETE ON $tables FROM mediagenda_api;" >/dev/null || return 1
-  m27_journal E19 "INSERT, UPDATE, DELETE retirés à mediagenda_api sur $tables"
+  for p in INSERT UPDATE DELETE; do
+    t="${etat#*"$p="}"; t="${t%%;*}"
+    [[ -z "$t" ]] || m27_psql "REVOKE $p ON $t FROM mediagenda_api;" >/dev/null || return 1
+  done
+  m27_journal E19 "INSERT, UPDATE, DELETE retirés à mediagenda_api ($etat)"
 }
 _e19_v3_constat() {
   [[ "$(m27_psql "SELECT has_table_privilege('mediagenda_api', 'public.rendez_vous', 'INSERT');")" == f ]]
 }
 _e19_v3_defaire() {
-  local tables
-  tables="$(m27_lire E19 v3-tables)"
-  if [[ -n "$tables" ]]; then
-    m27_psql "GRANT INSERT, UPDATE, DELETE ON $tables TO mediagenda_api;" >/dev/null ||
-      wb_avert "droits non rendus : GRANT INSERT, UPDATE, DELETE ON $tables TO mediagenda_api; (à jouer sur le primaire de recette)"
-    m27_journal E19 "droits rendus sur $tables"
+  local etat p t
+  etat="$(m27_lire E19 v3-droits)"
+  if [[ -n "$etat" ]]; then
+    for p in INSERT UPDATE DELETE; do
+      t="${etat#*"$p="}"; t="${t%%;*}"
+      [[ -n "$t" ]] || continue
+      m27_psql "GRANT $p ON $t TO mediagenda_api;" >/dev/null ||
+        wb_avert "droits non rendus : GRANT $p ON $t TO mediagenda_api; (à jouer sur le primaire de recette)"
+    done
+    m27_journal E19 "droits d'origine rendus ($etat)"
   fi
   if m27_commit_actif E19 v3; then m27_retablir E19 v3 || true; else m27_oublier E19 git-v3; fi
-  m27_oublier E19 v3-tables
+  m27_oublier E19 v3-droits
 }
 
 # --- Mécanique commune --------------------------------------------------------------------------------

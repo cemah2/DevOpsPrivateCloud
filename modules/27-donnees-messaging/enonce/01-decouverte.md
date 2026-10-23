@@ -405,7 +405,7 @@ Flyway lit chaque paramètre aussi dans une variable d'environnement : `FLYWAY_`
 
 <details><summary>Indice 2</summary>
 
-Flyway veut une URL **JDBC** (`jdbc:postgresql://hôte:5432/base?…`) et l'utilisateur à part, pas l'URL `postgresql://u:p@…` que fabrique le component du M25 : ajoute des clés au **modèle** de l'ExternalSecret du migrateur. CloudNativePG publie la CA de la base dans le Secret `mediagenda-db-ca` (clé `ca.crt`) ; le pilote JDBC accepte `sslmode=verify-full&sslrootcert=<fichier>`. Le certificat serveur de CNPG porte les noms des Services `-rw`, `-ro`, `-r`.
+Flyway veut une URL **JDBC** (`jdbc:postgresql://hôte:5432/base?…`) et l'utilisateur à part, pas l'URL `postgresql://u:p@…` que fabrique le component du M25. L'URL JDBC ne contient aucun secret : elle peut s'écrire en clair dans le Job, où elle se relit en revue ; ajoute au **modèle** de l'ExternalSecret du migrateur les clés qui manquent pour l'utilisateur et le mot de passe. CloudNativePG publie la CA de la base dans le Secret `mediagenda-db-ca` (clé `ca.crt`) ; le pilote JDBC accepte `sslmode=verify-full&sslrootcert=<fichier>`. Le certificat serveur de CNPG porte les noms des Services `-rw`, `-ro`, `-r`.
 </details>
 
 <details><summary>Indice 3</summary>
