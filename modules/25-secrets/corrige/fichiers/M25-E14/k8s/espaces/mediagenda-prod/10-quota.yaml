@@ -1,0 +1,18 @@
+# plateforme/k8s — espaces/mediagenda-prod/10-quota.yaml (M20-E07, repris de M17-E09) ; M25-E14 : un LoadBalancer pour OpenBao
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota-mediagenda
+  namespace: mediagenda-prod
+  labels:
+    medisphere.internal/environnement: prod
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.memory: 12Gi
+    pods: "30"
+    persistentvolumeclaims: "10"
+    requests.storage: 60Gi
+    services.loadbalancers: "1"   # M25-E14 : Service 10.10.41.65 de mediagenda-db pour OpenBao (CNP : vault01-03 seulement)
+    services.nodeports: "0"

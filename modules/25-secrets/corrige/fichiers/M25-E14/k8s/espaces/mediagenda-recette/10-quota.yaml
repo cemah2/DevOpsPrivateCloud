@@ -1,0 +1,21 @@
+# plateforme/k8s — espaces/mediagenda-recette/10-quota.yaml (M14-E10 ; M25-E14 : un LoadBalancer pour OpenBao)
+# Recette : une fois et demie le budget de dev (plus de réplicas, essais de charge de Julien).
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota-equipe
+  namespace: mediagenda-recette
+spec:
+  hard:
+    requests.cpu: "3"
+    requests.memory: 6Gi
+    limits.cpu: "8"
+    limits.memory: 12Gi
+    pods: "30"
+    services: "10"
+    services.nodeports: "0"
+    services.loadbalancers: "1"   # M25-E14 : Service 10.10.41.64 de mediagenda-db pour OpenBao (CNP : vault01-03 seulement)
+    configmaps: "30"
+    secrets: "30"
+    count/jobs.batch: "20"
+    count/cronjobs.batch: "5"
