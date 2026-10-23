@@ -140,8 +140,9 @@ _m24p_royaume() { _m24d_kc ""; }
 # _m24p_clients_metier — clients du royaume SAUF ceux que Keycloak crée lui-même (account,
 # account-console, admin-cli, broker, realm-management, security-admin-console) : leurs redirections
 # à suffixe (/realms/medisphere/account/*) et le flux direct d'admin-cli sont ceux de Keycloak.
+# Les secrets des clients (livrés à view-clients, voir _m24d_kc_client) sont retirés dès la lecture.
 _m24p_clients_metier() {
-  _m24d_kc "clients?max=500" | jq -c '[.[] | select(.clientId as $c
+  _m24d_kc "clients?max=500" | jq -c '[.[] | del(.secret) | select(.clientId as $c
     | ["account", "account-console", "admin-cli", "broker", "realm-management", "security-admin-console"]
     | index($c) | not)]' 2>/dev/null || true
 }

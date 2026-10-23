@@ -14,7 +14,7 @@ Toute modification de ce document passe par une MR relue par la RSSI. Un branche
 ## 1. Principes
 
 1. **Les droits découlent des groupes, jamais des personnes.** Aucun nom de personne dans une politique, une ACL, une liaison RBAC ou une table de correspondance. Arriver, changer d'équipe ou partir = une MR sur `annuaire/groupes.yml` ou `annuaire/personnes.yml`, rien d'autre.
-2. **Moindre privilège par défaut.** Un compte authentifié sans groupe reconnu ne voit rien (Argo CD : `policy.default` vide ; Kubernetes : aucune liaison ; Grafana : Viewer de l'organisation principale seulement). L'écriture en production est l'exception, justifiée ligne par ligne ci-dessous.
+2. **Moindre privilège par défaut.** Un compte authentifié sans groupe reconnu ne voit rien (Argo CD : `policy.default` vide ; Kubernetes : aucune liaison ; Grafana : connexion refusée, `role_attribute_strict` et `org_mapping` sans joker). L'écriture en production est l'exception, justifiée ligne par ligne ci-dessous.
 3. **Un compte par personne, nominatif et fédéré.** Les comptes humains viennent de Keycloak (lui-même fédéré à l'annuaire). Un compte local d'humain est une anomalie, sauf les comptes de bris de glace (section 5).
 4. **Authentification forte pour qui administre.** Les membres de `plateforme-admins` et `securite` ont l'OTP obligatoire (M24-E21) ; leurs droits d'administration ne s'exercent que par le SSO.
 5. **Une porte de secours par service, éprouvée et surveillée.** Elle ne dépend pas du SSO, son secret est au Vault `critique` (et au coffre), son usage est journalisé et alerté (RB-240).

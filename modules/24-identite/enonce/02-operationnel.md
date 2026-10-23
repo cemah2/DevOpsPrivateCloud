@@ -207,7 +207,7 @@ Les variables de planification d'un pipeline se lisent comme les autres dans `ru
 | Client Keycloak | `grafana`, confidentiel, redirection `https://grafana.apps.par1.medisphere.internal/login/generic_oauth`, retour après déconnexion `https://grafana.apps.par1.medisphere.internal/login`, PKCE `S256` |
 | Grafana | 13.2, sous-chart de `kube-prometheus-stack` (`plateforme/observabilite`, `kps/values.yaml`), espace `supervision` ; racine MédiSphère dans la ConfigMap `racine-medisphere` (clé `ca.crt`, M21-E06) |
 | Secret | `supervision/grafana-oidc`, clé `GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET`, créé par `secrets-k8s.sh appliquer identite` ; chargé par `grafana.envFromSecret` |
-| Rôles voulus | `plateforme-admins` → *Grafana Admin* (serveur) et Admin de l'organisation principale ; `plateforme`, `support` → Editor ; toute autre personne de l'annuaire → Viewer ; organisation « Sécurité » : `securite` Editor, `plateforme-admins`, `support`, `direction` Viewer |
+| Rôles voulus | `plateforme-admins` → *Grafana Admin* (serveur) et Admin de l'organisation principale ; `plateforme`, `support` → Editor ; tout autre membre de l'un des sept groupes → Viewer ; organisation « Sécurité » : `securite` Editor, `plateforme-admins`, `support`, `direction` Viewer |
 | Équipes | `plateforme`, `mediagenda`, `medidoc` : OpenTofu, état `observabilite-grafana` de `plateforme/infra` (M21-E17), membres par adresse de courriel |
 | Flux | Grafana (pod de `supervision`) → VIP 10.10.70.200:443 : la politique `refus-par-defaut-sortie` de M21-E29 le refuse aujourd'hui |
 
@@ -237,7 +237,7 @@ Les variables de planification d'un pipeline se lisent comme les autres dans `ru
 
 <details><summary>Indice 1</summary>
 
-`role_attribute_path` est une expression JMESPath évaluée sur l'ID token puis userinfo : `contains(groups[*], 'plateforme-admins') && 'GrafanaAdmin' || …`. Avec `role_attribute_strict = true`, une expression qui ne donne rien (revendication absente) **refuse** la connexion au lieu de donner Viewer : c'est ce qu'on veut si la portée `groupes` disparaît un jour.
+`role_attribute_path` est une expression JMESPath évaluée sur l'ID token puis userinfo : `contains(groups[*], 'plateforme-admins') && 'GrafanaAdmin' || …`. Avec `role_attribute_strict = true`, une expression qui ne donne rien (revendication absente) **refuse** la connexion au lieu de donner Viewer : c'est ce qu'on veut si la portée `groupes` disparaît un jour. Mais Grafana ne refuse que si **aucune** entrée d'`org_mapping` ne donne de rôle non plus : une entrée joker (`*:1:Viewer`) en donnerait un à tout le monde et annulerait le garde-fou. Dès qu'`org_mapping` est défini, une personne n'entre que dans les organisations qu'il lui donne : nomme l'organisation principale (`1`) pour chacun des sept groupes.
 </details>
 
 <details><summary>Indice 2</summary>

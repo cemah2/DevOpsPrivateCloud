@@ -10,7 +10,7 @@
 
 ## Contexte
 
-Depuis le palier 2 du M24, tous les services de MédiSphère s'authentifient par Keycloak (`idp01`) : une indisponibilité empêche toute **nouvelle** connexion (GitLab, Grafana, Argo CD, Harbor, Proxmox, `kubectl` par kubelogin, `step ssh login`). Le lab tourne sur un seul hyperviseur (`pve01`), avec ≈ 108 Go occupés sur 128 Go. Question : faut-il deux nœuds Keycloak en permanence ?
+Depuis le palier 2 du M24, tous les services de MédiSphère s'authentifient par Keycloak (`idp01`) : une indisponibilité empêche toute **nouvelle** connexion (GitLab, Grafana, Argo CD, Harbor, Proxmox, `kubectl` par kubelogin, `step ssh login`). Le lab tourne sur un seul hyperviseur (`pve01`), avec ≈ 107 Go occupés sur 128 Go. Question : faut-il deux nœuds Keycloak en permanence ?
 
 Ce que partagent les nœuds d'une grappe Keycloak 26 : la **base PostgreSQL** (royaumes, clients, clés, sessions persistées, table de découverte `jgroups_ping`) et le transport Infinispan (TCP 7800, détection 57800, mTLS). Depuis la 26.0, les sessions des utilisateurs sont **persistées en base** par défaut : elles survivent à l'arrêt de tous les nœuds.
 

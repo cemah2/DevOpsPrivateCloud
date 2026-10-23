@@ -4,9 +4,9 @@
 |---|---|
 | **Bloc** | F — Sécurité |
 | **Niveau** | Cœur |
-| **Profil de lab** | Socle v5 (socle v4 + `idp01`, `ipa01`) + `ceph-par1` + `k8s-par1` (≈ 108 Go) ; `idp02` (2241, 2 Go) le temps de M24-E24 |
+| **Profil de lab** | Socle v5 (socle v4 + `idp01`, `ipa01`) + `ceph-par1` + `k8s-par1` (≈ 107 Go) ; `idp02` (2241, 2 Go) le temps de M24-E24 |
 | **Prérequis** | Module 23 (`traces-v1`) ; module 06 (step-ca, PowerDNS, certificats SSH, NetBox) ; module 07 (`lb01`/`lb02`) ; module 14 (RBAC, kubeadm) ; module 20 (Argo CD, comptes locaux) ; module 21 (Grafana, organisations) ; module 22 (locataire Loki `audit`) |
-| **Durée indicative** | 85 à 105 heures (palier 1 : 16-20 h ; palier 2 : 30-36 h ; palier 3 : 22-27 h ; palier 4 : 12-15 h ; mini-projet : 8-12 h) |
+| **Durée indicative** | 103 à 125 heures (palier 1 : 21-25 h ; palier 2 : 40-46 h ; palier 3 : 22-27 h ; palier 4 : 12-15 h ; mini-projet : 8-12 h) |
 
 ## Contexte MédiSphère
 

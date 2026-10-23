@@ -82,5 +82,8 @@ _m24y_entetes() {
 # _m24y_ssh_ok HÔTE 'commande' — la commande de consultation affiche « oui » sur l'hôte.
 _m24y_ssh_ok() { [[ "$(_m24d_ssh "$1" "$2" | tail -n 1)" == oui ]]; }
 
-# _m24y_clients_tous — tous les clients du royaume (JSON), vide si illisible.
-_m24y_clients_tous() { _m24d_kc "clients?max=500"; }
+# _m24y_clients_tous — tous les clients du royaume (JSON), vide si illisible, SANS leurs secrets
+# (livrés à view-clients, voir _m24d_kc_client) : retirés dès la lecture.
+_m24y_clients_tous() {
+  _m24d_kc "clients?max=500" | jq -c 'map(del(.secret))' 2>/dev/null || true
+}

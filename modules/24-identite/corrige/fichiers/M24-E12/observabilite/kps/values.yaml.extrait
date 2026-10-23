@@ -56,17 +56,29 @@ grafana:
         'Viewer'
       allow_assign_grafana_admin: true
       # Revendication « groups » absente (portée retirée, mappeur cassé) : REFUS, pas Viewer par défaut.
+      # Grafana refuse quand ni role_attribute_path ni AUCUNE entrée d'org_mapping ne donne de rôle.
       role_attribute_strict: true
       # Organisations : la même revendication, lue comme liste ; « Sécurité » est créée par OpenTofu
-      # (M22-E16). Rôle final dans une organisation = le plus élevé de role_attribute_path et
-      # d'org_mapping (organisation principale, id 1).
+      # (M22-E16). Syntaxe : <groupe>:<id ou nom de l'organisation>:<rôle>, séparés par des espaces.
+      # Dès qu'org_mapping est défini, une personne n'entre QUE dans les organisations qu'il lui
+      # donne : l'organisation principale (id 1) doit donc y figurer pour chacun des sept groupes.
+      # Rôle final dans une organisation = le plus élevé de role_attribute_path et d'org_mapping
+      # (plateforme-admins : Admin dans l'organisation 1, grâce à GrafanaAdmin).
+      # PAS de joker « *:1:Viewer » : il donnerait un rôle même sans revendication « groups », et
+      # role_attribute_strict ne refuserait plus jamais personne (panne M24-E35, variante 3).
       org_attribute_path: groups
       org_mapping: >-
+        plateforme-admins:1:Viewer
+        plateforme:1:Viewer
+        mediagenda:1:Viewer
+        medidoc:1:Viewer
+        securite:1:Viewer
+        support:1:Viewer
+        direction:1:Viewer
         securite:Sécurité:Editor
         plateforme-admins:Sécurité:Viewer
         support:Sécurité:Viewer
         direction:Sécurité:Viewer
-        *:1:Viewer
       # Synchronisation des rôles à CHAQUE connexion (défaut) : OpenTofu ne gère plus les membres
       # de l'organisation « Sécurité » (observabilite-grafana, ignore_changes).
       skip_org_role_sync: false

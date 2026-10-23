@@ -43,7 +43,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 | Tickets | INC-5135 à INC-5143 (pannes), SEC-/PLAT-25xx (xx = exercice) |
 | Variables de `lab/lab.env` | `WB_M24_IDP`, `WB_M24_IPA`, `WB_M24_CP` (nœuds de contrôle), `WB_M24_LB` (répartiteurs), `WB_M24_MON01`, `WB_M24_KC_ADMIN_FILE` (secret de `svc-tofu-keycloak`, défaut `~/.config/workbook/keycloak-tofu.env`), `WB_M24_ARRIVEE` (défaut `emma.durand`), `WB_M24_VM_SSSD` (défaut `nbx01`) ; les chemins des fichiers sur les VMs ont aussi leur variable (liste dans `lab/lab.env.example`) si ton lab diffère du corrigé |
 
-> **Mémoire** : aucune VM temporaire dans ce palier ; le profil reste celui du module (≈ 108 Go). M24-E44 lance seulement des outils sur `adm01`.
+> **Mémoire** : aucune VM temporaire dans ce palier ; le profil reste celui du module (≈ 107 Go). M24-E44 lance seulement des outils sur `adm01`.
 
 **Ordre conseillé** : E35 → E38 → E37 → E39 → E36 → E40 → E41 → E42 → E44 → E43 → E45. On commence par un seul client (E35) et par le temps (E38), qui touchent tous les services de la même façon ; puis l'annuaire (E37) et les groupes (E39), qui ne touchent que certaines personnes ; puis le cluster (E36), les VMs (E40), OAuth2 Proxy (E41) et le fournisseur lui-même (E42). Le passage sous le capot (E44) précède l'astreinte (E43) parce qu'il donne les gestes de mesure dont l'astreinte a besoin ; les questions (E45) ferment le palier, avant le mini-projet. **Durée totale indicative** : 12 à 15 h.
 
