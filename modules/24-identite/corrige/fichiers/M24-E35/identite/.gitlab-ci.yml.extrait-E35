@@ -1,0 +1,42 @@
+# plateforme/identite — .gitlab-ci.yml — EXTRAIT (M24-E35, INC-5135) : contrôle de DÉRIVE du royaume.
+# À ajouter après tofu:plan (même étape « plan »). Il réutilise .tofu (outils/ci-preparer.sh : S3,
+# svc-tofu-keycloak, phrase de chiffrement de l'état, secrets des clients en variable éphémère).
+#
+# Planification : Build → Pipeline schedules → « Dérive du royaume (nuit) », cron « 43 5 * * * »,
+# fuseau Europe/Paris, branche main, variable DERIVE_NUIT=1. Propriétaire de la planification : un
+# Maintainer de plateforme-admins (c'est lui qui reçoit le courriel d'échec : le mettre en copie de
+# plateforme@ par une règle de messagerie, ou ajouter une notification de projet « pipeline en échec »).
+#
+# Ce que le job VOIT : toute différence entre le code et Keycloak pour ce que le fournisseur relit
+# (redirections, portées par défaut, mappeurs, fédération, réglages du royaume, durées, événements…).
+# Ce qu'il ne voit PAS : les arguments en écriture seule (client_secret_wo, bind_credential_wo) ; d'où
+# l'alerte ClientSsoEnEchec (loki/regles/audit/identite.yaml) et FederationLdapEnEchec (E26).
+# Le pipeline planifié lance aussi annuaire:verifier (règle « branche par défaut ») : une dérive de
+# l'annuaire apparaît dans son --check --diff (le job ne la fait pas échouer : à lire dans le journal).
+tofu:derive:
+  extends: .tofu
+  stage: plan
+  interruptible: false
+  script:
+    - tofu -chdir=tofu init -input=false -lockfile=readonly
+    - |
+      # -lock=false : lecture seule, ne bloque jamais un apply en cours ; -refresh (défaut) : relit Keycloak.
+      rc=0
+      tofu -chdir=tofu plan -input=false -lock=false -detailed-exitcode -no-color > tofu/derive.txt 2>&1 || rc=$?
+      grep -E '^(Plan:|No changes)' tofu/derive.txt || true
+      case "$rc" in
+        0) echo "Aucune dérive : Keycloak correspond au code de main." ;;
+        2) echo "DÉRIVE : Keycloak ne correspond plus au code (détail dans l'artefact derive.txt)."
+           grep -E '^ *# .* (will be|must be)' tofu/derive.txt || true
+           exit 1 ;;
+        *) echo "Plan en ERREUR (accès, état, fournisseur) : la dérive n'a pas pu être mesurée."; exit 1 ;;
+      esac
+  artifacts:
+    when: always
+    # Le plan décrit le royaume (pas de secret : écriture seule et variables éphémères) : réservé aux Developers.
+    access: developer
+    expire_in: 30 days
+    paths:
+      - tofu/derive.txt
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "schedule" && $DERIVE_NUIT == "1" && $KEYCLOAK_CLIENT_SECRET

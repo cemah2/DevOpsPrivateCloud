@@ -1,0 +1,61 @@
+# plateforme/observabilite — regles/pki-services.yaml (M25-E41, INC-5241). Complète regles/secrets.yaml
+# (M25-E27 : CertificatServicesExpireBientot) par ce que la panne a montré :
+#  - un certificat de service peut être NON PRÊT (signature refusée par OpenBao) pendant 32 h sans
+#    qu'aucune échéance ne soit proche : on alerte sur l'état, pas seulement sur la date ;
+#  - la CRL peut être PÉRIMÉE sans qu'aucun certificat ne le soit : métrique de la sonde de mon01
+#    (rôle sonde_crl), seuil sous le délai de reconstruction automatique (12 h avant l'échéance).
+# Variante non visible par la supervision : un certificat émis sans l'usage clientAuth est « prêt »
+# pour cert-manager ; seul le relais (ghostunnel) le refuse (voir le corrigé de M25-E41).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pki-services
+spec:
+  groups:
+    - name: secrets.pki-services
+      rules:
+        - alert: CertificatServicesNonPret
+          expr: |
+            max by (namespace, name) (
+              certmanager_certificate_ready_status{issuer_name="openbao-services", condition="False"}
+            ) == 1
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Le certificat de service {{ $labels.namespace }}/{{ $labels.name }} n'est pas prêt"
+            description: >-
+              cert-manager n'obtient pas de certificat de pki-services (rôle services-k8s, émetteur, méthode
+              k8s-par1). Le certificat en place continue de servir jusqu'à son échéance (48 h) : lire la
+              CertificateRequest en échec. RB-251 pour un coffre indisponible, M25-E41 sinon.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/secrets/pki-services.md
+        - alert: CRLServicesBientotPerimee
+          expr: |
+            (min(medisphere_pki_crl_prochaine_maj_secondes{montage="pki-services"}) - time() < 6 * 3600)
+            or (min(medisphere_pki_crl_valide{montage="pki-services"}) == 0)
+          for: 10m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "La CRL de pki-services est périmée, invalide ou le sera dans moins de 6 h"
+            description: >-
+              OpenBao la reconstruit 12 h avant son échéance (auto_rebuild) : s'il reste moins de 6 h, la
+              reconstruction ne se fait plus. Tout client qui vérifie la CRL refusera les certificats
+              de service. bao read pki-services/config/crl ; bao read pki-services/crl/rotate.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/secrets/pki-services.md
+        - alert: CRLServicesSondeMuette
+          expr: |
+            absent(medisphere_pki_crl_sonde_succes{montage="pki-services"})
+            or (min(medisphere_pki_crl_sonde_succes{montage="pki-services"}) == 0)
+          for: 30m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "La sonde de la CRL de pki-services ne remonte plus"
+            description: >-
+              La métrique de la sonde de mon01 (rôle sonde_crl) manque ou la CRL n'a pas pu être
+              téléchargée : l'alerte CRLServicesBientotPerimee ne protège plus rien.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/secrets/pki-services.md

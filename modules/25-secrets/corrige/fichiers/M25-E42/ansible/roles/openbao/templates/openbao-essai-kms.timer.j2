@@ -1,0 +1,11 @@
+# /etc/systemd/system/openbao-essai-kms.timer — {{ inventory_hostname }} (M25-E42)
+[Unit]
+Description=Essai quotidien de l'auto-descellement d'OpenBao
+
+[Timer]
+OnCalendar=*-*-* {{ openbao_essai_kms_heure }}
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

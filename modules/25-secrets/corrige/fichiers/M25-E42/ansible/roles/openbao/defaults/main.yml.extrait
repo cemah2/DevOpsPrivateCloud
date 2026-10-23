@@ -1,0 +1,8 @@
+# roles/openbao/defaults/main.yml — EXTRAIT : variables AJOUTÉES en M25-E42 (INC-5242).
+# Essai quotidien de l'auto-descellement (seulement si openbao_seal_transit) : le jeton du seal
+# chiffre et déchiffre une valeur témoin sur kms01, et se renouvelle. Métriques pour node_exporter.
+openbao_essai_kms: true
+# Heure fixe, décalée par nœud par RandomizedDelaySec : un essai par jour suffit à apprendre une panne
+# AVANT le prochain redémarrage (période du jeton : 168 h).
+openbao_essai_kms_heure: "06:15"
+openbao_essai_kms_textfile: "{{ node_exporter_dossier_textfile | default('/var/lib/prometheus/node-exporter') }}"

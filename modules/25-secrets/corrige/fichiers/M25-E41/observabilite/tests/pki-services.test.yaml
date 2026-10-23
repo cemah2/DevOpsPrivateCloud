@@ -1,0 +1,68 @@
+# plateforme/observabilite — tests/pki-services.test.yaml (M25-E41). Lancés par le job tests-regles
+# (la règle est d'abord extraite de la PrometheusRule vers build/regles/pki-services.yml).
+rule_files:
+  - ../build/regles/pki-services.yml
+evaluation_interval: 1m
+tests:
+  - name: un certificat non prêt depuis 15 min déclenche, un certificat prêt non
+    interval: 1m
+    input_series:
+      - series: 'certmanager_certificate_ready_status{namespace="medidoc-recette", name="medidoc-mtls", issuer_name="openbao-services", condition="False"}'
+        values: '0x5 1x30'
+      - series: 'certmanager_certificate_ready_status{namespace="mediagenda-recette", name="mediagenda-mtls", issuer_name="openbao-services", condition="False"}'
+        values: '0x35'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: CertificatServicesNonPret
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: CertificatServicesNonPret
+        exp_alerts:
+          - exp_labels:
+              namespace: medidoc-recette
+              name: medidoc-mtls
+              gravite: avertissement
+              equipe: plateforme
+            exp_annotations:
+              resume: "Le certificat de service medidoc-recette/medidoc-mtls n'est pas prêt"
+              description: "cert-manager n'obtient pas de certificat de pki-services (rôle services-k8s, émetteur, méthode k8s-par1). Le certificat en place continue de servir jusqu'à son échéance (48 h) : lire la CertificateRequest en échec. RB-251 pour un coffre indisponible, M25-E41 sinon."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/secrets/pki-services.md
+  - name: CRL saine (reconstruite 12 h avant échéance) ne déclenche pas ; CRL à 5 min d'échéance déclenche
+    interval: 1m
+    input_series:
+      # Temps de l'essai : 0 à 30 min. nextUpdate saine = 12 h ; puis CRL « 5 min » posée à t = 5 min.
+      - series: 'medisphere_pki_crl_prochaine_maj_secondes{montage="pki-services"}'
+        values: '43200x4 600x25'
+      - series: 'medisphere_pki_crl_valide{montage="pki-services"}'
+        values: '1x30'
+      - series: 'medisphere_pki_crl_sonde_succes{montage="pki-services"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: CRLServicesBientotPerimee
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: CRLServicesBientotPerimee
+        exp_alerts:
+          - exp_labels:
+              gravite: avertissement
+              equipe: plateforme
+            exp_annotations:
+              resume: "La CRL de pki-services est périmée, invalide ou le sera dans moins de 6 h"
+              description: "OpenBao la reconstruit 12 h avant son échéance (auto_rebuild) : s'il reste moins de 6 h, la reconstruction ne se fait plus. Tout client qui vérifie la CRL refusera les certificats de service. bao read pki-services/config/crl ; bao read pki-services/crl/rotate."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/secrets/pki-services.md
+  - name: sonde absente
+    interval: 1m
+    input_series: []
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: CRLServicesSondeMuette
+        exp_alerts:
+          - exp_labels:
+              gravite: avertissement
+              equipe: plateforme
+              montage: pki-services
+            exp_annotations:
+              resume: "La sonde de la CRL de pki-services ne remonte plus"
+              description: "La métrique de la sonde de mon01 (rôle sonde_crl) manque ou la CRL n'a pas pu être téléchargée : l'alerte CRLServicesBientotPerimee ne protège plus rien."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/secrets/pki-services.md

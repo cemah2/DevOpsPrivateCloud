@@ -1,0 +1,42 @@
+# plateforme/observabilite — regles/identite.yaml — EXTRAIT (M24-E42, INC-5142) : deux alertes de plus
+# à ajouter à la liste « rules » du groupe identite.alertes existant (M24-E26) ; l'en-tête du groupe est
+# rappelé pour situer l'extrait. Tests : tests/identite-E42.test.yaml.
+#
+# Ce qu'E26 voyait déjà : Keycloak arrêté ou certificat de idp01 refusé (KeycloakIndisponible, la
+# collecte de idp01:9000 vérifie le certificat), sso injoignable depuis mon01 (sonde du témoin).
+# Ce qu'il ne voyait pas : un serveur sain retiré par HAProxy alors que la collecte directe va bien
+# (contrôle de santé mal dirigé) ; Keycloak qui attend des connexions à sa base ; un émetteur différent
+# (traité par la sonde du témoin : module oidc_emetteur, rôle supervision_temoin).
+#
+# haproxy_server_status : exportateur natif de HAProxy (M21-E10), une série par état possible avec
+# l'étiquette « state », valeur 1 pour l'état courant. agroal_* : réserve de connexions de Keycloak
+# (Quarkus/Agroal) sur /metrics du port 9000 : vérifie le nom exact sur ta version.
+    - name: identite.alertes
+      rules:
+        - alert: SsoSansServeur
+          expr: |
+            sum by (instance) (haproxy_server_status{job="haproxy", proxy="be_sso", state="UP"}) == 0
+          for: 1m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.instance }} : plus aucun serveur Keycloak en service dans be_sso"
+            description: >-
+              HAProxy répond 503 à toutes les connexions SSO. Raison du retrait dans journalctl -u haproxy
+              (Layer4, Layer6 = TLS, Layer7 = réponse du contrôle de santé) ; comparer avec /health/ready
+              sur idp01:9000. RB-246 §8.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-246-sso-indisponible.md
+        - alert: KeycloakBaseSaturee
+          expr: |
+            max by (instance) (agroal_awaiting_count{job="keycloak"}) > 0
+          for: 2m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.instance }} : des requêtes de Keycloak attendent une connexion à la base depuis 2 minutes"
+            description: >-
+              Lenteurs et erreurs « internal server error » par moments. Sur idp01 : pg_stat_activity,
+              max_connections (et pg_settings.sourcefile), refus « too many clients » dans journalctl -u keycloak. RB-246 §8.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-246-sso-indisponible.md

@@ -1,0 +1,43 @@
+---
+# roles/openbao/tasks/essai-kms.yml (M25-E42) — inclus par tasks/main.yml :
+#   - name: Essai quotidien de l'auto-descellement
+#     ansible.builtin.include_tasks: essai-kms.yml
+#     when: openbao_seal_transit | bool and openbao_essai_kms | bool
+#     tags: [openbao_essai_kms]
+# Ne redémarre jamais openbao.
+- name: Script de l'essai
+  ansible.builtin.copy:
+    src: openbao-essai-kms
+    dest: /usr/local/sbin/openbao-essai-kms
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Unité et minuterie de l'essai
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - openbao-essai-kms.service
+    - openbao-essai-kms.timer
+  register: openbao_essai_kms_unites
+
+- name: Recharger systemd si les unités ont changé
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: openbao_essai_kms_unites is changed
+
+- name: Minuterie active
+  ansible.builtin.systemd_service:
+    name: openbao-essai-kms.timer
+    enabled: true
+    state: started
+
+- name: Premier essai (le résultat compte : un échec arrête le playbook)
+  ansible.builtin.systemd_service:
+    name: openbao-essai-kms.service
+    state: started
+  when: openbao_essai_kms_unites is changed

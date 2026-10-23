@@ -1,0 +1,30 @@
+# plateforme/observabilite — loki/regles/audit/identite.yaml — EXTRAIT (M24-E39, INC-5139) : groupe à
+# AJOUTER (locataire AUDIT). Journal d'audit du serveur d'API (M22-E07) : métadonnées structurées
+# verb, user, code, resource, object_ns, object_name.
+#
+# La configuration d'Argo CD (argocd-cm, argocd-rbac-cm, argocd-cmd-params-cm) ne change que par
+# « helmfile apply » de la release argocd (plateforme/k8s), rare et annoncé. Toute autre écriture est
+# une question : une main a changé qui peut faire quoi dans Argo CD (M24-E39 : policy.default à
+# role:admin, scopes, policy.csv). Faux positif accepté : chaque helmfile apply de la release (le
+# rapprocher de la MR et du journal des changements).
+groups:
+  - name: identite-argocd
+    interval: 1m
+    rules:
+      - alert: ConfigurationArgoCDModifiee
+        expr: |
+          sum by (user, object_name, verb) (count_over_time({job="kubernetes-audit"}
+            | object_ns="argocd" | resource="configmaps"
+            | object_name=~"argocd-cm|argocd-rbac-cm|argocd-cmd-params-cm"
+            | verb=~"create|update|patch|delete" | code=~"2.." [5m])) > 0
+        labels:
+          gravite: avertissement
+          equipe: securite
+        annotations:
+          resume: "Configuration d'Argo CD modifiée : {{ $labels.verb }} sur {{ $labels.object_name }} par {{ $labels.user }}"
+          description: >-
+            Si ce n'est pas un helmfile apply annoncé de la release argocd : comparer à la release
+            (helmfile -e par1 -l composant=argocd diff), et si des droits ont été élargis, établir la
+            fenêtre et ce qui a été fait pendant (RB-246 §5). Détail (Loki — audit) :
+            {job="kubernetes-audit"} | object_ns="argocd" | object_name="{{ $labels.object_name }}"
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-246-sso-indisponible.md

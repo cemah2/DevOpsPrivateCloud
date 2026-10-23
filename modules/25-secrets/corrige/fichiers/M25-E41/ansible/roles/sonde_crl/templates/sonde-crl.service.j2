@@ -1,0 +1,17 @@
+# /etc/systemd/system/sonde-crl.service — {{ inventory_hostname }} (M25-E41)
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle sonde_crl).') }}
+[Unit]
+Description=Sonde de fraîcheur des CRL d'OpenBao ({{ sonde_crl_montages | join(', ') }})
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/sonde-crl {{ sonde_crl_url_base }} {{ sonde_crl_textfile }} {{ sonde_crl_racine }} {{ sonde_crl_montages | join(' ') }}
+# root : le dossier textfile de node_exporter appartient à root ; le reste est en lecture seule.
+ReadWritePaths={{ sonde_crl_textfile }}
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_INET AF_INET6

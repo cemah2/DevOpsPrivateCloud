@@ -1,0 +1,24 @@
+# /etc/systemd/system/openbao-essai-kms.service — {{ inventory_hostname }} (M25-E42)
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle openbao).') }}
+[Unit]
+Description=Essai de l'auto-descellement d'OpenBao (jeton du seal, chiffrement et déchiffrement témoin sur kms01)
+Documentation=https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/secrets/runbooks/RB-251-descellement-et-redemarrage.md
+Wants=network-online.target
+After=network-online.target
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/openbao-essai-kms {{ openbao_seal_transit_adresse }} {{ openbao_seal_transit_montage }} {{ openbao_seal_transit_cle }} {{ openbao_racine }} {{ openbao_essai_kms_textfile }}
+SyslogIdentifier=openbao-essai-kms
+# root : lit /etc/openbao/kms.env (root 0600) ; tout le reste en lecture seule.
+ProtectSystem=strict
+ReadWritePaths={{ openbao_essai_kms_textfile }}
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# /usr/local/bin/sonde-crl — sonde de fraîcheur des CRL publiées par OpenBao (M25-E41).
+# Usage : sonde-crl <URL de base de l'API> <dossier textfile> <racine PKI> <montage>…
+# Lecture seule, sans jeton (points publics <montage>/ca/pem et <montage>/crl/pem).
+set -Eeuo pipefail
+base="$1" textfile="$2" racine="$3"
+shift 3
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+{
+  echo '# HELP medisphere_pki_crl_prochaine_maj_secondes Date (nextUpdate) de la CRL publiée, en secondes depuis l époque.'
+  echo '# TYPE medisphere_pki_crl_prochaine_maj_secondes gauge'
+  echo '# HELP medisphere_pki_crl_valide 1 si la CRL est signée par la CA du montage et non périmée.'
+  echo '# TYPE medisphere_pki_crl_valide gauge'
+  echo '# HELP medisphere_pki_crl_sonde_succes 1 si la CRL et la CA ont pu être téléchargées.'
+  echo '# TYPE medisphere_pki_crl_sonde_succes gauge'
+  for m in "$@"; do
+    ok=0 valide=0 prochaine=0
+    if curl -sf --max-time 10 --cacert "$racine" "$base/$m/ca/pem" -o "$tmp/ca.pem" \
+       && curl -sf --max-time 10 --cacert "$racine" "$base/$m/crl/pem" -o "$tmp/crl.pem"; then
+      ok=1
+      p="$(openssl crl -in "$tmp/crl.pem" -noout -nextupdate | cut -d= -f2)"
+      prochaine="$(date -d "$p" +%s)"
+      if openssl crl -in "$tmp/crl.pem" -noout -CAfile "$tmp/ca.pem" 2>&1 | grep -q 'verify OK' \
+         && ((prochaine > $(date +%s))); then
+        valide=1
+      fi
+    fi
+    printf 'medisphere_pki_crl_prochaine_maj_secondes{montage="%s"} %s\n' "$m" "$prochaine"
+    printf 'medisphere_pki_crl_valide{montage="%s"} %s\n' "$m" "$valide"
+    printf 'medisphere_pki_crl_sonde_succes{montage="%s"} %s\n' "$m" "$ok"
+  done
+} >"$textfile/pki_crl.prom.$$"
+chmod 0644 "$textfile/pki_crl.prom.$$"
+mv -f "$textfile/pki_crl.prom.$$" "$textfile/pki_crl.prom"

@@ -1,0 +1,6 @@
+---
+# host_vars/mon01/sonde_crl.yml (M25-E41) — la sonde tourne sur le témoin (mon01), hors du cluster :
+# elle voit la CRL comme la voit un client extérieur. Rôle ajouté au jeu « temoin » du playbook de
+# supervision de mon01 (M21-E11) : roles: [..., sonde_crl].
+sonde_crl_montages:
+  - pki-services

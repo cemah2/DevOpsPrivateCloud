@@ -1,0 +1,37 @@
+# plateforme/observabilite — loki/regles/audit/identite.yaml — EXTRAIT (M24-E35, INC-5135) : groupe
+# à AJOUTER à la suite des groupes d'E26 et d'E28 (même fichier, locataire AUDIT).
+#
+# Erreurs de CLIENT des services en SSO : le service lui-même ne sait plus parler à Keycloak (secret
+# refusé à l'échange du code, URI de redirection refusée avant le formulaire). Une personne qui se trompe
+# de mot de passe ne déclenche rien ici (erreurs invalid_user_credentials : KeycloakEchecsConnexion, E26).
+# Le compteur keycloak_user_events_total n'a pas l'étiquette du client (cardinalité, E26) : le journal,
+# lui, nomme le service touché (clientId).
+# Lignes des événements (écouteur jboss-logging, champ « message » du JSON) :
+#   type="CODE_TO_TOKEN_ERROR", realmName="medisphere", clientId="grafana", …, error="invalid_client_credentials", …
+#   type="LOGIN_ERROR", realmName="medisphere", clientId="grafana", …, error="invalid_redirect_uri", …
+groups:
+  - name: identite-clients
+    interval: 1m
+    rules:
+      - alert: ClientSsoEnEchec
+        # Plus de 2 erreurs en 10 min pour un même client : un essai isolé (un favori périmé, un
+        # robot) ne réveille personne ; un service fermé à tous, si.
+        expr: |
+          sum by (client) (count_over_time({service="keycloak"} |= "_ERROR"
+            | json | loggerName="org.keycloak.events"
+            | line_format "{{.message}}"
+            |~ `realmName="medisphere"`
+            |~ `error="(invalid_client_credentials|invalid_client|invalid_redirect_uri|unauthorized_client)"`
+            | regexp `clientId="(?P<client>[^"]+)"` [10m])) > 2
+        labels:
+          gravite: critique
+          equipe: plateforme
+        annotations:
+          resume: "Le client {{ $labels.client }} est refusé par Keycloak ({{ $value }} erreurs en 10 min)"
+          description: >-
+            Le service {{ $labels.client }} ne peut plus faire entrer personne par le SSO : secret du
+            client différent entre Keycloak et le service (CODE_TO_TOKEN_ERROR, invalid_client_credentials),
+            ou URI de redirection refusée (LOGIN_ERROR, invalid_redirect_uri). Compare au code
+            (tofu plan) et au Vault (introspection, RB-244) ; regarde les événements d'administration.
+            Détail (Loki — audit) : {service="keycloak"} |= "_ERROR" |= "{{ $labels.client }}" | json
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-246-sso-indisponible.md

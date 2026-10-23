@@ -1,0 +1,49 @@
+# plateforme/observabilite — tests/identite-E42.test.yaml (M24-E42) : promtool test rules
+#   yq '.spec' regles/identite.yaml > /tmp/identite.rules.yaml && promtool test rules tests/identite-E42.test.yaml
+rule_files:
+  - /tmp/identite.rules.yaml
+
+evaluation_interval: 15s
+
+tests:
+  - name: be_sso sans serveur sur lb01, sain sur lb02
+    interval: 15s
+    input_series:
+      - series: 'haproxy_server_status{job="haproxy", instance="lb01", proxy="be_sso", server="idp01", state="UP"}'
+        values: '1x4 0x20'
+      - series: 'haproxy_server_status{job="haproxy", instance="lb01", proxy="be_sso", server="idp01", state="DOWN"}'
+        values: '0x4 1x20'
+      - series: 'haproxy_server_status{job="haproxy", instance="lb02", proxy="be_sso", server="idp01", state="UP"}'
+        values: '1x24'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: SsoSansServeur
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: SsoSansServeur
+        exp_alerts:
+          - exp_labels: {gravite: critique, equipe: plateforme, instance: lb01}
+            exp_annotations:
+              resume: "lb01 : plus aucun serveur Keycloak en service dans be_sso"
+              description: >-
+                HAProxy répond 503 à toutes les connexions SSO. Raison du retrait dans journalctl -u haproxy (Layer4, Layer6 = TLS, Layer7 = réponse du contrôle de santé) ; comparer avec /health/ready sur idp01:9000. RB-246 §8.
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-246-sso-indisponible.md
+
+  - name: requêtes en attente de connexion à la base
+    interval: 15s
+    input_series:
+      - series: 'agroal_awaiting_count{job="keycloak", instance="idp01", datasource="default"}'
+        values: '0x4 3x20'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: KeycloakBaseSaturee
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: KeycloakBaseSaturee
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme, instance: idp01}
+            exp_annotations:
+              resume: "idp01 : des requêtes de Keycloak attendent une connexion à la base depuis 2 minutes"
+              description: >-
+                Lenteurs et erreurs « internal server error » par moments. Sur idp01 : pg_stat_activity, max_connections (et pg_settings.sourcefile), refus « too many clients » dans journalctl -u keycloak. RB-246 §8.
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-246-sso-indisponible.md

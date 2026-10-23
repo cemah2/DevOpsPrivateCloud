@@ -14,7 +14,8 @@
 #      administrateurs perdent leurs droits, les autres groupes ne voient rien changer ;
 #   4. mappeur « groups » de la portée « groupes » (Keycloak) avec le chemin complet : la revendication
 #      devient « /plateforme-admins » ; aucune ligne de policy.csv ne correspond (et Grafana, Harbor,
-#      kube-apiserver sont touchés de la même façon).
+#      kube-apiserver sont touchés de la même façon ; Grafana ne refuse pas : role_attribute_path
+#      retombe sur « Viewer », la revendication existant toujours).
 # Les objets d'argocd sont sauvegardés avant (JSON) ; restaurés seulement s'ils portent la marque.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
@@ -134,7 +135,7 @@ symptome_E39() {
     1) qui="Julien Petit"; detail="Je me connecte à Argo CD par le SSO, et je ne vois plus AUCUNE application. Karim non plus." ;;
     2) qui="Sophie Laurent"; detail="Nadia (support, lecture seule) vient de me montrer qu'elle a un bouton « Delete » actif sur mediagenda-prod dans Argo CD. Ce n'est pas normal." ;;
     3) qui="Karim Benali"; detail="Je n'ai plus que la lecture dans Argo CD : impossible de synchroniser plateforme. Julien, lui, synchronise ses applications comme d'habitude." ;;
-    *) qui="Julien Petit"; detail="Je ne vois plus mes applications dans Argo CD. Et Nadia me dit que Grafana lui refuse l'entrée depuis ce matin." ;;
+    *) qui="Julien Petit"; detail="Je ne vois plus mes applications dans Argo CD. Et Nadia me dit que dans Grafana elle n'est plus qu'en lecture (Viewer) depuis ce matin." ;;
   esac
   wb_symptome "Ticket INC-5139 — De : $qui" \
     "$detail" \

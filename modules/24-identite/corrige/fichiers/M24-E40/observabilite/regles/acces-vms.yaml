@@ -1,0 +1,34 @@
+# plateforme/observabilite — regles/acces-vms.yaml (M24-E40, INC-5140). À ajouter à
+# regles/kustomization.yaml (« - acces-vms.yaml ») et au job de tests des règles.
+#
+# SSSD arrêté sur un hôte inscrit = plus aucune personne de l'annuaire ne peut y entrer (le compte local
+# admin, lui, passe : personne ne s'en aperçoit avant le premier ticket). Mesure : collecteur « systemd »
+# de node_exporter (désactivé par défaut : --collector.systemd, avec --collector.systemd.unit-include
+# pour limiter les séries ; variable du rôle node_exporter à ajouter si elle manque, M21-E08).
+# L'absence de la série (collecteur non activé sur un hôte) n'est PAS une alerte ici : c'est la revue de
+# couverture du mini-projet qui la vérifie.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: acces-vms
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: acces-vms.alertes
+      rules:
+        - alert: SssdArrete
+          expr: |
+            node_systemd_unit_state{name="sssd.service", state="active"} == 0
+          for: 5m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.instance }} : SSSD n'est plus actif depuis 5 minutes"
+            description: >-
+              Les personnes de l'annuaire ne peuvent plus entrer sur cette machine (ni sudo) ; le compte
+              local admin reste utilisable. Sur la machine : systemctl status sssd, journalctl -u sssd -b,
+              droits de /etc/sssd/sssd.conf (root, 0600). RB-246 §6.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-246-sso-indisponible.md

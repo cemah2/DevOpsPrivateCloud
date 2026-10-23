@@ -1,0 +1,30 @@
+---
+# Rôle sonde_crl (M25-E41) — voir defaults/main.yml.
+- name: Script de la sonde
+  ansible.builtin.copy:
+    src: sonde-crl
+    dest: /usr/local/bin/sonde-crl
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Unité et minuterie
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - sonde-crl.service
+    - sonde-crl.timer
+  notify: Recharger systemd (sonde_crl)
+
+- name: Recharger systemd avant d'activer la minuterie
+  ansible.builtin.meta: flush_handlers
+
+- name: Minuterie active
+  ansible.builtin.systemd_service:
+    name: sonde-crl.timer
+    enabled: true
+    state: started

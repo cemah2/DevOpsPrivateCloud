@@ -1,0 +1,10 @@
+<!-- plateforme/medisphere — docs/securite/identite/runbooks/RB-241-arrivee.md — EXTRAIT (M24-E37, INC-5137).
+     À insérer dans « ## Étapes », juste APRÈS l'application de l'annuaire (job annuaire:appliquer) et
+     AVANT l'annonce « accès prêts » au responsable. Les numéros d'étapes suivants sont décalés d'un. -->
+
+N. **Vérifier que Keycloak voit la personne, avec ses groupes** (sans attendre la synchronisation de 15 min, ni le premier jour) :
+   1. *User federation* → `ipa01` → *Action* → *Sync changed users* ; le message indique « 1 imported » (ou plus si d'autres arrivées attendaient).
+   2. *Users* → recherche de `<uid>` : la personne est là, bandeau « fédéré » vers `ipa01`. Absente : **arrêter** et ouvrir RB-246 §3 (liaison de `svc-keycloak`, filtre des personnes) ; ne jamais la créer dans Keycloak.
+   3. *Clients* → `grafana` (ou tout client confidentiel) → *Client scopes* → *Evaluate*, utilisateur `<uid>` → *Generated ID token* : `"groups"` contient **exactement** les groupes demandés au ticket, en noms courts. Un groupe manquant : RB-246 §3 (filtre du mappeur `groupes-ipa`) ; un groupe en trop : retour au ticket.
+   4. Une personne déjà en poste du **même** groupe : même évaluation, mêmes groupes (une panne du mappeur touche tout le groupe, pas seulement l'arrivée).
+   5. Preuve au ticket : capture des groupes évalués (pas de jeton complet : il porte une signature valable cinq minutes).

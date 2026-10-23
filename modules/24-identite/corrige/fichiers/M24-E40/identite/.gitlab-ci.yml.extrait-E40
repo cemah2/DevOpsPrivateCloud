@@ -1,0 +1,38 @@
+# plateforme/identite — .gitlab-ci.yml — EXTRAIT (M24-E40, INC-5140) : contrôle de DÉRIVE de l'annuaire.
+# À ajouter après annuaire:verifier (même étape « verifier »). Il réutilise .annuaire (clé SSH de CI
+# copiée en 600 puis effacée, mot de passe du Vault critique, environnement lab/identite en « prepare »).
+#
+# Planification : la même que « Dérive du royaume (nuit) » de M24-E35 (branche main, variable
+# DERIVE_NUIT=1) : une seule planification, deux contrôles (royaume et annuaire).
+#
+# Pourquoi un job de plus : annuaire:verifier AFFICHE le --check --diff mais réussit toujours (il sert
+# à relire une MR). Ici, le récapitulatif d'Ansible (« changed=N ») fait échouer le job dès que
+# l'annuaire ne correspond plus au code : règle HBAC désactivée, règle sudo restreinte, personne ajoutée
+# à un groupe à la main, politique de mot de passe modifiée…
+# Limite : ce que les modules de freeipa.ansible_freeipa ne relisent pas (mots de passe, attributs
+# non gérés par annuaire/) n'est pas vu ; d'où les journaux de 389-ds dans Loki « audit » (E26).
+annuaire:derive:
+  extends: .annuaire
+  stage: verifier
+  interruptible: false
+  environment:
+    name: lab/identite
+    action: prepare
+  script:
+    - |
+      set -o pipefail
+      uv run ansible-playbook annuaire/annuaire.yml --check --diff | tee annuaire-derive.txt
+      n="$(sed -n 's/.* changed=\([0-9][0-9]*\).*/\1/p' annuaire-derive.txt | awk '{s += $1} END {print s + 0}')"
+      if [ "$n" -gt 0 ]; then
+        echo "DÉRIVE : $n changement(s) que annuaire:appliquer referait (détail ci-dessus et dans l'artefact)."
+        exit 1
+      fi
+      echo "Aucune dérive : l'annuaire correspond au code de main."
+  artifacts:
+    when: always
+    access: developer
+    expire_in: 30 days
+    paths:
+      - annuaire-derive.txt
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "schedule" && $DERIVE_NUIT == "1"

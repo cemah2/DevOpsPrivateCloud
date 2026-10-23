@@ -1,0 +1,28 @@
+# plateforme/observabilite — tests/acces-vms.test.yaml (M24-E40) : promtool test rules
+#   yq '.spec' regles/acces-vms.yaml > /tmp/acces-vms.rules.yaml && promtool test rules tests/acces-vms.test.yaml
+rule_files:
+  - /tmp/acces-vms.rules.yaml
+
+evaluation_interval: 15s
+
+tests:
+  - name: SSSD arrêté sur nbx01, actif sur mon01
+    interval: 15s
+    input_series:
+      - series: 'node_systemd_unit_state{job="vms", instance="nbx01", name="sssd.service", state="active"}'
+        values: '1x4 0x40'
+      - series: 'node_systemd_unit_state{job="vms", instance="mon01", name="sssd.service", state="active"}'
+        values: '1x44'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: SssdArrete
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: SssdArrete
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme, job: vms, instance: nbx01, name: sssd.service, state: active}
+            exp_annotations:
+              resume: "nbx01 : SSSD n'est plus actif depuis 5 minutes"
+              description: >-
+                Les personnes de l'annuaire ne peuvent plus entrer sur cette machine (ni sudo) ; le compte local admin reste utilisable. Sur la machine : systemctl status sssd, journalctl -u sssd -b, droits de /etc/sssd/sssd.conf (root, 0600). RB-246 §6.
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-246-sso-indisponible.md

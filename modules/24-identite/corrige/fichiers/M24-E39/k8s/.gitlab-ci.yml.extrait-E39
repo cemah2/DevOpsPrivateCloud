@@ -1,0 +1,29 @@
+# plateforme/k8s — .gitlab-ci.yml — EXTRAIT (M24-E39, INC-5139) : contrôle de DÉRIVE de la configuration
+# d'Argo CD (release Helmfile « argocd », que rien ne réconcilie : M20, ADR-0200).
+#
+# Planification : Build → Pipeline schedules → « Dérive d'Argo CD (nuit) », cron « 37 5 * * * »,
+# fuseau Europe/Paris, branche main, variable DERIVE_NUIT=1.
+# Variable du projet, PROTÉGÉE, de type FICHIER : KUBECONFIG_ARGOCD_DERIVE, kubeconfig du compte de
+# service argocd/argocd-derive (jeton lié de durée bornée, renouvelé comme celui de la revue des accès,
+# M24-E30), qui n'a que « get » sur les ConfigMaps argocd-cm et argocd-rbac-cm :
+#   apiVersion: rbac.authorization.k8s.io/v1
+#   kind: Role
+#   metadata: {name: argocd-derive, namespace: argocd}
+#   rules:
+#     - apiGroups: [""]
+#       resources: [configmaps]
+#       resourceNames: [argocd-cm, argocd-rbac-cm]
+#       verbs: [get]
+# (Role, RoleBinding et ServiceAccount dans rbac/argocd-derive.yaml, appliqués par « task appliquer »
+# comme les autres objets de rbac/, M24-E17.)
+# Flux : runner01 → VIP de l'API du cluster (déjà ouvert pour la revue des accès, M24-E30).
+argocd:derive:
+  stage: verifier
+  tags: [shell]
+  interruptible: false
+  variables:
+    KUBECONFIG: $KUBECONFIG_ARGOCD_DERIVE
+  script:
+    - outils/argocd-derive.sh par1
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "schedule" && $DERIVE_NUIT == "1"

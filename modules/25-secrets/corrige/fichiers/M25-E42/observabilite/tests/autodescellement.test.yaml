@@ -1,0 +1,46 @@
+# plateforme/observabilite — tests/autodescellement.test.yaml (M25-E42).
+rule_files:
+  - ../build/regles/autodescellement.yml
+evaluation_interval: 1m
+tests:
+  - name: essai en échec sur vault02 seulement ; jeton qui ne se renouvelle pas
+    interval: 1m
+    input_series:
+      - series: 'medisphere_openbao_kms_essai_ok{job="vms", instance="vault01"}'
+        values: '1x40'
+      - series: 'medisphere_openbao_kms_essai_ok{job="vms", instance="vault02"}'
+        values: '1x5 0x35'
+      - series: 'medisphere_openbao_kms_jeton_ttl_secondes{job="vms", instance="vault01"}'
+        values: '604800x40'
+      - series: 'medisphere_openbao_kms_jeton_ttl_secondes{job="vms", instance="vault02"}'
+        values: '-1x40'
+      - series: 'medisphere_openbao_kms_essai_horodatage{job="vms", instance="vault01"}'
+        values: '0x40'
+      - series: 'medisphere_openbao_kms_essai_horodatage{job="vms", instance="vault02"}'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: OpenBaoAutodescellementEnEchec
+        exp_alerts:
+          - exp_labels:
+              instance: vault02
+              gravite: critique
+              equipe: plateforme
+            exp_annotations:
+              resume: "vault02 ne pourrait plus se desceller seul"
+              description: "L'essai de l'auto-descellement (chiffrement et déchiffrement témoin sur kms01 avec le jeton du seal) a échoué : le prochain redémarrage de ce nœud le laissera scellé. Ne pas le redémarrer ; journalctl -t openbao-essai-kms ; RB-251 § « essai en échec »."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/secrets/runbooks/RB-251-descellement-et-redemarrage.md
+      - eval_time: 35m
+        alertname: OpenBaoJetonSealBientotExpire
+        exp_alerts:
+          - exp_labels:
+              instance: vault02
+              gravite: avertissement
+              equipe: plateforme
+            exp_annotations:
+              resume: "Le jeton du seal de vault02 expire dans moins de 3 jours, ou ne se renouvelle pas"
+              description: "Le jeton périodique du seal transit doit se renouveler (droit auth/token/renew-self dans la politique kms-autodescellement de kms01). Valeur -1 : renouvellement refusé."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/secrets/runbooks/RB-251-descellement-et-redemarrage.md
+      - eval_time: 35m
+        alertname: OpenBaoEssaiAutodescellementAbsent
+        exp_alerts: []

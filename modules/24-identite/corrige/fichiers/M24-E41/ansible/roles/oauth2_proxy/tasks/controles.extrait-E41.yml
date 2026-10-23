@@ -1,0 +1,45 @@
+---
+# Rôle oauth2_proxy — tasks/controles.yml — EXTRAIT (M24-E41, INC-5141) : à ajouter après
+# « La redirection vise l'émetteur… ». Le gabarit du rôle ne sait poser ni cookie_domains ni une
+# redirect_url étrangère : ces contrôles attrapent une modification À LA MAIN du fichier (ou un gabarit
+# changé par erreur) au prochain passage du rôle, y compris en --check planifié (les tâches uri et assert
+# s'exécutent en mode check : check_mode: false explicite sur la lecture).
+
+- name: Sans session, la première réponse (lecture seule, aussi en mode --check)
+  ansible.builtin.uri:
+    url: "{{ item.url_publique }}/"
+    ca_path: "{{ oauth2_proxy_racine }}"
+    follow_redirects: none
+    status_code: 302
+  check_mode: false
+  loop: "{{ oauth2_proxy_instances }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  register: _oauth2_proxy_premiere
+
+- name: L'URI de retour annoncée est celle de l'instance (pas celle d'une autre instance du même client)
+  ansible.builtin.assert:
+    that:
+      - item.location is search('redirect_uri=' ~ ((item.item.url_publique ~ '/oauth2/callback') | urlencode | replace('/', '%2F') | regex_escape) ~ '(&|$)')
+    fail_msg: >-
+      {{ item.item.nom }} : la redirection n'annonce pas {{ item.item.url_publique }}/oauth2/callback
+      (redirect_url modifiée à la main ? RB-246 §7)
+    quiet: true
+  loop: "{{ _oauth2_proxy_premiere.results }}"
+  loop_control:
+    label: "{{ item.item.nom }}"
+
+- name: Le cookie __Host- respecte son préfixe (Secure, Path=/, sans Domain), sinon le navigateur le rejette
+  ansible.builtin.assert:
+    that:
+      - item.set_cookie | default('') is search('__Host-oauth2-' ~ item.item.nom)
+      - item.set_cookie | default('') is search('(?i);\\s*secure')
+      - item.set_cookie | default('') is search('(?i);\\s*path=/(;|,|$)')
+      - item.set_cookie | default('') is not search('(?i);\\s*domain=')
+    fail_msg: >-
+      {{ item.item.nom }} : cookie de CSRF non conforme au préfixe __Host- (domaine posé ? cookie_secure
+      désactivé ?) : boucle « Login Failed » assurée (RB-246 §7)
+    quiet: true
+  loop: "{{ _oauth2_proxy_premiere.results }}"
+  loop_control:
+    label: "{{ item.item.nom }}"

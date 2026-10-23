@@ -1,0 +1,14 @@
+---
+# Rôle sonde_crl (M25-E41, INC-5241) — sonde de fraîcheur de la CRL de la PKI de services, sur mon01.
+# Toutes les 15 min : télécharge la CRL et la CA publiques de pki-services (sans jeton), vérifie la
+# signature de la CRL par la CA, et écrit pour le collecteur textfile de node_exporter :
+#   medisphere_pki_crl_prochaine_maj_secondes{montage}  (nextUpdate, époque)
+#   medisphere_pki_crl_valide{montage}                  (1 si signée par la CA et non périmée)
+#   medisphere_pki_crl_sonde_succes{montage}            (1 si la CRL a pu être lue)
+# Alertes : plateforme/observabilite, regles/pki-services.yaml.
+sonde_crl_url_base: https://openbao.par1.medisphere.internal:8200/v1
+sonde_crl_montages:
+  - pki-services
+sonde_crl_periode: 15min
+sonde_crl_racine: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+sonde_crl_textfile: "{{ node_exporter_dossier_textfile | default('/var/lib/prometheus/node-exporter') }}"

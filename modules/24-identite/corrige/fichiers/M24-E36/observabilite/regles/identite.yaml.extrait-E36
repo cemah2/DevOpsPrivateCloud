@@ -1,0 +1,53 @@
+# plateforme/observabilite — regles/identite.yaml — EXTRAIT (M24-E36, INC-5136) : groupe à AJOUTER
+# dans spec.groups de la PrometheusRule « identite » (M24-E26). Métriques des trois kube-apiserver,
+# collectées par kube-prometheus-stack (job « apiserver »). Noms vérifiés dans le code de Kubernetes
+# 1.36.0 (métriques ALPHA : à revérifier à chaque montée de version du cluster, RB-142).
+#   apiserver_authentication_jwt_authenticator_latency_seconds{result, jwt_issuer_hash}  (histogramme)
+#   apiserver_authentication_config_controller_automatic_reloads_total{status, apiserver_id_hash}
+#   apiserver_authentication_config_controller_last_config_info{apiserver_id_hash, hash}  (lu au diagnostic)
+# Ce que ces règles ne voient PAS : un fichier qui authentifie bien mais avec un préfixe de groupes faux
+# (403 partout) ; voir l'audit (Loki, locataire audit) et le contrôle --check planifié du playbook.
+    - name: identite.kube-apiserver
+      rules:
+        # Jetons OIDC refusés : plus de la moitié des vérifications échouent sur 10 min, avec un minimum
+        # de 20 vérifications (la nuit, trois échecs sur quatre essais ne sont pas une panne). La
+        # métrique ne compte que les jetons absents du cache : chaque nouveau jeton compte une fois.
+        - alert: KubeApiJetonsOidcRefuses
+          expr: |
+            (
+              sum(increase(apiserver_authentication_jwt_authenticator_latency_seconds_count{result="failure"}[10m]))
+              /
+              sum(increase(apiserver_authentication_jwt_authenticator_latency_seconds_count[10m]))
+            ) > 0.5
+            and
+            sum(increase(apiserver_authentication_jwt_authenticator_latency_seconds_count[10m])) > 20
+          for: 5m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "kube-apiserver refuse {{ $value | humanizePercentage }} des jetons OIDC depuis 10 minutes"
+            description: >-
+              kubectl par OIDC ne fonctionne plus pour une partie des personnes : fichier
+              d'authentification structurée modifié (audience, règles CEL), horloges, émetteur ou JWKS.
+              Journal de kube-apiserver (« Unable to authenticate the request ») et RB-246 §2.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-246-sso-indisponible.md
+        # Un rechargement refusé laisse l'ANCIENNE configuration : rien ne casse, mais la prochaine
+        # correction (rotation, nouvel émetteur) ne prendra pas effet non plus.
+        - alert: KubeApiAuthentificationRechargementEchoue
+          expr: |
+            sum by (instance) (increase(apiserver_authentication_config_controller_automatic_reloads_total{status="failure"}[15m])) > 0
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.instance }} : rechargement du fichier d'authentification refusé"
+            description: >-
+              Le fichier /etc/kubernetes/authentification/config.yaml de ce nœud est invalide ou son
+              émetteur est injoignable : kube-apiserver garde l'ancienne configuration. Journal :
+              « failed to load / validate / update authentication config ».
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-246-sso-indisponible.md
+        # Pas d'alerte « configurations différentes entre nœuds » sur …_last_config_info : son étiquette
+        # hash est l'empreinte du fichier ENTIER, commentaires compris, et le gabarit du rôle écrit le nom
+        # du nœud en commentaire : les trois empreintes diffèrent toujours. Ce qui compte, c'est qu'elles
+        # ne changent qu'avec un passage du rôle : changes(…[1d]) se lit dans le journal de diagnostic.

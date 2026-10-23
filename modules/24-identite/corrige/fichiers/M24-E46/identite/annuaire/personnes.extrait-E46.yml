@@ -1,0 +1,11 @@
+# annuaire/personnes.yml — EXTRAIT (M24-E46, PLAT-2546) : la personne fictive de la démonstration de
+# départ. Arrivée par RB-241 (MR la veille de la revue) ; le départ (RB-242) passe « etat » à disabled
+# et la retire de tous les groupes (annuaire/groupes.yml : membres de « plateforme »), jamais une
+# suppression. Courriel fictif du domaine interne ; aucune donnée réelle.
+  - identifiant: thomas.leroy
+    prenom: Thomas
+    nom: Leroy
+    courriel: thomas.leroy@medisphere.internal
+    titre: "Prestataire InfoGér (démonstration de départ, M24-E46)"
+    # Arrivée : etat absent (present). Départ, MR du jour de la revue :
+    etat: disabled

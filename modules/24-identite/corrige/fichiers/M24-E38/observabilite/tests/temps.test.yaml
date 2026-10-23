@@ -1,0 +1,76 @@
+# plateforme/observabilite — tests/temps.test.yaml (M24-E38) : promtool test rules
+#   yq '.spec' regles/temps.yaml > /tmp/temps.rules.yaml && promtool test rules tests/temps.test.yaml
+# (même extraction de spec que les autres PrometheusRule, M21-E15.)
+# node_time_seconds vaut l'heure de la machine : une série « 0+15x… » au pas de 15 s est une machine à
+# l'heure (valeur = instant de l'échantillon) ; « -600+15x… » une machine en retard de 10 minutes.
+rule_files:
+  - /tmp/temps.rules.yaml
+
+evaluation_interval: 15s
+
+tests:
+  - name: idp01 en retard de 10 minutes, nbx01 à l'heure
+    interval: 15s
+    input_series:
+      - series: 'node_time_seconds{job="vms", instance="idp01"}'
+        values: '-600+15x20'
+      - series: 'node_time_seconds{job="vms", instance="nbx01"}'
+        values: '0+15x20'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HorlogeDecalee
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: HorlogeDecalee
+        exp_alerts:
+          - exp_labels: {gravite: critique, equipe: plateforme, job: vms, instance: idp01}
+            exp_annotations:
+              resume: "idp01 : horloge décalée de 10m 0s"
+              description: >-
+                Les jetons du royaume (5 min) et les codes OTP (30 s) dépendent de cette horloge : « jeton expiré », OTP refusé, kubectl refusé par un serveur d'API sur trois. Vérifie timedatectl et chronyc tracking sur la machine ; RB-246 §4.
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-246-sso-indisponible.md
+
+  - name: nœud de contrôle en avance de 7 minutes, travailleur en avance de 40 secondes
+    interval: 15s
+    input_series:
+      - series: 'node_time_seconds{job="node-exporter", instance="k8s-cp03"}'
+        values: '420+15x20'
+      - series: 'node_time_seconds{job="node-exporter", instance="k8s-w01"}'
+        values: '40+15x20'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HorlogeDecalee
+        exp_alerts:
+          - exp_labels: {gravite: critique, equipe: plateforme, job: node-exporter, instance: k8s-cp03}
+            exp_annotations:
+              resume: "k8s-cp03 : horloge décalée de 7m 0s"
+              description: >-
+                Les jetons du royaume (5 min) et les codes OTP (30 s) dépendent de cette horloge : « jeton expiré », OTP refusé, kubectl refusé par un serveur d'API sur trois. Vérifie timedatectl et chronyc tracking sur la machine ; RB-246 §4.
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-246-sso-indisponible.md
+          - exp_labels: {gravite: avertissement, equipe: plateforme, job: node-exporter, instance: k8s-w01}
+            exp_annotations:
+              resume: "k8s-w01 : horloge décalée de 40s"
+              description: >-
+                Certificats, journaux, jetons et sauvegardes datés de travers. Vérifie timedatectl et chronyc tracking sur la machine ; RB-246 §4.
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-246-sso-indisponible.md
+
+  - name: service de temps arrêté (noyau non synchronisé)
+    interval: 1m
+    input_series:
+      - series: 'node_timex_sync_status{job="vms", instance="idp01"}'
+        values: '1 1 0x20'
+      - series: 'node_timex_sync_status{job="vms", instance="ipa01"}'
+        values: '1x22'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HorlogeNonSynchronisee
+        exp_alerts: []
+      - eval_time: 18m
+        alertname: HorlogeNonSynchronisee
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme, job: vms, instance: idp01}
+            exp_annotations:
+              resume: "idp01 : l'horloge n'est plus synchronisée"
+              description: >-
+                Le service de temps (chrony ou chronyd) est arrêté ou ne joint plus gw01/gw02. systemctl status chrony ; chronyc sources ; RB-246 §4.
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-246-sso-indisponible.md

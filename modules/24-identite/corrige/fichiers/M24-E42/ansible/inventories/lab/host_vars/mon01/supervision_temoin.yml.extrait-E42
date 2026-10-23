@@ -1,0 +1,12 @@
+# host_vars/mon01/supervision_temoin.yml — EXTRAIT (M24-E42) : un groupe de sondes de plus dans
+# supervision_temoin_sondes ({nom, module, cibles, etiquettes}, rôle supervision_temoin de M21-E11).
+# La règle de sonde existante du témoin (probe_success == 0 par instance, M21-E11) couvre la cible :
+# un émetteur faux fait passer probe_success à 0 et part à l'astreinte par l'Alertmanager du témoin,
+# qui ne dépend ni du cluster ni du SSO.
+  - nom: oidc
+    module: oidc_emetteur
+    cibles:
+      - https://sso.par1.medisphere.internal/realms/medisphere/.well-known/openid-configuration
+    etiquettes:
+      equipe: plateforme
+      service: keycloak

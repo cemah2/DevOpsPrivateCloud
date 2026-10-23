@@ -1,0 +1,18 @@
+{# Rôle supervision_temoin — templates/blackbox.yml.j2 — EXTRAIT (M24-E42, INC-5142) : module à ajouter
+   sous « modules: », après https_2xx. Une sonde https_2xx sur la découverte répond 200 même quand
+   Keycloak annonce un AUTRE émetteur (hostname faux) : ce module exige l'émetteur exact dans le corps.
+   Les guillemets et les barres obliques de l'émetteur sont échappés pour l'expression régulière (RE2). #}
+  # OIDC : la découverte du royaume répond 200 ET annonce l'émetteur public exact (M24-E42).
+  oidc_emetteur:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      fail_if_not_ssl: true
+      follow_redirects: false
+      valid_status_codes: [200]
+      tls_config:
+        ca_file: {{ supervision_temoin_racine_ca }}
+      fail_if_body_not_matches_regexp:
+        - '"issuer"\s*:\s*"https://sso\.par1\.medisphere\.internal/realms/medisphere"'

@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# =============================================================================
+# /usr/local/sbin/openbao-essai-kms — essai quotidien de l'auto-descellement (M25-E42, INC-5242).
+# Rôle openbao, nœuds vault01-03. Avec le jeton du seal du nœud (BAO_TOKEN de /etc/openbao/kms.env,
+# lu ici, jamais affiché ni passé en argument) :
+#   1. renouvelle le jeton (auth/token/renew-self) et relève sa durée restante — c'est aussi ce que
+#      fait le serveur ; si le droit manque, le jeton mourra au bout de sa période ;
+#   2. chiffre une valeur TÉMOIN (jamais la clé racine) avec la clé du seal, puis la déchiffre.
+# Ce qui est éprouvé : le chemin réseau du nœud vers kms01 (pare-feu local compris), TLS, le jeton, la
+# politique (encrypt ET decrypt). Ce qui ne l'est PAS : min_decryption_version (un texte chiffré à
+# l'instant l'est par la dernière version) — ce réglage se contrôle sur kms01, en cérémonie (RB-251).
+# Résultat : métriques pour le collecteur textfile de node_exporter ; code ≠ 0 en cas d'échec.
+#   medisphere_openbao_kms_essai_ok                 1 si chiffrement + déchiffrement réussis
+#   medisphere_openbao_kms_essai_horodatage         époque de l'essai
+#   medisphere_openbao_kms_jeton_ttl_secondes       durée restante après renouvellement (-1 : refusé)
+# Usage : openbao-essai-kms <adresse kms01> <montage/> <clé> <racine PKI|""> <dossier textfile>
+# =============================================================================
+set -Eeuo pipefail
+umask 077
+adresse="$1" montage="$2" cle="$3" racine="$4" textfile="$5"
+env_kms="${OPENBAO_KMS_ENV:-/etc/openbao/kms.env}"
+
+jeton="$(sed -n 's/^BAO_TOKEN=//p' "$env_kms" | head -n 1)"
+[[ -n "$jeton" ]] || { echo "openbao-essai-kms: BAO_TOKEN absent de $env_kms" >&2; exit 1; }
+opts=(-s --max-time 15)
+[[ -n "$racine" ]] && opts+=(--cacert "$racine")
+
+# requete MÉTHODE CHEMIN [corps JSON sur l'entrée standard] — corps de la réponse ; 0 si HTTP 2xx.
+requete() {
+  local code corps
+  corps="$(mktemp)"
+  code="$(curl "${opts[@]}" -o "$corps" -w '%{http_code}' -X "$1" \
+    -K <(printf 'header = "X-Vault-Token: %s"\n' "$jeton") -H 'Content-Type: application/json' \
+    --data-binary @- "$adresse/v1/$2")" || code=000
+  cat "$corps"
+  rm -f "$corps"
+  [[ "$code" == 2* ]]
+}
+
+ttl=-1
+if r="$(echo '{}' | requete POST auth/token/renew-self)"; then
+  ttl="$(jq -r '.auth.lease_duration // -1' <<<"$r")"
+else
+  echo "openbao-essai-kms: renouvellement du jeton refusé : $(jq -rc '.errors // empty' <<<"$r" 2>/dev/null)" >&2
+fi
+
+ok=0
+temoin="temoin-$(hostname -s)-$(date +%s)"
+if c="$(jq -nc --arg p "$(printf '%s' "$temoin" | base64 -w0)" '{plaintext: $p}' | requete POST "${montage}encrypt/$cle")"; then
+  chiffre="$(jq -r '.data.ciphertext' <<<"$c")"
+  if d="$(jq -nc --arg c "$chiffre" '{ciphertext: $c}' | requete POST "${montage}decrypt/$cle")" \
+     && [[ "$(jq -r '.data.plaintext' <<<"$d" | base64 -d)" == "$temoin" ]]; then
+    ok=1
+  else
+    echo "openbao-essai-kms: déchiffrement refusé : $(jq -rc '.errors // empty' <<<"$d" 2>/dev/null)" >&2
+  fi
+else
+  echo "openbao-essai-kms: chiffrement refusé ou kms01 injoignable : $(jq -rc '.errors // empty' <<<"$c" 2>/dev/null)" >&2
+fi
+
+{
+  echo '# HELP medisphere_openbao_kms_essai_ok 1 si le jeton du seal chiffre ET déchiffre une valeur témoin sur kms01.'
+  echo '# TYPE medisphere_openbao_kms_essai_ok gauge'
+  echo "medisphere_openbao_kms_essai_ok $ok"
+  echo '# HELP medisphere_openbao_kms_essai_horodatage Date du dernier essai (secondes depuis l époque).'
+  echo '# TYPE medisphere_openbao_kms_essai_horodatage gauge'
+  echo "medisphere_openbao_kms_essai_horodatage $(date +%s)"
+  echo '# HELP medisphere_openbao_kms_jeton_ttl_secondes Durée restante du jeton du seal après renouvellement (-1 si refusé).'
+  echo '# TYPE medisphere_openbao_kms_jeton_ttl_secondes gauge'
+  echo "medisphere_openbao_kms_jeton_ttl_secondes $ttl"
+} >"$textfile/openbao_kms.prom.$$"
+chmod 0644 "$textfile/openbao_kms.prom.$$"
+mv -f "$textfile/openbao_kms.prom.$$" "$textfile/openbao_kms.prom"
+((ok == 1 && ttl > 0))

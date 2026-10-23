@@ -1,0 +1,4 @@
+---
+- name: Recharger systemd (sonde_crl)
+  ansible.builtin.systemd_service:
+    daemon_reload: true

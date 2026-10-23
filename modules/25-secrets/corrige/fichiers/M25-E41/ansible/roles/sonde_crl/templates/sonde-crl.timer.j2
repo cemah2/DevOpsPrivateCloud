@@ -1,0 +1,11 @@
+# /etc/systemd/system/sonde-crl.timer — {{ inventory_hostname }} (M25-E41)
+[Unit]
+Description=Sonde de fraîcheur des CRL d'OpenBao (toutes les {{ sonde_crl_periode }})
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ sonde_crl_periode }}
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

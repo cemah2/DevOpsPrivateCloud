@@ -1,0 +1,52 @@
+# plateforme/observabilite — regles/autodescellement.yaml (M25-E42, INC-5242). Complète
+# regles/secrets.yaml (M25-E27) : OpenBaoScelle ne sonne qu'APRÈS le redémarrage raté ; ces alertes
+# sonnent AVANT, quand l'essai quotidien de chaque nœud (rôle openbao, openbao-essai-kms) montre que
+# l'auto-descellement ne marcherait plus (réseau, jeton, politique) ou que le jeton du seal va mourir.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: autodescellement
+spec:
+  groups:
+    - name: secrets.autodescellement
+      rules:
+        - alert: OpenBaoAutodescellementEnEchec
+          expr: max by (instance) (medisphere_openbao_kms_essai_ok{job="vms"}) == 0
+          for: 5m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.instance }} ne pourrait plus se desceller seul"
+            description: >-
+              L'essai de l'auto-descellement (chiffrement et déchiffrement témoin sur kms01 avec le jeton
+              du seal) a échoué : le prochain redémarrage de ce nœud le laissera scellé. Ne pas le
+              redémarrer ; journalctl -t openbao-essai-kms ; RB-251 § « essai en échec ».
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/secrets/runbooks/RB-251-descellement-et-redemarrage.md
+        - alert: OpenBaoJetonSealBientotExpire
+          expr: |
+            min by (instance) (medisphere_openbao_kms_jeton_ttl_secondes{job="vms"}) < 3 * 86400
+          for: 30m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Le jeton du seal de {{ $labels.instance }} expire dans moins de 3 jours, ou ne se renouvelle pas"
+            description: >-
+              Le jeton périodique du seal transit doit se renouveler (droit auth/token/renew-self dans la
+              politique kms-autodescellement de kms01). Valeur -1 : renouvellement refusé.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/secrets/runbooks/RB-251-descellement-et-redemarrage.md
+        - alert: OpenBaoEssaiAutodescellementAbsent
+          expr: |
+            (time() - max by (instance) (medisphere_openbao_kms_essai_horodatage{job="vms"}) > 26 * 3600)
+            or absent(medisphere_openbao_kms_essai_horodatage{job="vms"})
+          for: 30m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "L'essai quotidien de l'auto-descellement ne tourne plus"
+            description: >-
+              Aucun résultat d'essai depuis plus de 26 h : la minuterie openbao-essai-kms est arrêtée ou
+              node_exporter ne lit plus le fichier. OpenBaoAutodescellementEnEchec ne protège plus rien.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/secrets/runbooks/RB-251-descellement-et-redemarrage.md
