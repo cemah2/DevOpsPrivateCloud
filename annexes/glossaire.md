@@ -1,10 +1,10 @@
 # Glossaire
 
-> Termes des blocs A (modules 00 à 06), B (modules 07 à 11), C (modules 12 à 18), D (modules 19 et 20) et E (modules 21 à 23), avec l'exercice qui les introduit ou les pratique en premier. Les termes anglais sont conservés quand c'est l'usage du métier. Pour les versions et les changements de comportement, voir [`versions-bloc-A.md`](versions-bloc-A.md), [`versions-bloc-B.md`](versions-bloc-B.md), [`versions-bloc-C.md`](versions-bloc-C.md) et [`versions-bloc-DE.md`](versions-bloc-DE.md). Complété à la fin de chaque bloc.
+> Termes des blocs A (modules 00 à 06), B (modules 07 à 11), C (modules 12 à 18), D (modules 19 et 20), E (modules 21 à 23) et F (modules 24 à 26), avec l'exercice qui les introduit ou les pratique en premier. Les termes anglais sont conservés quand c'est l'usage du métier. Pour les versions et les changements de comportement, voir [`versions-bloc-A.md`](versions-bloc-A.md), [`versions-bloc-B.md`](versions-bloc-B.md), [`versions-bloc-C.md`](versions-bloc-C.md), [`versions-bloc-DE.md`](versions-bloc-DE.md) et [`versions-bloc-F.md`](versions-bloc-F.md). Complété à la fin de chaque bloc.
 
-640 entrées (bloc A : 200 ; bloc B : 180 ; bloc C : 180 ; blocs D et E : 80).
+718 entrées (bloc A : 200 ; bloc B : 180 ; bloc C : 180 ; blocs D et E : 80 ; bloc F : 78).
 
-[A](#a) · [B](#b) · [C](#c) · [D](#d) · [E](#e) · [F](#f) · [G](#g) · [H](#h) · [I](#i) · [J](#j) · [K](#k) · [L](#l) · [M](#m) · [N](#n) · [O](#o) · [P](#p) · [Q](#q) · [R](#r) · [S](#s) · [T](#t) · [U](#u) · [V](#v) · [W](#w) · [Y](#y) · [Z](#z)
+[A](#a) · [B](#b) · [C](#c) · [D](#d) · [E](#e) · [F](#f) · [G](#g) · [H](#h) · [I](#i) · [J](#j) · [K](#k) · [L](#l) · [M](#m) · [N](#n) · [O](#o) · [P](#p) · [Q](#q) · [R](#r) · [S](#s) · [T](#t) · [U](#u) · [V](#v) · [W](#w) · [X](#x) · [Y](#y) · [Z](#z)
 
 ## A
 
@@ -19,6 +19,7 @@
 - **Agent QEMU** — Service (`qemu-guest-agent`) installé dans la VM qui permet à Proxmox de lire ses adresses, d'y exécuter des commandes (`qm guest exec`) et de geler ses systèmes de fichiers avant une sauvegarde. → [M00-E11](../modules/00-lab/README.md)
 - **Agent SSH** — Processus (`ssh-agent`) qui garde en mémoire une clé privée déverrouillée, pour que les outils non interactifs (checks, Ansible) puissent l'utiliser sans redemander la phrase de passe. → [M00-E15](../modules/00-lab/README.md)
 - **Agrégat de liens (bond)** — Interface logique qui réunit plusieurs liens physiques : `active-backup` (un seul lien actif, sans coopération du voisin), `balance-xor`, `802.3ad` (LACP). La répartition se fait par flux : un flux ne dépasse jamais la vitesse d'un lien. → [M07-E04](../modules/07-reseau-ha/README.md)
+- **AIDE** — *Advanced Intrusion Detection Environment* : base d'empreintes des fichiers sensibles, comparée périodiquement pour détecter une modification non prévue. → [M26-E12](../modules/26-durcissement/README.md)
 - **Alertmanager** — Composant qui reçoit les alertes de Prometheus, les regroupe, les déduplique, les route vers des récepteurs (courriel, webhook) et applique silences et inhibitions. → [M21-E06](../modules/21-metriques/README.md)
 - **AllowedIPs (*cryptokey routing*)** — Liste des adresses qu'un pair WireGuard peut utiliser en source et vers lesquelles on lui envoie le trafic : à la fois filtre d'entrée et table de routage du tunnel. → [M07-E18](../modules/07-reseau-ha/README.md)
 - **Alloy (Grafana)** — Collecteur de télémétrie de Grafana Labs (successeur de Promtail et de l'agent Grafana), configuré en composants reliés entre eux ; ici il lit les journaux des pods, journald, l'audit de l'API et les événements et les envoie à Loki. → [M22-E03](../modules/22-logs/README.md)
@@ -30,12 +31,15 @@
 - **Ansible** — Outil de gestion de configuration sans agent : depuis un nœud de contrôle, il se connecte en SSH aux hôtes d'un inventaire et y exécute des modules décrits dans des playbooks. → [M04-E02](../modules/04-ansible/README.md)
 - **Ansible Vault** — Chiffrement de fichiers ou de variables d'un projet Ansible. Le workbook utilise deux identités (`lab`, `critique`) dont les mots de passe restent hors du dépôt. → [M04-E12](../modules/04-ansible/README.md)
 - **ansible-lint** — Analyseur de code Ansible (style, bonnes pratiques, profils jusqu'à `production`), lancé en pre-commit et en CI. → [M04-E20](../modules/04-ansible/README.md)
+- **ANSSI-BP-028** — Recommandations de configuration d'un système GNU/Linux publiées par l'ANSSI, en niveaux (minimal, intermédiaire, renforcé, élevé) ; le niveau intermédiaire est retenu, mesuré par un profil de ComplianceAsCode. → [M26-E04](../modules/26-durcissement/README.md)
 - **App of Apps** — Motif Argo CD où une application **racine** ne contient que des Applications (et souvent leurs AppProjects) : tout le cluster se déclare à partir d'un seul point d'entrée, qui se gère lui-même. → [M20-E06](../modules/20-gitops/README.md)
 - **AppArmor** — LSM de Debian qui confine un programme par un profil (chemins, capacités, réseau) ; Docker applique `docker-default` à chaque conteneur. → [M12-E24](../modules/12-conteneurs/README.md)
 - **Application (Argo CD)** — Ressource qui associe une source (dépôt Git, chemin, révision, ou chart) à une destination (cluster, espace) et une politique de synchronisation ; Argo CD compare en continu l'état rendu à l'état réel. → [M20-E04](../modules/20-gitops/README.md)
 - **Application credential** — Identifiant (ID et secret) qu'un utilisateur Keystone crée pour une application : limité à un projet et à des rôles, avec une date d'expiration, révocable sans toucher au mot de passe. → [M10-E05](../modules/10-openstack/README.md)
 - **ApplicationSet** — Contrôleur et ressource d'Argo CD qui génèrent des Applications à partir d'un modèle et de générateurs (liste, clusters, dépôt Git, matrice) : un environnement ou un cluster de plus devient une ligne. → [M20-E10](../modules/20-gitops/README.md)
 - **AppProject** — Cloison d'Argo CD : dépôts sources autorisés, destinations permises, types de ressources admis, rôles et fenêtres de synchronisation d'une équipe ; le projet `default` est verrouillé. → [M20-E07](../modules/20-gitops/README.md)
+- **AppRole (OpenBao)** — Méthode d'authentification des machines : un `role_id` (identifiant) et un `secret_id` (secret, court, à usage limité, lié à des adresses) échangés contre un jeton. → [M25-E07](../modules/25-secrets/README.md)
+- **ARF (*Asset Reporting Format*)** — Format XML des résultats complets d'une analyse SCAP (règles, résultats, preuves), à côté du rapport HTML lisible. → [M26-E04](../modules/26-durcissement/README.md)
 - **Argo CD** — Contrôleur GitOps de la CNCF : il lit des dépôts Git, rend les manifestes (Kustomize, Helm), les applique et signale ou corrige la dérive. Installé ici par Helmfile, il gère tout le reste. → [M20-E02](../modules/20-gitops/README.md)
 - **Argo Rollouts** — Contrôleur de déploiements progressifs : la ressource `Rollout` remplace le Deployment et ajoute canary, blue/green, analyses et pilotage du trafic (ici par la Gateway API). → [M20-E15](../modules/20-gitops/README.md)
 - **ARP gratuit** — Annonce ARP non sollicitée par laquelle un hôte qui prend une adresse (VIP, bascule de bond) met à jour les caches ARP et les tables FDB de son segment. → [M07-E08](../modules/07-reseau-ha/README.md)
@@ -45,6 +49,11 @@
 - **Attestation (in-toto)** — Déclaration signée à propos d'une image (SBOM, provenance, résultat d'analyse), au format in-toto, rangée à côté d'elle comme référent OCI (`cosign attest`). → [M13-E08](../modules/13-registre-supply-chain/README.md)
 - **Attributs de ressource (OpenTelemetry)** — Attributs qui décrivent l'émetteur de toute la télémétrie (`service.name`, `service.namespace`, `deployment.environment.name`, `k8s.*`), par opposition aux attributs d'une span. → [M23-E04](../modules/23-traces/README.md)
 - **Audit (Kubernetes)** — Journal des requêtes à l'API selon une politique (niveaux `None`, `Metadata`, `Request`, `RequestResponse`) ; `/etc/kubernetes/audit/politique.yaml`. → [M14-E27](../modules/14-kubernetes-admin/README.md)
+- **Audit (OpenBao)** — Journal de chaque requête et réponse du coffre, valeurs sensibles hachées (HMAC) ; déclaré dans `openbao.hcl` (l'API `sys/audit` ne l'active plus), le coffre refuse de servir s'il ne peut plus y écrire. → [M25-E21](../modules/25-secrets/README.md)
+- **auditd** — Démon d'audit du noyau Linux : règles (`auditctl`, `/etc/audit/rules.d/`) qui journalisent appels système, accès à des fichiers et changements d'identité ; ici acheminé vers Loki `audit`. → [M26-E12](../modules/26-durcissement/README.md)
+- **Authentification forte (MFA)** — Authentification par au moins deux facteurs de nature différente (ce qu'on sait, possède, est) ; ici OTP obligatoire pour les groupes d'administration, WebAuthn en option. → [M24-E21](../modules/24-identite/README.md)
+- **Authentification structurée (Kubernetes)** — Fichier `AuthenticationConfiguration` (`apiserver.config.k8s.io/v1`) passé par `--authentication-config` : émetteurs JWT, audiences, correspondance des revendications et règles CEL, rechargé sans redémarrer l'API ; remplace les drapeaux `--oidc-*`. → [M24-E16](../modules/24-identite/README.md)
+- **Auto-descellement** — Descellement sans intervention humaine : la clé racine du coffre est chiffrée par un service externe (*seal*) ; ici le moteur `transit` d'un second OpenBao, `kms01`. → [M25-E25](../modules/25-secrets/README.md)
 - **Auto-instrumentation** — Instrumentation injectée sans modifier le code (ressource `Instrumentation` de l'opérateur OpenTelemetry, agent du langage) ; rapide à poser, moins précise que l'instrumentation dans le code. → [M23-E07](../modules/23-traces/README.md)
 - **Autoscaler des PG** — Module du mgr qui ajuste le nombre de groupes de placement d'un pool selon la quantité de données qu'il contient ou qu'on lui annonce. → [M08-E05](../modules/08-ceph/README.md)
 - **AWX** — Interface web et API d'exécution d'Ansible (projet amont d'Ansible Automation Platform), sans version depuis 2024 : traitée en fiche. → [M04-E32](../modules/04-ansible/README.md)
@@ -53,7 +62,9 @@
 ## B
 
 - **Backend (OpenTofu)** — Endroit où OpenTofu range l'état : fichier local par défaut, compartiment S3 sur `s3-01` dans le workbook. → [M05-E11](../modules/05-iac/README.md)
+- **Bail (*lease*)** — Durée de vie attachée à un secret dynamique ou à un jeton d'OpenBao : renouvelable jusqu'à un maximum, révoqué à l'échéance ou à la demande (le secret est alors détruit chez sa cible). → [M25-E09](../modules/25-secrets/README.md)
 - **Barman Cloud (plugin)** — Greffon CNPG-I de CloudNativePG qui archive WAL et sauvegardes de base vers un stockage objet décrit par un `ObjectStore` (`cnpg-s3`) ; remplace `barmanObjectStore`, déprécié. → [M16-E19](../modules/16-kubernetes-stockage/README.md)
+- **Barrière (OpenBao)** — Couche de chiffrement entre le cœur du coffre et son stockage : tout ce qui est écrit dans Raft est chiffré par le trousseau ; scellé, le coffre ne peut plus la franchir. → [M25-E09](../modules/25-secrets/README.md)
 - **Bascule (*switchover*, *failover*)** — Changement du primaire d'un cluster PostgreSQL : planifié et sans perte (*switchover*) ou subi après sa perte (*failover*) ; CloudNativePG promeut le réplica le plus avancé. → [M16-E25](../modules/16-kubernetes-stockage/README.md)
 - **Base / overlay (Kustomize)** — Une base est un ensemble de manifestes complets ; un overlay la décline (espace, images, réplicas, correctifs) par un `kustomization.yaml`, sans gabarit. → [M17-E04](../modules/17-packaging/README.md)
 - **Bastion** — Point d'entrée unique et contrôlé vers un réseau d'administration ; ici `adm01`, puis avec des certificats SSH d'utilisateur. → [M00-E15](../modules/00-lab/README.md)
@@ -73,6 +84,7 @@
 - **Branche protégée** — Branche GitLab sur laquelle le push direct, la réécriture et la suppression sont restreints ; la fusion passe par une merge request. → [M01-E11](../modules/01-git/README.md)
 - **Break & fix (`BF`)** — Type d'exercice : une panne est injectée par `lab/bin/break`, il faut la diagnostiquer et la réparer. `--annuler` restaure l'état sain. → [M00-E38](../modules/00-lab/README.md)
 - **Bridge VLAN-aware** — Pont Linux qui transporte plusieurs VLANs étiquetés ; `vmbr1` en est un, sans port physique, pour isoler le lab. → [M00-E09](../modules/00-lab/README.md)
+- **Bris de glace** — Accès de secours qui ne dépend pas du système normal (SSO) : compte local par service, secret au coffre, essayé régulièrement, usage journalisé et alerté, refermé après usage. → [M24-E28](../modules/24-identite/README.md)
 - **BSL (*BackupStorageLocation*)** — Objet Velero qui désigne le stockage objet des sauvegardes (compartiment, point d'accès, identifiants, autorité de certification). → [M16-E16](../modules/16-kubernetes-stockage/README.md)
 - **Budget d'erreur** — Part d'échecs tolérée par un SLO sur sa fenêtre (100 % − objectif) ; tant qu'il reste du budget on livre, quand il est consommé on stabilise (`politique-budget-erreur.md`). → [M21-E27](../modules/21-metriques/README.md)
 - **Buildah** — Outil de construction d'images OCI sans démon, par Containerfile ou commande par commande, utilisable sans privilège. → [M12-E13](../modules/12-conteneurs/README.md)
@@ -120,9 +132,11 @@
 - **Cilium** — CNI fondé sur eBPF : réseau des pods, remplacement de kube-proxy, politiques L3 à L7, LB IPAM, BGP, Gateway API, Hubble ; 1.20 sur `k8s-par1`. → [M14-E05](../modules/14-kubernetes-admin/README.md)
 - **CiliumNetworkPolicy / CiliumClusterwideNetworkPolicy** — Politiques propres à Cilium, par espace ou pour tout le cluster : identités, entités (`world`, `kube-apiserver`), règles HTTP, noms DNS (`toFQDNs`). → [M15-E17](../modules/15-kubernetes-reseau/README.md)
 - **Cinder** — Service de volumes bloc persistants (types, instantanés, sauvegardes) ; pilote RBD sur le pool `volumes`, `cinder-backup` vers `backups`. → [M10-E10](../modules/10-openstack/README.md)
+- **CIS Benchmarks** — Référentiels de configuration sécurisée du *Center for Internet Security*, par système et par version (CIS Debian 13, CIS RHEL 10, CIS Kubernetes), en niveaux 1 et 2. → [M26-E04](../modules/26-durcissement/README.md)
 - **Classe de périphérique** — Étiquette d'un OSD (`ssd`, `hdd`, `nvme`), détectée ou posée, qu'une règle CRUSH peut cibler. → [M08-E04](../modules/08-ceph/README.md)
 - **Classe QoS** — Classe d'un pod déduite de ses demandes et limites (`Guaranteed`, `Burstable`, `BestEffort`) ; elle décide qui est évincé d'abord quand un nœud manque de mémoire. → [M14-E08](../modules/14-kubernetes-admin/README.md)
 - **Clé de déploiement (*deploy key*)** — Clé SSH rattachée à un projet GitLab, en lecture (ou écriture), pour un automate qui n'a pas de compte. → [M01-E20](../modules/01-git/README.md)
+- **Client (OIDC)** — Application qui demande des jetons à un fournisseur d'identité ; **confidentiel** s'il garde un secret (serveur), **public** sinon (CLI, navigateur : PKCE obligatoire). → [M24-E05](../modules/24-identite/README.md)
 - **Clone complet / clone lié** — Copie indépendante d'un disque, ou copie qui partage les blocs du template (rapide mais liée à lui). Le workbook réserve les clones liés aux VMs jetables. → [M00-E19](../modules/00-lab/README.md)
 - **cloud-init** — Programme qui configure une instance au premier démarrage (utilisateur, clés, réseau, paquets) depuis une source de données. → [M00-E11](../modules/00-lab/README.md)
 - **CloudNativePG (CNPG)** — Opérateur PostgreSQL de Kubernetes : `Cluster` (primaire, réplicas, bascule, Services `-rw`/`-ro`), sauvegardes, restauration à un instant donné. → [M16-E18](../modules/16-kubernetes-stockage/README.md)
@@ -132,6 +146,7 @@
 - **clusterctl** — CLI de Cluster API : installe les fournisseurs (`init`), génère des manifestes, déplace les objets d'un cluster de gestion à un autre (`move`). → [M18-E08](../modules/18-distributions/README.md)
 - **ClusterResourceSet** — Objet Cluster API qui applique des manifestes (ici le CNI Cilium) à chaque nouveau cluster de charge de travail sélectionné. → [M18-E10](../modules/18-distributions/README.md)
 - **ClusterRole agrégée** — ClusterRole dont les règles sont la réunion des ClusterRoles portant une étiquette donnée (`aggregationRule`) ; `wb-checks` s'étend ainsi de module en module. → [M14-E06](../modules/14-kubernetes-admin/README.md)
+- **ClusterSecretStore / SecretStore** — Objets d'External Secrets Operator qui décrivent comment joindre un coffre et s'y authentifier, pour tout le cluster ou pour un seul espace. → [M25-E12](../modules/25-secrets/README.md)
 - **CNI** — *Container Network Interface* : spécification et greffons que le runtime appelle à la création et à la destruction de chaque pod (interface, adresse, routes). → [M14-E05](../modules/14-kubernetes-admin/README.md)
 - **Code d'effacement** — Redondance par *k* fragments de données et *m* de parité : le pool survit à *m* pertes pour un surcoût de (k+m)/k ; profil (`k`, `m`, greffon ISA-L par défaut en Tentacle, domaine de panne). → [M08-E15](../modules/08-ceph/README.md)
 - **Colle (*glue record*)** — Enregistrement A d'un serveur de noms placé dans la zone parente quand ce serveur est lui-même dans la zone déléguée. → [M06-E06](../modules/06-services-socle/README.md)
@@ -139,6 +154,7 @@
 - **Collector (OpenTelemetry)** — Programme qui reçoit, traite et exporte la télémétrie par **pipelines** (récepteurs → processeurs → exportateurs), déployé en agent (par nœud) ou en passerelle ; distribution `contrib` ici. → [M23-E02](../modules/23-traces/README.md)
 - **Commissioning (MAAS)** — Phase où MAAS démarre une machine sur un système temporaire pour inventorier et tester son matériel avant de la déclarer prête. → [M11-E10](../modules/11-bare-metal/README.md)
 - **commitlint** — Outil qui vérifie que les messages de commit respectent une convention (ici Conventional Commits), en local et en CI. → [M01-E14](../modules/01-git/README.md)
+- **ComplianceAsCode** — Projet libre (contenu *SCAP Security Guide*) qui écrit les règles des référentiels (CIS, ANSSI, STIG) une fois et en produit des *datastreams* SCAP, des playbooks et des scripts de remédiation. → [M26-E04](../modules/26-durcissement/README.md)
 - **Component (Kustomize)** — Morceau de kustomization réutilisable qu'un overlay inclut ou non (`dependances`, `haute-disponibilite`, `livraison`). → [M17-E09](../modules/17-packaging/README.md)
 - **Composant CI/CD (GitLab)** — Unité de configuration réutilisable et versionnée (`templates/<nom>/template.yml`), incluse par `include: component: …@vX.Y.Z` avec des entrées typées ; successeur des gabarits copiés. → [M19-E10](../modules/19-ci/README.md)
 - **Compose (Docker Compose)** — Description d'une pile de conteneurs dans `compose.yaml` (services, réseaux, volumes, secrets, dépendances avec conditions de santé) ; v5, commande `docker compose`. → [M12-E08](../modules/12-conteneurs/README.md)
@@ -184,6 +200,7 @@
 - **Deployment / ReplicaSet** — Le Deployment maintient N pods identiques par un ReplicaSet par version et passe de l'un à l'autre progressivement. → [M14-E07](../modules/14-kubernetes-admin/README.md)
 - **Dérive (*drift*)** — Écart entre l'état décrit par le code et la réalité, dû à une modification faite hors de l'outil ; détectée par `--check` (Ansible) ou `plan` (OpenTofu). → [M04-E29](../modules/04-ansible/README.md)
 - **Dérive (GitOps)** — Écart entre l'état déclaré dans Git et l'état réel du cluster (`OutOfSync`) ; corrigée automatiquement par `selfHeal` ou signalée, selon la politique. → [M20-E05](../modules/20-gitops/README.md)
+- **Descellement (*unseal*)** — Reconstitution, au démarrage d'OpenBao, de la clé qui ouvre la barrière : par des parts Shamir saisies par des dépositaires, ou automatiquement par un *seal*. → [M25-E03](../modules/25-secrets/README.md)
 - **Designate** — Service DNS d'OpenStack (zones et enregistrements par projet) ; traité en fiche. → [M10-E12](../modules/10-openstack/README.md)
 - **DHCP relais (*relay*)** — Agent qui transmet les requêtes DHCP d'un VLAN vers un serveur situé ailleurs ; ici dnsmasq sur `gw01`. → [M00-E14](../modules/00-lab/README.md)
 - **Digest (empreinte d'image)** — `sha256:…` d'un manifeste ou d'un index : il désigne un contenu exact pour toujours, au contraire d'une étiquette. On signe et on déploie des digests. → [M12-E04](../modules/12-conteneurs/README.md)
@@ -212,6 +229,7 @@
 - **Empreinte (*checksum*, *hash*)** — Condensé (SHA-256) qui prouve l'intégrité d'un fichier ; on vérifie l'empreinte publiée avant d'exécuter un binaire téléchargé. → [M00-E04](../modules/00-lab/README.md)
 - **`emptyDir` / `hostPath`** — Volume éphémère qui vit aussi longtemps que le pod ; montage d'un dossier du nœud, interdit par les profils `baseline` et `restricted`. → [M16-E02](../modules/16-kubernetes-stockage/README.md)
 - **EndpointSlice** — Objets qui listent, par tranches, les adresses prêtes derrière un Service ; lus par kube-proxy, Cilium et CoreDNS. → [M15-E03](../modules/15-kubernetes-reseau/README.md)
+- **Enveloppement de réponse (*response wrapping*)** — OpenBao remet un secret dans un jeton à usage unique et de courte durée ; le destinataire le déballe, et toute interception se voit (le jeton a déjà servi). → [M25-E07](../modules/25-secrets/README.md)
 - **Espace de noms (Kubernetes)** — Cloison de noms, de droits, de quotas et de politiques dans un cluster (`mediagenda-recette`, `wb-essais`). → [M14-E10](../modules/14-kubernetes-admin/README.md)
 - **Espace de noms (PBS)** — *Namespace* : sous-arborescence d'un datastore qui isole les sauvegardes (`par1`, `par1/git01`) et porte ses propres droits. → [M00-E22](../modules/00-lab/README.md)
 - **Espace de noms réseau (*netns*)** — Pile réseau isolée du noyau (interfaces, routes, pare-feu), gérée par `ip netns` ; permet de simuler plusieurs hôtes dans une seule VM. → [M07-E04](../modules/07-reseau-ha/README.md)
@@ -228,16 +246,21 @@
 - **Exécuteur `shell` (GitLab Runner)** — Mode où le runner exécute les jobs directement sur sa machine, avec les outils installés ; Docker et Kubernetes viendront aux modules 12 et 19. → [M01-E23](../modules/01-git/README.md)
 - **Exemplar** — Échantillon d'une métrique (souvent d'un histogramme) qui porte un `trace_id` : depuis un point du graphique on ouvre la trace d'une requête réelle. → [M23-E08](../modules/23-traces/README.md)
 - **Exportateur (Prometheus)** — Programme qui traduit l'état d'un système (Linux, HAProxy, Proxmox…) en métriques au format d'exposition de Prometheus ; certains logiciels exposent nativement. → [M21-E08](../modules/21-metriques/README.md)
+- **External Secrets Operator (ESO)** — Opérateur Kubernetes qui lit des secrets dans un coffre externe et les matérialise en Secrets, rafraîchis périodiquement ; API `external-secrets.io/v1`. → [M25-E12](../modules/25-secrets/README.md)
 - **ExternalDNS** — Contrôleur qui publie dans un DNS les noms des routes et des Services (fournisseur `rfc2136`) et les retire quand ils disparaissent. → [M15-E15](../modules/15-kubernetes-reseau/README.md)
+- **ExternalSecret** — Objet versionnable d'ESO qui dit quel secret lire dans le coffre et quel Secret Kubernetes en produire ; il ne contient aucune valeur. → [M25-E13](../modules/25-secrets/README.md)
 
 ## F
 
 - **Fabric leaf-spine** — Topologie de datacenter où chaque *leaf* (commutateur d'accès) est relié à chaque *spine* : deux sauts entre deux leaves, autant de chemins égaux que de spines, capacité qui croît en ajoutant des spines. → [M07-E14](../modules/07-reseau-ha/README.md)
 - **Fact (Ansible)** — Information collectée sur un hôte (système, réseau, matériel) et lue par `ansible_facts['…']`. → [M04-E04](../modules/04-ansible/README.md)
 - **Failback** — Retour automatique d'une ressource HA sur son nœud préféré quand il revient ; option `failback` des règles d'affinité (ex-`nofailback`, inversé). → [M09-E13](../modules/09-cluster-proxmox/README.md)
+- **Falco** — Moteur de détection à l'exécution de la CNCF : lit les appels système (pilote `modern_ebpf`) et les compare à des règles (shell dans un conteneur, lecture d'un jeton…). → [M26-E08](../modules/26-durcissement/README.md)
+- **falcosidekick** — Relais des alertes de Falco vers des destinations (Alertmanager, Loki…). → [M26-E19](../modules/26-durcissement/README.md)
 - **Fast-forward** — Fusion qui se contente d'avancer la référence de branche, sans commit de fusion, quand l'historique est linéaire. → [M01-E07](../modules/01-git/README.md)
 - **FDB** — *Forwarding database* : table d'un pont qui associe chaque adresse MAC (et VLAN) au port où elle a été vue ; une MAC inconnue est inondée. → [M07-E02](../modules/07-reseau-ha/README.md)
 - **Fédération (Prometheus)** — Collecte, par un Prometheus, d'une sélection de séries d'un autre via `/federate` ; ici entre le cluster et le témoin de `mon01`, dans les deux sens. → [M21-E11](../modules/21-metriques/README.md)
+- **Fédération d'utilisateurs (Keycloak)** — Keycloak cherche les personnes dans un annuaire externe (LDAP), y vérifie les mots de passe et en importe les groupes, l'annuaire restant la source de vérité (`READ_ONLY`). → [M24-E06](../modules/24-identite/README.md)
 - **Fencing** — Isolement certain d'un nœud défaillant avant de redémarrer ses ressources ailleurs ; Proxmox VE pratique l'auto-fencing : le chien de garde redémarre le nœud qui a perdu le quorum. → [M09-E24](../modules/09-cluster-proxmox/README.md)
 - **Fenêtre de synchronisation** — Plage horaire d'un AppProject d'Argo CD qui autorise ou interdit les synchronisations (automatiques ou manuelles) : mises en production cadrées, gel des changements. → [M20-E29](../modules/20-gitops/README.md)
 - **ffsplit** — Algorithme du QDevice qui, dans un cluster coupé en deux moitiés égales, donne le vote d'arbitrage à une seule d'entre elles. → [M09-E05](../modules/09-cluster-proxmox/README.md)
@@ -248,6 +271,7 @@
 - **Forward zone (Recursor)** — Zone que le récurseur relaie vers des serveurs désignés (ici l'autoritaire local) au lieu de la résoudre depuis la racine. → [M06-E07](../modules/06-services-socle/README.md)
 - **Fournisseur de ressources (Placement)** — Entité inventoriée par Placement (un hyperviseur) : inventaires (`VCPU`, `MEMORY_MB`, `DISK_GB`), ratios d'allocation, allocations, traits. → [M10-E29](../modules/10-openstack/README.md)
 - **FQCN** — *Fully Qualified Collection Name* : nom complet d'un module Ansible (`ansible.builtin.apt`), imposé par les conventions du projet. → [M04-E02](../modules/04-ansible/README.md)
+- **FreeIPA** — Solution d'identité Linux qui assemble annuaire LDAP (389-ds), Kerberos, CA (Dogtag), HBAC, sudo et clients SSSD ; serveur seulement sur la famille RHEL. → [M24-E02](../modules/24-identite/README.md)
 - **FRR** — Suite libre de démons de routage (`zebra`, `staticd`, `ospfd`, `bgpd`, `bfdd`…), issue de Quagga ; 10.7 du dépôt deb.frrouting.org dans le workbook. → [M07-E06](../modules/07-reseau-ha/README.md)
 - **fsid** — Identifiant unique (UUID) d'un cluster Ceph, présent dans `ceph.conf` et dans le nom des unités systemd de cephadm. → [M08-E03](../modules/08-ceph/README.md)
 
@@ -274,6 +298,7 @@
 - **`group_vars` / `host_vars`** — Dossiers de variables Ansible par groupe et par hôte, rangés à côté de l'inventaire. → [M04-E03](../modules/04-ansible/README.md)
 - **Groupe de placement (PG)** — Sous-ensemble d'un pool : chaque objet est haché vers un PG, et CRUSH place chaque PG sur un jeu d'OSD (*acting set*, dont un primaire) ; états `active+clean`, `degraded`, `undersized`, `peering`… → [M08-E05](../modules/08-ceph/README.md)
 - **Groupe de sécurité** — Ensemble de règles de filtrage avec état appliqué aux ports des instances ; tout ce qui entre est refusé par défaut. → [M10-E08](../modules/10-openstack/README.md)
+- **Groupe externe (OpenBao)** — Groupe d'identité d'OpenBao relié à un groupe venu d'une méthode d'authentification (revendication `groups` d'OIDC) ; les politiques s'attachent au groupe, pas aux personnes. → [M25-E06](../modules/25-secrets/README.md)
 - **GRPCRoute / TLSRoute** — Routes de la Gateway API pour gRPC (service, méthode) et pour TLS sans terminaison, choisi par le nom SNI. → [M15-E16](../modules/15-kubernetes-reseau/README.md)
 - **Grype** — Analyseur de vulnérabilités d'Anchore, qui lit une image ou une SBOM ; base au schéma v6. → [M13-E06](../modules/13-registre-supply-chain/README.md)
 
@@ -283,6 +308,7 @@
 - **Handler** — Tâche Ansible déclenchée par `notify` et exécutée une seule fois en fin de play (rechargement d'un service après changement). → [M04-E08](../modules/04-ansible/README.md)
 - **HAProxy** — Répartiteur de charge et proxy TCP/HTTP : *frontends*, *backends*, contrôles de santé, terminaison TLS, page de statistiques ; 3.2 LTS sur `lb01`/`lb02`. → [M07-E10](../modules/07-reseau-ha/README.md)
 - **Harbor** — Registre d'entreprise de la CNCF : projets, robots, caches, quotas, rétention, immuabilité, réplication, analyse Trivy, signatures ; 2.15 sur `reg01`. → [M13-E02](../modules/13-registre-supply-chain/README.md)
+- **HBAC (*Host-Based Access Control*)** — Règles de FreeIPA qui disent quels groupes de personnes peuvent se connecter à quels groupes d'hôtes par quels services (`sshd`, `sudo`), appliquées par SSSD. → [M24-E19](../modules/24-identite/README.md)
 - **HCL** — *HashiCorp Configuration Language* : syntaxe des fichiers Packer (`.pkr.hcl`) et OpenTofu (`.tf`). → [M03-E03](../modules/03-images/README.md)
 - **HEALTH_OK / WARN / ERR** — États de santé globaux d'un cluster Ceph ; `ceph health detail` donne les contrôles en cause. → [M08-E07](../modules/08-ceph/README.md)
 - **Heat** — Service d'orchestration d'OpenStack : une pile (*stack*) de ressources décrite dans un gabarit HOT en YAML, avec paramètres et sorties. → [M10-E14](../modules/10-openstack/README.md)
@@ -305,12 +331,14 @@
 ## I
 
 - **Idempotence** — Propriété d'une opération qu'on peut rejouer sans changer le résultat : la seconde exécution ne modifie rien. → [M04-E05](../modules/04-ansible/README.md)
+- **Identifiants dynamiques** — Identifiants créés à la demande par le coffre (ici un rôle PostgreSQL) pour un bail court, puis supprimés : chaque consommateur a les siens, une fuite expire seule. → [M25-E14](../modules/25-secrets/README.md)
 - **Identité (Cilium)** — Numéro attribué à chaque combinaison d'étiquettes de pod ; les politiques de Cilium filtrent par identité, pas par adresse IP. → [M15-E05](../modules/15-kubernetes-reseau/README.md)
 - **iLO** — BMC des serveurs HP/HPE ; iLO 4 sur `hp01`, Redfish 1.0 à partir du firmware 2.30. → [M11-E07](../modules/11-bare-metal/README.md)
 - **Image dorée (*golden image*)** — Template construit par du code, durci, testé et versionné, qui contient tout ce qui est commun aux machines. → [M03-E01](../modules/03-images/README.md)
 - **Image OCI** — Couches, configuration et manifeste, souvent sous un index, adressés par leur empreinte selon l'*Image Specification* de l'OCI. → [M12-E04](../modules/12-conteneurs/README.md)
 - **image-builder** — Projet de Kubernetes (Packer et Ansible) qui construit les images de nœud de Cluster API, une par version de Kubernetes. → [M18-E09](../modules/18-distributions/README.md)
 - **imagePullSecret** — Secret de type `kubernetes.io/dockerconfigjson` qu'un pod, ou son compte de service, présente au registre pour tirer une image privée (`harbor-pull`). → [M14-E19](../modules/14-kubernetes-admin/README.md)
+- **ImageValidatingPolicy (Kyverno)** — Politique CEL de Kyverno qui vérifie à l'admission la signature et les attestations des images (Cosign, Notary) et peut en imposer le digest. → [M26-E15](../modules/26-durcissement/README.md)
 - **Import (OpenTofu)** — Rattachement d'un objet existant à une ressource du code, sans le recréer (bloc `import` ou `tofu import`). → [M05-E16](../modules/05-iac/README.md)
 - **Import de VM** — Reprise de disques et de VMs venues d'ailleurs (`qm disk import`, `import-from`, OVF/OVA, ESXi) dans Proxmox VE. → [M09-E23](../modules/09-cluster-proxmox/README.md)
 - **`include` (GitLab CI)** — Inclusion de fichiers de configuration CI d'un autre projet (`plateforme/ci-templates`) ou du même dépôt. → [M01-E24](../modules/01-git/README.md)
@@ -334,16 +362,20 @@
 ## J
 
 - **JCasC / Jenkinsfile** — *Jenkins Configuration as Code* : la configuration de Jenkins en YAML ; Jenkinsfile : le pipeline déclaré dans le dépôt. Pratiqués en comparaison avec GitLab CI. → [M19-E19](../modules/19-ci/README.md)
+- **Jeton d'accès / jeton d'identité / jeton de rafraîchissement** — *Access token* (pour appeler une API), *ID token* (dit au client qui s'est connecté) et *refresh token* (renouvelle les deux sans nouvelle connexion) délivrés par un fournisseur OIDC. → [M24-E07](../modules/24-identite/README.md)
 - **Jeton d'accès personnel (GitLab)** — *Personal access token* (`glpat-`) à portées choisies (`read_api`, `api`) et expiration obligatoire. → [M01-E05](../modules/01-git/README.md)
 - **Jeton d'API Proxmox** — Identifiant `utilisateur@realm!nom` et secret pour l'API, avec privilèges séparés ou non et date d'expiration. → [M00-E17](../modules/00-lab/README.md)
 - **Jeton d'identité (`id_tokens`)** — Jeton OIDC signé par GitLab pour un job, avec une audience choisie, qu'un service tiers (Vault, nuage) échange contre des droits courts ; remplace les secrets longue durée. → [M19-E25](../modules/19-ci/README.md)
 - **Jeton Fernet** — Format de jeton Keystone chiffré et non stocké, vérifié avec des clés partagées entre contrôleurs, qu'il faut faire tourner et synchroniser. → [M10-E24](../modules/10-openstack/README.md)
+- **Jeton racine (OpenBao)** — Jeton sans aucune limite produit à l'initialisation ; révoqué dès que l'administration passe par des identités, régénéré seulement en urgence avec un quorum de parts. → [M25-E03](../modules/25-secrets/README.md)
 - **Jeton v2 (NetBox)** — Format de jeton de NetBox 4.5+ (`nbt_<clé>.<jeton>`) dont le secret n'est plus lisible après création. → [M06-E10](../modules/06-services-socle/README.md)
 - **Jinja2** — Moteur de templates utilisé par Ansible pour les expressions `{{ }}` et les fichiers modèles. → [M04-E07](../modules/04-ansible/README.md)
 - **Job / CronJob** — Pod exécuté jusqu'à réussite (Job), éventuellement selon un calendrier (CronJob) : migrations, sauvegardes. → [M14-E15](../modules/14-kubernetes-admin/README.md)
 - **jq** — Processeur JSON en ligne de commande : filtrer, transformer et extraire des réponses d'API. → [M02-E05](../modules/02-scripting/README.md)
 - **Jumbo frames** — Trames Ethernet dont la charge utile va jusqu'à 9000 octets ; elles réduisent le coût par octet du trafic de stockage, à condition que tout le chemin (cartes, ponts, sous-interfaces) ait le même MTU. → [M07-E15](../modules/07-reseau-ha/README.md)
 - **JWK (provisioner)** — Provisioner step-ca à clé JSON chiffrée par mot de passe, pour l'émission manuelle de certificats (`admin`). → [M06-E02](../modules/06-services-socle/README.md)
+- **JWKS (*JSON Web Key Set*)** — Clés publiques qu'un émetteur publie (`jwks_uri` de la découverte) pour qu'on vérifie la signature de ses JWT ; le `kid` de l'en-tête désigne la clé. → [M24-E07](../modules/24-identite/README.md)
+- **JWT (*JSON Web Token*)** — Jeton compact en trois parties base64url (en-tête, revendications, signature) ; lisible par tous, infalsifiable sans la clé privée. → [M24-E07](../modules/24-identite/README.md)
 
 ## K
 
@@ -352,6 +384,8 @@
 - **KAS (GitLab Agent Server)** — Composant de GitLab qui reçoit les connexions des agents pour Kubernetes et relaie les requêtes des pipelines vers les clusters. → [M19-E18](../modules/19-ci/README.md)
 - **Kea** — Serveur DHCP d'ISC (successeur d'ISC DHCP) : configuration JSON, API de contrôle, DDNS, haute disponibilité. → [M06-E16](../modules/06-services-socle/README.md)
 - **keepalived** — Implémentation de VRRP (v2, v3) sous Linux, avec suivi de scripts (`track_script`), groupes de synchronisation et scripts de transition (`notify`). → [M07-E08](../modules/07-reseau-ha/README.md)
+- **Kerberos** — Protocole d'authentification par tickets délivrés par un KDC, sans faire circuler le mot de passe ; exige des horloges synchronisées. Royaume du lab : `PAR1.MEDISPHERE.INTERNAL`. → [M24-E02](../modules/24-identite/README.md)
+- **Keycloak** — Fournisseur d'identité libre (OIDC, SAML) : royaumes, clients, fédération d'annuaires, flux d'authentification, MFA. → [M24-E04](../modules/24-identite/README.md)
 - **Keystone** — Service d'identité d'OpenStack : authentification, jetons, catalogue des points d'accès, domaines, projets, utilisateurs, groupes, rôles. → [M10-E05](../modules/10-openstack/README.md)
 - **Kickstart** — Fichier de réponses de l'installeur Anaconda (famille RHEL) pour une installation sans intervention. → [M03-E06](../modules/03-images/README.md)
 - **kind** — *Kubernetes IN Docker* : des nœuds kubeadm dans des conteneurs, pour le développement, la CI et l'amorçage d'un cluster de gestion. → [M18-E02](../modules/18-distributions/README.md)
@@ -368,13 +402,19 @@
 - **KubeadmControlPlane** — Objet Cluster API qui crée, monte de version et remplace les nœuds de contrôle d'un cluster, par kubeadm. → [M18-E08](../modules/18-distributions/README.md)
 - **kubeconfig** — Fichier client de Kubernetes : clusters (URL, CA), utilisateurs (certificat, jeton), contextes. → [M14-E06](../modules/14-kubernetes-admin/README.md)
 - **kubelet** — Agent de chaque nœud qui fait exister par le CRI les pods qui lui sont attribués, et rend compte de leur état et de celui du nœud. → [M14-E04](../modules/14-kubernetes-admin/README.md)
+- **kubelet-csr-approver** — Contrôleur qui approuve automatiquement les demandes de certificat de service des kubelets (`serverTLSBootstrap`) si le nom et les adresses correspondent aux nœuds attendus. → [M26-E25](../modules/26-durcissement/README.md)
+- **kubelogin** — Greffon `kubectl oidc-login` : ouvre le navigateur, mène le flux OIDC (PKCE) et remet le jeton à `kubectl`, avec cache et rafraîchissement. → [M24-E16](../modules/24-identite/README.md)
 - **kubeProxyReplacement** — Mode de Cilium qui assure en eBPF tout le travail de kube-proxy (Services, NodePort, *socket LB*) ; exigé par sa Gateway API. → [M15-E08](../modules/15-kubernetes-reseau/README.md)
+- **kubescape** — Analyseur de posture Kubernetes (cadres NSA, MITRE, CIS) : cluster, manifestes et images. → [M26-E05](../modules/26-durcissement/README.md)
 - **Kustomize** — Déclinaison de manifestes sans gabarit (bases, overlays, components, générateurs, remplacements) ; embarqué dans `kubectl apply -k`. → [M17-E04](../modules/17-packaging/README.md)
+- **KV v2** — Moteur de secrets clé-valeur versionné d'OpenBao : versions conservées, suppression réversible, destruction définitive, métadonnées séparées des valeurs. → [M25-E04](../modules/25-secrets/README.md)
+- **Kyverno** — Moteur de politiques d'admission de la CNCF ; depuis 1.19, politiques CEL `policies.kyverno.io/v1` (`ValidatingPolicy`, `ImageValidatingPolicy`, `MutatingPolicy`, `GeneratingPolicy`), `ClusterPolicy` dépréciée. → [M26-E07](../modules/26-durcissement/README.md)
 
 ## L
 
 - **LACP (802.3ad)** — Protocole de négociation d'agrégat de liens : les deux extrémités échangent des LACPDU pour former et surveiller l'agrégat. Un pont Linux ne relaie pas ces trames (adresse réservée 01:80:c2:00:00:02). → [M07-E04](../modules/07-reseau-ha/README.md)
 - **LB IPAM (Cilium)** — Attribution d'adresses aux Services `LoadBalancer` depuis des réservoirs (`CiliumLoadBalancerIPPool` `lb-par1`, 10.10.41.10-199). → [M15-E10](../modules/15-kubernetes-reseau/README.md)
+- **LDAP** — Protocole d'accès à un annuaire hiérarchique : un client se lie (*bind*) avec un DN et un mot de passe, puis cherche des entrées sous une base (`dc=par1,dc=medisphere,dc=internal`) ; LDAPS = LDAP sur TLS (636). → [M24-E02](../modules/24-identite/README.md)
 - **Lien /31** — Réseau point à point de deux adresses, sans adresse de réseau ni de diffusion (RFC 3021) ; liens de la fabric de la maquette dans 10.10.250.0/24. → [M07-E03](../modules/07-reseau-ha/README.md)
 - **`lifecycle`** — Bloc OpenTofu qui modifie le cycle de vie d'une ressource : `prevent_destroy`, `ignore_changes`, `create_before_destroy`. → [M05-E18](../modules/05-iac/README.md)
 - **LimitRange / ResourceQuota** — Valeurs par défaut et bornes des demandes et limites des conteneurs d'un espace ; plafond de consommation de l'espace entier. → [M14-E10](../modules/14-kubernetes-admin/README.md)
@@ -383,8 +423,10 @@
 - **LogQL** — Langage de requête de Loki : sélecteur de flux par étiquettes, filtres de lignes, analyseurs (`json`, `logfmt`), puis fonctions métriques (`rate`, `count_over_time`). → [M22-E04](../modules/22-logs/README.md)
 - **Loki** — Système de journaux de Grafana Labs qui n'indexe que les étiquettes des flux et stocke les lignes compressées dans un stockage objet ; ici monolithique et multi-locataire. → [M22-E02](../modules/22-logs/README.md)
 - **Longhorn** — Stockage bloc répliqué sur les disques des nœuds, avec son interface ; comparé puis retiré. → [M16-E15](../modules/16-kubernetes-stockage/README.md)
+- **LSM (*Linux Security Modules*)** — Points d'accroche du noyau où s'insèrent les contrôles d'accès obligatoires (SELinux, AppArmor) et les programmes BPF-LSM (Tetragon). → [M26-E44](../modules/26-durcissement/README.md)
 - **LUKS / dm-crypt** — Chiffrement de périphérique bloc de Linux ; cephadm chiffre ainsi les OSD (`encrypted: true`), les clés étant gardées par les moniteurs. → [M08-E27](../modules/08-ceph/README.md)
 - **LVM-thin** — Volumes logiques à allocation fine, base des instantanés et clones liés rapides de Proxmox sur `local-nvme`. → [M00-E07](../modules/00-lab/README.md)
+- **Lynis** — Outil d'audit de sécurité d'un hôte Unix, qui donne un indice de durcissement et des suggestions ; complément rapide d'OpenSCAP. → [M26-E03](../modules/26-durcissement/README.md)
 
 ## M
 
@@ -401,6 +443,7 @@
 - **Merge request (MR)** — Demande de fusion d'une branche dans une autre, support de la revue, des discussions et du pipeline. → [M01-E10](../modules/01-git/README.md)
 - **Métadonnées structurées (Loki)** — Paires clé-valeur attachées à chaque ligne sans être des étiquettes de flux : filtrables sans augmenter la cardinalité (`request_id`, `trace_id`). → [M22-E06](../modules/22-logs/README.md)
 - **MetalLB** — Fournisseur d'adresses `LoadBalancer` pour clusters sans nuage, en L2 ou en BGP ; comparé sur `m15-essai`. → [M15-E19](../modules/15-kubernetes-reseau/README.md)
+- **Méthode d'authentification (OpenBao)** — Moyen par lequel une identité obtient un jeton (`oidc`, `jwt`, `kubernetes`, `approle`…), montée à un chemin (`auth/gitlab/`) et associée à des rôles. → [M25-E06](../modules/25-secrets/README.md)
 - **Méthodes USE et RED** — USE (*Utilization, Saturation, Errors*) pour les ressources ; RED (*Rate, Errors, Duration*) pour les services. Deux grilles pour construire les tableaux de référence. → [M21-E19](../modules/21-metriques/README.md)
 - **metrics-generator (Tempo)** — Composant de Tempo qui tire des traces des métriques (RED par service, graphe de services) et les écrit dans Prometheus, avec exemplars. → [M23-E13](../modules/23-traces/README.md)
 - **metrics-server** — Agrégateur des métriques de ressources des kubelets, servi par l'API (`kubectl top`, autoscaling). → [M14-E20](../modules/14-kubernetes-admin/README.md)
@@ -411,6 +454,7 @@
 - **Mise à jour progressive** — Mise à jour nœud par nœud, ressources évacuées et cluster sain entre deux, sans interrompre le service (*rolling update*). → [M09-E19](../modules/09-cluster-proxmox/README.md)
 - **Mode maintenance (HA)** — `ha-manager crm-command node-maintenance enable <nœud>` : évacue les ressources HA d'un nœud et l'exclut des placements jusqu'à sa sortie de maintenance. → [M09-E20](../modules/09-cluster-proxmox/README.md)
 - **Mode strict (Bash)** — `set -euo pipefail` : arrêt sur erreur, variable indéfinie ou échec dans un tube — avec de nombreuses exceptions à connaître. → [M02-E03](../modules/02-scripting/README.md)
+- **Modèle de menace** — Description des actifs, des acteurs, des frontières de confiance et des scénarios d'attaque d'un système, pour choisir et prioriser les mesures. → [M26-E02](../modules/26-durcissement/README.md)
 - **Modes d'accès (volumes)** — `ReadWriteOnce` (un nœud), `ReadWriteOncePod` (un pod), `ReadOnlyMany`, `ReadWriteMany` (plusieurs nœuds, système de fichiers partagé). → [M16-E03](../modules/16-kubernetes-stockage/README.md)
 - **Module (Ansible)** — Unité d'action d'Ansible (`apt`, `template`, `service`…) qui décrit un état et décide s'il y a quelque chose à faire. → [M04-E04](../modules/04-ansible/README.md)
 - **Module (OpenTofu)** — Dossier de fichiers `.tf` réutilisable, avec variables et sorties, versionné et consommé par étiquette (`vm-debian`). → [M05-E13](../modules/05-iac/README.md)
@@ -421,6 +465,7 @@
 - **mTLS (authentification mutuelle)** — TLS où le client présente aussi un certificat, vérifié par le serveur ; utilisé pour les partenaires de `gw-partenaires`. → [M15-E33](../modules/15-kubernetes-reseau/README.md)
 - **MTU** — Taille maximale d'un paquet sur un lien ; une MTU incohérente (tunnel) laisse passer les petits échanges et bloque les gros. → [M00-E41](../modules/00-lab/README.md)
 - **Multi-étapes (*multi-stage*)** — Dockerfile à plusieurs `FROM` : on compile dans une étape et on ne copie que le résultat dans l'image finale. → [M12-E10](../modules/12-conteneurs/README.md)
+- **MutatingAdmissionPolicy (MAP)** — Politique d'admission native de Kubernetes (GA en 1.36) qui modifie un objet par une expression CEL, sans webhook. → [M26-E17](../modules/26-durcissement/README.md)
 
 ## N
 
@@ -434,6 +479,7 @@
 - **nftables** — Pare-feu du noyau Linux (tables, chaînes, ensembles), configuré dans `/etc/nftables.conf` sur `gw01`. → [M00-E10](../modules/00-lab/README.md)
 - **No valid host was found** — Erreur de Nova quand l'ordonnanceur ne trouve aucun hyperviseur pour une demande (Placement, filtres) ; la cause est dans les journaux de `nova-scheduler`. → [M10-E35](../modules/10-openstack/README.md)
 - **NoCloud** — Source de données cloud-init lue sur un lecteur local (le lecteur `cloudinit` de Proxmox). → [M03-E04](../modules/03-images/README.md)
+- **`nodeEncryption` (Cilium)** — Option de Cilium qui étend le chiffrement WireGuard au trafic entre nœuds (pas seulement entre pods). → [M26-E26](../modules/26-durcissement/README.md)
 - **NodePort / LoadBalancer** — Types de Service : un port de 30000-32767 ouvert sur chaque nœud ; une adresse externe fournie par un tiers (ici le LB IPAM). → [M15-E03](../modules/15-kubernetes-reseau/README.md)
 - **`nopreempt`** — Option keepalived qui empêche un routeur plus prioritaire qui revient de reprendre la VIP : une seule coupure par incident, mais un état nominal qui dépend de l'historique. → [M07-E08](../modules/07-reseau-ha/README.md)
 - **NOTIFY (DNS)** — Message par lequel un serveur primaire prévient ses secondaires qu'une zone a changé. → [M06-E24](../modules/06-services-socle/README.md)
@@ -443,12 +489,17 @@
 
 ## O
 
+- **OAuth 2.0** — Cadre de délégation d'accès : un client obtient un jeton d'accès pour appeler une API au nom d'une personne, sans connaître son mot de passe. → [M24-E07](../modules/24-identite/README.md)
+- **OAuth2 Proxy** — Mandataire inverse qui impose une connexion OIDC devant une application qui n'en sait pas faire (Hubble UI, Pyroscope, Mailpit). → [M24-E18](../modules/24-identite/README.md)
 - **OCI** — *Open Container Initiative* : spécifications d'image, de runtime et de distribution que suivent Docker, Podman, containerd et les registres. → [M12-E04](../modules/12-conteneurs/README.md)
 - **Octavia** — Service de répartition de charge d'OpenStack : répartiteurs, écouteurs, pools, membres ; fournisseur `amphora` (VM HAProxy) ou `ovn` (couche 4 distribuée dans OVN, sans TLS ni couche 7). → [M10-E16](../modules/10-openstack/README.md)
+- **OIDC (OpenID Connect)** — Couche d'identité au-dessus d'OAuth 2.0 : jeton d'identité signé, découverte (`.well-known/openid-configuration`), revendications standard. → [M24-E07](../modules/24-identite/README.md)
 - **Omnibus** — Paquet GitLab qui embarque tous ses composants (NGINX, Puma, Sidekiq, Gitaly, PostgreSQL, Redis), configurés par `gitlab.rb` et `gitlab-ctl reconfigure`. → [M01-E04](../modules/01-git/README.md)
 - **OOM killer** — Tueur du noyau qui termine un processus quand son cgroup dépasse `memory.max` ; code de sortie 137, état `OOMKilled`. → [M12-E18](../modules/12-conteneurs/README.md)
 - **Open vSwitch (OVS)** — Commutateur logiciel programmable : ports d'accès et *trunks*, bonds LACP, miroirs, tables OpenFlow ; brique de base d'OVN. → [M07-E05](../modules/07-reseau-ha/README.md)
+- **OpenBao** — Fork communautaire de HashiCorp Vault (Linux Foundation, MPL 2.0) : coffre de secrets, CLI `bao` ; ici en grappe Raft sur `vault01-03`. → [M25-E03](../modules/25-secrets/README.md)
 - **OpenFlow** — Modèle de tables « correspondance → actions » d'un commutateur programmable ; l'action `NORMAL` d'OVS le fait se comporter comme un commutateur classique. → [M07-E05](../modules/07-reseau-ha/README.md)
+- **OpenSCAP** — Outil libre (`oscap`) qui évalue un hôte contre un contenu SCAP et produit des résultats ARF et un rapport HTML ; peut générer une remédiation. → [M26-E04](../modules/26-durcissement/README.md)
 - **OpenStack** — Ensemble de services libres d'IaaS (Keystone, Nova, Neutron, Glance, Cinder…) pilotés par API ; deux séries par an, 2026.1 « Gazpacho » dans le workbook. → [M10-E04](../modules/10-openstack/README.md)
 - **OpenTelemetry (OTel)** — Projet de la CNCF qui normalise l'API, les SDK, le protocole (OTLP), les conventions sémantiques et le Collector des traces, métriques et journaux. → [M23-E02](../modules/23-traces/README.md)
 - **OpenTofu** — Outil d'infrastructure déclarative, fork libre de Terraform (Linux Foundation) ; outil IaC du workbook. → [M05-E02](../modules/05-iac/README.md)
@@ -468,6 +519,7 @@
 - **Packfile** — Fichier où Git compresse des objets en deltas ; `git gc` et `git maintenance` les entretiennent. → [M01-E45](../modules/01-git/README.md)
 - **Paire veth** — Deux interfaces virtuelles reliées comme par un câble, souvent placées dans deux espaces de noms réseau. → [M07-E04](../modules/07-reseau-ha/README.md)
 - **Paperkey** — Copie imprimable d'une clé de chiffrement de sauvegarde PBS, à conserver hors ligne. → [M00-E36](../modules/00-lab/README.md)
+- **Pare-feu d'hôte (Cilium)** — Politiques Cilium appliquées aux nœuds eux-mêmes (`nodeSelector`), en plus des pods ; une erreur peut isoler un nœud, d'où l'application nœud par nœud. → [M26-E27](../modules/26-durcissement/README.md)
 - **pasta** — Réseau sans privilège par défaut de Podman 5 (paquet `passt`) : il reproduit la configuration réseau de l'hôte dans l'espace de noms du conteneur. → [M12-E06](../modules/12-conteneurs/README.md)
 - **PDB (*PodDisruptionBudget*)** — Nombre minimal de pods disponibles (ou maximal d'indisponibles) que les évictions volontaires, comme un drain, doivent respecter. → [M14-E16](../modules/14-kubernetes-admin/README.md)
 - **physnet** — Nom logique d'un réseau physique dans Neutron (`physnet1` sur OS-EXT), cible des réseaux *provider* (flat, VLAN). → [M10-E08](../modules/10-openstack/README.md)
@@ -476,6 +528,7 @@
 - **Pipeline enfant / multi-projets** — Pipeline déclenché par un job (`trigger`) dans le même projet (enfant, configuration générée possible) ou dans un autre projet (multi-projets). → [M19-E12](../modules/19-ci/README.md)
 - **PITR (restauration à un instant donné)** — *Point-in-time recovery* : restauration d'une base depuis une sauvegarde de base et le rejeu des WAL jusqu'à l'instant choisi. → [M16-E19](../modules/16-kubernetes-stockage/README.md)
 - **Pivot (`clusterctl move`)** — Déplacement des objets Cluster API d'un cluster de gestion (amorcé dans kind) vers un autre, durable (`k3s01`). → [M18-E12](../modules/18-distributions/README.md)
+- **PKCE** — *Proof Key for Code Exchange* (RFC 7636) : le client envoie le haché d'un secret aléatoire avec la demande d'autorisation et le secret lui-même à l'échange du code ; un code intercepté ne sert à rien. → [M24-E07](../modules/24-identite/README.md)
 - **Placement** — Service d'OpenStack qui inventorie les ressources des hyperviseurs et répond aux demandes de l'ordonnanceur de Nova. → [M10-E04](../modules/10-openstack/README.md)
 - **Plan (OpenTofu)** — Liste des actions qu'OpenTofu prévoit (créer, modifier, remplacer `-/+`, détruire) ; on relit le plan, puis on applique exactement celui-là. → [M05-E05](../modules/05-iac/README.md)
 - **Play / playbook** — Un play applique des tâches à un groupe d'hôtes ; un playbook est un fichier YAML qui enchaîne des plays. → [M04-E05](../modules/04-ansible/README.md)
@@ -486,10 +539,12 @@
 - **Pod Security Admission (PSA)** — Contrôleur d'admission intégré qui applique les *Pod Security Standards* (`privileged`, `baseline`, `restricted`) par étiquette d'espace (`enforce`, `audit`, `warn`). → [M14-E18](../modules/14-kubernetes-admin/README.md)
 - **Pod statique** — Pod décrit par un fichier de `/etc/kubernetes/manifests/` et lancé par le kubelet sans passer par l'API : c'est ainsi que démarrent les composants du plan de contrôle. → [M14-E04](../modules/14-kubernetes-admin/README.md)
 - **Podman** — Moteur de conteneurs sans démon, compatible avec Docker, utilisable sans privilège ; 5.4 sur Debian 13, 5.8 sur Rocky 10. → [M12-E06](../modules/12-conteneurs/README.md)
+- **PolicyException (Kyverno)** — Objet qui exempte des ressources nommées d'une politique Kyverno ; ici seulement dans l'espace `kyverno-exceptions`, datées et justifiées. → [M26-E18](../modules/26-durcissement/README.md)
 - **Politique d'accès (`oslo.policy`)** — Règles qui associent chaque appel d'API aux rôles et portées autorisés ; valeurs par défaut dans le code, surcharges dans `policy.yaml`. → [M10-E23](../modules/10-openstack/README.md)
 - **Pool (Ceph)** — Espace logique de RADOS avec sa redondance (`size`/`min_size` ou profil d'effacement), sa règle CRUSH, son application (`rbd`, `cephfs`, `rgw`) et son quota. → [M08-E05](../modules/08-ceph/README.md)
 - **Pool Proxmox** — Regroupement de VMs et de stockages qui porte des droits ; toutes les VMs du workbook sont dans `lab`. → [M00-E08](../modules/00-lab/README.md)
 - **Port (Neutron)** — Point d'attache d'un appareil (instance, routeur, DHCP) à un réseau, avec sa MAC, ses adresses et ses groupes de sécurité. → [M10-E08](../modules/10-openstack/README.md)
+- **Portée (*client scope*)** — Ensemble de revendications et de mappeurs qu'un client Keycloak ajoute aux jetons (portée `groupes` → revendication `groups`). → [M24-E05](../modules/24-identite/README.md)
 - **PowerDNS Authoritative** — Serveur DNS faisant autorité, à backends (SQLite) et API REST ; écoute sur 5300, derrière le récurseur. → [M06-E06](../modules/06-services-socle/README.md)
 - **PowerDNS Recursor** — Résolveur récursif validant DNSSEC, seul point d'entrée DNS des clients du lab (port 53). → [M06-E07](../modules/06-services-socle/README.md)
 - **pre-commit** — Cadre qui exécute des contrôles versionnés avec le dépôt (lint, secrets, format) avant chaque commit. → [M01-E15](../modules/01-git/README.md)
@@ -530,6 +585,7 @@
 - **RabbitMQ** — Bus de messages AMQP entre les composants d'un service OpenStack (API, ordonnanceur, *conductor*, agents) ; files *quorum* obligatoires en 2026.1. → [M10-E24](../modules/10-openstack/README.md)
 - **Racine hors ligne** — Clé de l'autorité racine de la PKI conservée chiffrée hors de tout serveur en ligne ; elle ne signe que des intermédiaires. → [M06-E02](../modules/06-services-socle/README.md)
 - **RADOS** — *Reliable Autonomic Distributed Object Store* : magasin d'objets au cœur de Ceph, accessible par `librados`. → [M08-E05](../modules/08-ceph/README.md)
+- **Raft (stockage intégré)** — Stockage répliqué d'OpenBao par consensus Raft entre les nœuds de la grappe : un leader écrit, une majorité doit répondre ; instantanés par `bao operator raft snapshot`. → [M25-E24](../modules/25-secrets/README.md)
 - **RBAC** — *Role-Based Access Control* : Role et ClusterRole (verbes sur ressources) liés à des utilisateurs, groupes ou comptes de service par RoleBinding et ClusterRoleBinding. → [M14-E11](../modules/14-kubernetes-admin/README.md)
 - **RBD** — *RADOS Block Device* : image bloc découpée en objets RADOS ; instantanés, clones (*layering*), accès par le noyau (`rbd device map`) ou par librbd (QEMU). → [M08-E06](../modules/08-ceph/README.md)
 - **Rebase interactif** — `git rebase -i` : réécrire une suite de commits (réordonner, fusionner, reformuler) avant de la soumettre à revue. → [M01-E12](../modules/01-git/README.md)
@@ -549,6 +605,7 @@
 - **Rekor (journal de transparence)** — Journal public, en ajout seul, de Sigstore où sont inscrites les signatures ; le workbook n'y écrit jamais. → [M13-E07](../modules/13-registre-supply-chain/README.md)
 - **Relabeling** — Réécriture des étiquettes par Prometheus, avant la collecte (`relabel_configs` : cibles) ou après (`metric_relabel_configs` : séries) ; pour garder, renommer ou supprimer. → [M21-E13](../modules/21-metriques/README.md)
 - **Release (Helm)** — Instance installée d'un chart : un nom, un espace, un historique de révisions rangé dans des Secrets de l'espace. → [M17-E02](../modules/17-packaging/README.md)
+- **Reloader** — Contrôleur (stakater) qui redémarre en roulement les charges dont un Secret ou une ConfigMap référencés ont changé. → [M25-E15](../modules/25-secrets/README.md)
 - **Renovate** — Robot qui ouvre des MR de mise à jour des dépendances et des images ; auto-hébergé, en pipeline planifié. → [M13-E11](../modules/13-registre-supply-chain/README.md)
 - **Répartition couche 4 / couche 7** — Couche 4 : le répartiteur relaie des connexions TCP sans les lire ; couche 7 : il lit les requêtes HTTP et choisit un serveur par nom, chemin ou en-tête. → [M07-E10](../modules/07-reseau-ha/README.md)
 - **Réplication ZFS (`pvesr`)** — Copie planifiée des disques ZFS d'une VM vers un autre nœud par `zfs send` incrémental ; en cas de panne, perte des données écrites depuis la dernière synchronisation. → [M09-E14](../modules/09-cluster-proxmox/README.md)
@@ -557,8 +614,10 @@
 - **Réseau provider / réseau de projet** — *Provider* : réseau physique existant, créé par l'administrateur (`ext-net`) ; de projet (*self-service*) : réseau privé en overlay, relié à l'extérieur par un routeur. → [M10-E08](../modules/10-openstack/README.md)
 - **`resource_group`** — Mot-clé GitLab CI qui garantit qu'un seul job du groupe s'exécute à la fois (deux déploiements de la même cible ne se croisent pas). → [M19-E07](../modules/19-ci/README.md)
 - **REV (revue)** — Type d'exercice : relire une configuration ou un code fourni (souvent « de Lucas ») et en relever les défauts. → [M00-E26](../modules/00-lab/README.md)
+- **Revendication (*claim*)** — Attribut porté par un JWT : `iss`, `sub`, `aud`, `exp`, `preferred_username`, `groups`… ; les services en tirent l'identité et les droits. → [M24-E07](../modules/24-identite/README.md)
 - **Reverse proxy** — Serveur qui reçoit les requêtes des clients au nom de serveurs d'application, termine souvent TLS et ajoute des en-têtes (`X-Forwarded-For`) ; Nginx ou HAProxy. → [M07-E11](../modules/07-reseau-ha/README.md)
 - **Revert** — Commit qui annule les effets d'un commit précédent sans réécrire l'historique publié. → [M01-E08](../modules/01-git/README.md)
+- **Revue des accès** — Contrôle périodique et signé de qui a accès à quoi, comparé au modèle d'autorisation ; les écarts sont corrigés ou acceptés nommément. → [M24-E30](../modules/24-identite/README.md)
 - **RFC 2136 (Kubernetes)** — Mises à jour DNS signées TSIG par lesquelles ExternalDNS et cert-manager écrivent dans la zone `apps`, vers l'autoritaire en 5300 ; un échec rend toujours `REFUSED`. → [M15-E14](../modules/15-kubernetes-reseau/README.md)
 - **RGW (RADOS Gateway)** — Passerelle objet de Ceph, compatible S3 et Swift : comptes, utilisateurs, compartiments, quotas, politiques. → [M08-E11](../modules/08-ceph/README.md)
 - **RKE2** — Distribution durcie de SUSE (superviseur, pods statiques, etcd, profil CIS), installée sur Rocky Linux 10. → [M18-E04](../modules/18-distributions/README.md)
@@ -569,6 +628,7 @@
 - **Rook** — Opérateur qui déploie Ceph dans le cluster Kubernetes ; comparé puis retiré. → [M16-E13](../modules/16-kubernetes-stockage/README.md)
 - **Rootless (sans privilège)** — Moteur et conteneurs lancés par un compte ordinaire grâce à l'espace de noms `user` : le root du conteneur n'est, vu de l'hôte, qu'un UID subordonné. → [M12-E06](../modules/12-conteneurs/README.md)
 - **Rotation** — Remplacement planifié d'un secret, d'une clé ou d'une image par une nouvelle version, et retrait de l'ancienne. → [M04-E30](../modules/04-ansible/README.md)
+- **Royaume (*realm*)** — Dans Keycloak, espace isolé d'utilisateurs, de clients et de réglages (`master` pour l'administration, `medisphere` pour les personnes) ; en Kerberos, domaine d'administration d'un KDC. → [M24-E05](../modules/24-identite/README.md)
 - **ruff** — Analyseur et formateur Python très rapide, équivalent de ShellCheck et shfmt pour Python. → [M02-E07](../modules/02-scripting/README.md)
 - **Ruler (Loki)** — Composant de Loki qui évalue des règles LogQL (enregistrement et alertes) par locataire et envoie les alertes à Alertmanager. → [M22-E08](../modules/22-logs/README.md)
 - **`rules` / `workflow` (GitLab CI)** — `rules` : conditions qui décident si un job entre dans le pipeline et comment ; `workflow:rules` : si le pipeline lui-même est créé (évite le doublon branche + MR). → [M19-E06](../modules/19-ci/README.md)
@@ -580,14 +640,19 @@
 ## S
 
 - **S3** — API de stockage objet (compartiments, objets, versions) d'AWS, devenue un standard ; servie ici par SeaweedFS. → [M05-E10](../modules/05-iac/README.md)
+- **SAML** — Protocole de fédération web à base d'assertions XML signées, transportées par le navigateur ; ancêtre d'OIDC, encore courant chez les partenaires. → [M24-E09](../modules/24-identite/README.md)
 - **SBOM** — *Software Bill of Materials* : inventaire des composants d'un logiciel (nom, version, licence, purl), produit par Syft en SPDX ou CycloneDX. → [M13-E06](../modules/13-registre-supply-chain/README.md)
+- **SCAP** — *Security Content Automation Protocol* : famille de standards du NIST (XCCDF, OVAL, CPE, ARF) pour décrire et évaluer automatiquement une configuration. → [M26-E04](../modules/26-durcissement/README.md)
 - **Schéma de valeurs (`values.schema.json`)** — JSON Schema que Helm vérifie avant tout rendu : une valeur mal typée ou inconnue arrête l'installation. → [M17-E05](../modules/17-packaging/README.md)
 - **Scrub** — Lecture de vérification de toutes les données d'un stockage pour détecter les corruptions : `zpool scrub` sur ZFS, *scrub* et *deep-scrub* des PG sur Ceph. → [M08-E08](../modules/08-ceph/README.md)
 - **SDN (Proxmox)** — *Software-Defined Network* : zones et VNets déclarés au niveau du cluster Proxmox (`vinfra`, `vsandbox`…). → [M00-E28](../modules/00-lab/README.md)
 - **SeaBIOS / OVMF** — Micrologiciels de QEMU : SeaBIOS (BIOS) et OVMF (UEFI, issu d'EDK II). → [M11-E03](../modules/11-bare-metal/README.md)
+- **Seal (OpenBao)** — Mécanisme qui protège la clé racine du coffre : Shamir (parts humaines) ou externe (`transit`, HSM, KMS de nuage) pour l'auto-descellement ; changer de seal est une migration. → [M25-E03](../modules/25-secrets/README.md)
+- **Sealed Secrets** — Contrôleur Kubernetes qui déchiffre des `SealedSecret` chiffrés pour le cluster (clé publique), commitables dans Git. → [M25-E19](../modules/25-secrets/README.md)
 - **SeaweedFS** — Stockage objet distribué libre (Apache 2.0) qui remplace MinIO sur `s3-01`. → [M05-E10](../modules/05-iac/README.md)
 - **seccomp** — Filtre des appels système d'un processus ; le profil par défaut des moteurs en bloque une quarantaine (`keyctl`, `kexec_load`…). → [M12-E24](../modules/12-conteneurs/README.md)
 - **Secret de construction** — `RUN --mount=type=secret` de BuildKit : le secret est monté le temps d'une instruction, jamais écrit dans une couche ni dans l'historique. → [M12-E11](../modules/12-conteneurs/README.md)
+- **Secrets Store CSI Driver** — Pilote CSI qui monte des secrets d'un coffre comme fichiers dans les pods, sans (forcément) créer de Secret Kubernetes. → [M25-E19](../modules/25-secrets/README.md)
 - **Secure Boot** — Démarrage UEFI qui n'exécute que des binaires signés par une clé de confiance ; iPXE 2.0 le prend en charge par un shim signé. → [M11-E13](../modules/11-bare-metal/README.md)
 - **SELinux et conteneurs** — Sur Rocky Linux, chaque conteneur tourne en `container_t` avec ses catégories MCS ; un montage lié doit être réétiqueté (`:Z`, `:z`). → [M12-E25](../modules/12-conteneurs/README.md)
 - **semantic-release** — Outil qui déduit la version suivante des messages de commit, pose l'étiquette et publie notes et release. → [M01-E25](../modules/01-git/README.md)
@@ -602,6 +667,7 @@
 - **Service sans tête (*headless*)** — Service sans adresse virtuelle (`clusterIP: None`) : le DNS rend directement les adresses des pods ; base des StatefulSets. → [M15-E03](../modules/15-kubernetes-reseau/README.md)
 - **ServiceMonitor / PodMonitor** — Ressources de prometheus-operator qui déclarent quels Services ou pods collecter ; l'opérateur en génère la configuration de Prometheus. → [M21-E07](../modules/21-metriques/README.md)
 - **Seuils de remplissage** — `nearfull` (85 %), `backfillfull` (90 %) et `full` (95 %) par défaut : au-delà de `full`, Ceph refuse les écritures. → [M08-E20](../modules/08-ceph/README.md)
+- **Shamir (partage de secret)** — Découpage d'une clé en *n* parts dont *k* suffisent à la reconstituer (ici 5 parts, seuil 3) ; aucune part seule ne révèle rien. → [M25-E03](../modules/25-secrets/README.md)
 - **ShellCheck** — Analyseur statique de scripts shell qui signale les erreurs classiques (guillemets, `cd` non vérifié…). → [M02-E04](../modules/02-scripting/README.md)
 - **shfmt** — Formateur de scripts shell, configuré par `.editorconfig`. → [M02-E04](../modules/02-scripting/README.md)
 - **Shim containerd** — `containerd-shim-runc-v2` : processus par conteneur qui appelle runc, garde le conteneur en vie si containerd redémarre et remonte son code de sortie. → [M12-E09](../modules/12-conteneurs/README.md)
@@ -616,6 +682,7 @@
 - **SOA** — Enregistrement de tête d'une zone DNS : serveur primaire, contact, numéro de série, minuteries. → [M06-E06](../modules/06-services-socle/README.md)
 - **SonarQube** — Plateforme d'analyse de qualité et de sécurité du code ; l'édition communautaire n'analyse ni les MR ni les branches (retirée par l'ADR-0190). → [M19-E16](../modules/19-ci/README.md)
 - **Sondes (*probes*)** — `livenessProbe` (redémarrer le conteneur), `readinessProbe` (lui envoyer du trafic), `startupProbe` (protéger un démarrage lent) ; `/sante` et `/pret` pour MédiAgenda. → [M14-E08](../modules/14-kubernetes-admin/README.md)
+- **SOPS** — Outil qui chiffre les valeurs d'un fichier YAML ou JSON en gardant les clés lisibles, avec age, PGP ou `transit` d'OpenBao ; fichiers versionnables dans Git. → [M25-E18](../modules/25-secrets/README.md)
 - **Source de données (`data`)** — Lecture d'informations par OpenTofu (image dorée `current`, stockages) sans les gérer. → [M05-E08](../modules/05-iac/README.md)
 - **Source de vérité** — Endroit unique où l'on décide d'une donnée (adresse, nom, rôle) ; les autres outils en dérivent. NetBox au module 06. → [M06-E05](../modules/06-services-socle/README.md)
 - **Sourdine (`ceph health mute`)** — Masquage d'un contrôle de santé pour une durée donnée, le temps d'une intervention connue ; à dater et à justifier. → [M08-E07](../modules/08-ceph/README.md)
@@ -627,7 +694,10 @@
 - **Spécification de service (cephadm)** — Document YAML qui décrit un service (type, placement par hôtes ou étiquettes, options) ; `ceph orch apply -i` fait converger le cluster vers elle. → [M08-E03](../modules/08-ceph/README.md)
 - **Split-brain (cerveau divisé)** — Deux membres d'un système redondant se croient chacun actifs (deux maîtres VRRP, deux moitiés de cluster) : adresses en double ou écritures divergentes. → [M07-E37](../modules/07-reseau-ha/README.md)
 - **Squash** — Fusion de plusieurs commits en un seul, à la fusion d'une MR ou pendant un rebase. → [M01-E09](../modules/01-git/README.md)
+- **ssh-audit** — Outil qui inspecte un serveur SSH (algorithmes, clés, versions) et signale les faiblesses. → [M26-E03](../modules/26-durcissement/README.md)
 - **`sshpop`** — Provisioner step-ca qui authentifie une demande par un certificat SSH déjà valide (renouvellement). → [M06-E19](../modules/06-services-socle/README.md)
+- **SSO (authentification unique)** — Une connexion au fournisseur d'identité ouvre une session réutilisée par tous les services qui lui délèguent l'authentification. → [M24-E11](../modules/24-identite/README.md)
+- **SSSD** — *System Security Services Daemon* : client Linux de FreeIPA (LDAP, Kerberos) qui résout les comptes, authentifie, applique HBAC et sudo et met en cache pour travailler hors ligne. → [M24-E19](../modules/24-identite/README.md)
 - **StatefulSet** — Pods à identité stable (`valkey-0`), créés et arrêtés dans l'ordre, chacun avec son PVC issu de `volumeClaimTemplates`, qui lui survit. → [M14-E15](../modules/14-kubernetes-admin/README.md)
 - **Statut NetBox (`planned` → `active`)** — Cycle de vie d'un équipement dans NetBox ; l'usine de provisioning n'installe qu'un équipement `planned` et le passe `active` en fin de chaîne. → [M11-E06](../modules/11-bare-metal/README.md)
 - **step-ca** — Autorité de certification de Smallstep : X.509 et SSH, ACME, provisioners ; installée sur `ca01`. → [M06-E02](../modules/06-services-socle/README.md)
@@ -642,6 +712,7 @@
 
 ## T
 
+- **Tailoring (profil adapté)** — Fichier XCCDF qui dérive un profil d'un référentiel (règles désactivées, valeurs changées) pour refléter les exceptions acceptées ; ici `tailoring-{cis,anssi}.xml`. → [M26-E10](../modules/26-durcissement/README.md)
 - **Taint / toleration** — Une taint repousse les pods d'un nœud (`NoSchedule`, `NoExecute`), sauf ceux qui la tolèrent ; `dedie=bdd:NoSchedule` sur `k8s-w03`. → [M14-E14](../modules/14-kubernetes-admin/README.md)
 - **Talos Linux** — OS immuable dédié à Kubernetes, sans shell ni SSH, piloté par une API gRPC (`talosctl`, port 50000) et une configuration machine en YAML. → [M18-E05](../modules/18-distributions/README.md)
 - **Task (Taskfile)** — Lanceur de tâches en YAML (`Taskfile.yml`), alternative lisible à Make. → [M02-E20](../modules/02-scripting/README.md)
@@ -650,18 +721,22 @@
 - **Terminaison TLS** — Déchiffrement TLS sur le répartiteur ou le proxy, qui relaie ensuite en clair ou rechiffre vers le serveur. → [M07-E11](../modules/07-reseau-ha/README.md)
 - **terraform-docs** — Générateur de documentation (variables, sorties) des modules OpenTofu/Terraform. → [M05-E20](../modules/05-iac/README.md)
 - **Terragrunt** — Surcouche d'OpenTofu qui factorise backends, providers et environnements (`run --all`). → [M05-E24](../modules/05-iac/README.md)
+- **Tetragon** — Outil eBPF de Cilium pour observer (processus, fichiers, réseau) et appliquer (tuer un processus, refuser un appel) selon des `TracingPolicy`. → [M26-E20](../modules/26-durcissement/README.md)
 - **tflint** — Analyseur statique du code OpenTofu/Terraform (erreurs, conventions, règles par provider). → [M05-E20](../modules/05-iac/README.md)
 - **TFTP** — *Trivial File Transfer Protocol* : transfert de fichiers sur UDP 69, sans authentification, seul protocole de téléchargement du micrologiciel PXE. → [M11-E02](../modules/11-bare-metal/README.md)
 - **Thanos (sidecar, Store, Compactor, Query)** — Extension de Prometheus : le sidecar envoie les blocs au stockage objet, le Store Gateway les sert, le Compactor compacte, sous-échantillonne et applique la rétention, Query offre la vue globale et dédupliquée. → [M21-E24](../modules/21-metriques/README.md)
 - **Timer systemd** — Unité qui déclenche un service à heure fixe ou à intervalle ; remplace cron dans le workbook. → [M02-E26](../modules/02-scripting/README.md)
 - **Tinkerbell** — Pile de provisioning bare-metal déployée sur Kubernetes (workflows d'actions en conteneurs) ; évaluée dans l'ADR-0110. → [M11-E16](../modules/11-bare-metal/README.md)
 - **TLS *passthrough*** — Écouteur qui relaie la connexion TLS sans la déchiffrer, d'après le nom SNI ; `gw-partenaires` vers `relais-mtls`. → [M15-E16](../modules/15-kubernetes-reseau/README.md)
+- **TokenReview** — API Kubernetes qui valide un jeton de compte de service et renvoie l'identité ; la méthode `kubernetes` d'OpenBao s'en sert. → [M25-E12](../modules/25-secrets/README.md)
 - **TOTP** — Code à usage unique fondé sur le temps (RFC 6238), second facteur des comptes humains du cluster. → [M09-E26](../modules/09-cluster-proxmox/README.md)
 - **Trace distribuée** — Arbre des spans d'une même requête à travers plusieurs services, relié par un `trace_id` commun. → [M23-E04](../modules/23-traces/README.md)
 - **TraceQL** — Langage de requête de Tempo : sélection de spans par attributs (`{ resource.service.name = "…" && duration > 300ms }`), relations, agrégations. → [M23-E05](../modules/23-traces/README.md)
 - **`track_script`** — Script que keepalived exécute périodiquement ; son échec abaisse la priorité de l'instance ou la met en `FAULT`. → [M07-E08](../modules/07-reseau-ha/README.md)
+- **Transit (moteur)** — Moteur d'OpenBao de chiffrement comme service : chiffre, déchiffre, signe avec des clés qui ne quittent jamais le coffre (rotation, versions). → [M25-E17](../modules/25-secrets/README.md)
 - **`trap`** — Commande Bash qui exécute du code à la sortie ou sur un signal (nettoyage des fichiers temporaires). → [M02-E03](../modules/02-scripting/README.md)
 - **Trivy** — Scanner de vulnérabilités et de mauvaises configurations ; épinglé par empreinte depuis sa compromission de 2026. → [M05-E25](../modules/05-iac/README.md)
+- **Trousseau (*keyring*)** — Ensemble des clés de chiffrement de la barrière d'OpenBao, lui-même chiffré par la clé racine ; tourné par `bao operator rotate`. → [M25-E44](../modules/25-secrets/README.md)
 - **TSIG** — Signature HMAC à clé partagée des échanges DNS (transferts de zone, mises à jour dynamiques). → [M06-E17](../modules/06-services-socle/README.md)
 - **Type de volume** — Catégorie de volume Cinder (backend, QoS, chiffrement) proposée aux projets. → [M10-E11](../modules/10-openstack/README.md)
 - **Typer** — Bibliothèque Python de CLI fondée sur les annotations de type, utilisée pour `medictl`. → [M02-E15](../modules/02-scripting/README.md)
@@ -678,6 +753,7 @@
 
 - **Vague de synchronisation (*sync wave*)** — Annotation d'Argo CD (`argocd.argoproj.io/sync-wave`) qui ordonne l'application des ressources ; une vague attend que la précédente soit saine. → [M20-E11](../modules/20-gitops/README.md)
 - **ValidatingAdmissionPolicy (VAP)** — Politique d'admission intégrée, écrite en **CEL** (*Common Expression Language*) et liée par une `ValidatingAdmissionPolicyBinding` (`medisphere-images`). → [M14-E18](../modules/14-kubernetes-admin/README.md)
+- **ValidatingPolicy (Kyverno)** — Politique CEL de validation de Kyverno 1.19 (`policies.kyverno.io/v1`), proche d'une ValidatingAdmissionPolicy native mais avec rapports, exceptions et tests `kyverno test`. → [M26-E07](../modules/26-durcissement/README.md)
 - **Valkey** — Base clé-valeur en mémoire, fork libre de Redis ; utilisée par NetBox (cache, files de tâches). → [M06-E04](../modules/06-services-socle/README.md)
 - **Variables CI protégées et masquées** — Variables GitLab exposées seulement aux branches protégées et masquées dans les journaux ; emplacement des secrets en CI. → [M01-E25](../modules/01-git/README.md)
 - **Velero** — Sauvegarde et restauration d'objets Kubernetes et de leurs volumes vers un stockage objet ; 1.18, Kopia ou *data mover*. → [M16-E16](../modules/16-kubernetes-stockage/README.md)
@@ -707,9 +783,14 @@
 - **WaitForFirstConsumer** — Liaison différée d'une StorageClass : le volume est créé quand le pod est ordonnancé, là où il pourra l'utiliser. → [M16-E12](../modules/16-kubernetes-stockage/README.md)
 - **WAL** — *Write-Ahead Log* de PostgreSQL : journal des modifications, archivé en continu pour la sauvegarde et la restauration à un instant donné. → [M16-E19](../modules/16-kubernetes-stockage/README.md)
 - **Watchdog** — Alerte toujours active du chart kube-prometheus-stack, qui prouve que la chaîne d'alerte fonctionne ; base du *dead man's switch*. → [M21-E28](../modules/21-metriques/README.md)
+- **WebAuthn / passkey** — Authentification par clé publique liée au site (clé matérielle, biométrie de l'appareil), résistante à l'hameçonnage. → [M24-E21](../modules/24-identite/README.md)
 - **WireGuard** — VPN noyau à clés publiques ; tunnel inter-sites `wg0` et VPN d'administration `wg1` sur `gw01`. → [M00-E16](../modules/00-lab/README.md)
 - **Workspace (OpenTofu)** — Plusieurs états pour une même configuration ; comparé aux répertoires par environnement. → [M05-E15](../modules/05-iac/README.md)
 - **Worktree** — Arbre de travail supplémentaire attaché au même dépôt Git, pour travailler sur deux branches à la fois. → [M01-E18](../modules/01-git/README.md)
+
+## X
+
+- **XCCDF** — Langage SCAP qui décrit un référentiel en règles et profils, et les résultats de leur évaluation. → [M26-E04](../modules/26-durcissement/README.md)
 
 ## Y
 

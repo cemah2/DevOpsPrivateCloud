@@ -4,7 +4,7 @@
 >
 > Domaines relevés le 7 octobre 2026 sur les pages officielles des éditeurs (liens en fin de section). Ils changent régulièrement : vérifie la version en vigueur avant de t'inscrire. Les correspondances sont **indicatives** : un exercice « couvre » un domaine quand il y fait pratiquer un geste de l'examen, pas quand il en parle. Les examens pratiques (LFCS, RHCSA, RHCE, CKA) demandent en plus de la **vitesse** : refais les exercices `CHRONO` et les `BF` sans indice.
 
-État : **blocs A à E** (modules 00 à 23) renseignés ; blocs F, G et finaux à compléter. Domaines des certifications ajoutées au bloc B (COA, CCNA, Ceph) relevés le 8 octobre 2026 ; ceux des certifications Kubernetes (CKA, CKAD, CKS, KCNA, KCSA) le 15 octobre 2026 sur les programmes publiés par la CNCF ([cncf/curriculum](https://github.com/cncf/curriculum)) ; ceux des certifications des blocs D et E (PCA, OTCA, CAPA, CGOA) le 22 octobre 2026 sur les pages officielles de la CNCF et de la Linux Foundation.
+État : **blocs A à F** (modules 00 à 26) renseignés ; bloc G et finaux à compléter. Domaines des certifications ajoutées au bloc B (COA, CCNA, Ceph) relevés le 8 octobre 2026 ; ceux des certifications Kubernetes (CKA, CKAD, CKS, KCNA, KCSA) le 15 octobre 2026 sur les programmes publiés par la CNCF ([cncf/curriculum](https://github.com/cncf/curriculum)) ; ceux des certifications des blocs D et E (PCA, OTCA, CAPA, CGOA) le 22 octobre 2026 sur les pages officielles de la CNCF et de la Linux Foundation ; ceux du HashiCorp Vault Associate (003) le 23 octobre 2026 sur la page officielle de HashiCorp.
 
 ## Vue d'ensemble
 
@@ -21,13 +21,14 @@
 | Proxmox VE | Proxmox Server Solutions | formation avec attestation, sans examen | M00, M09 | §8 |
 | CKA — Certified Kubernetes Administrator (programme v1.35) | CNCF / Linux Foundation | pratique, en ligne (2 h) | large : installation kubeadm, cycle de vie, réseau, stockage et dépannage (M14 à M17) ; l'autoscaling seulement au M28 | §9 |
 | CKAD — Certified Kubernetes Application Developer (programme v1.37) | CNCF / Linux Foundation | pratique, en ligne (2 h) | large pour la conception, la configuration et le déploiement (M12, M14, M15, M17) | §10 |
-| CKS — Certified Kubernetes Security Specialist (programme v1.34) | CNCF / Linux Foundation | pratique, en ligne (2 h) ; CKA en cours de validité exigée | **partielle** : chaîne d'approvisionnement (M12, M13), RBAC, admission, audit, chiffrement (M14), politiques réseau et chiffrement entre nœuds (M15) ; sécurité à l'exécution au bloc F | §11 |
-| KCNA et KCSA — Kubernetes and Cloud Native (Security) Associate | CNCF / Linux Foundation | QCM en ligne | KCNA : largement couvert par le bloc C ; KCSA : en partie (le reste au bloc F) | §12 |
+| CKS — Certified Kubernetes Security Specialist (programme v1.34) | CNCF / Linux Foundation | pratique, en ligne (2 h) ; CKA en cours de validité exigée | **large** : chaîne d'approvisionnement (M12, M13), RBAC, admission, audit, chiffrement (M14), politiques réseau (M15) ; OIDC et RBAC par groupes (M24), Secrets par coffre (M25), CIS, PSA, Kyverno, Falco, Tetragon, chiffrement et pare-feu des nœuds (M26) ; conteneurs isolés (gVisor, Kata) seulement discutés | §11, §21 |
+| KCNA et KCSA — Kubernetes and Cloud Native (Security) Associate | CNCF / Linux Foundation | QCM en ligne | KCNA : largement couvert par le bloc C ; KCSA : largement couvert avec le bloc F | §12, §21 |
 | DCA — Docker Certified Associate | Mirantis | QCM | partielle : M12, M13 ; Swarm et produits d'entreprise de Mirantis non couverts | §13 |
 | PCA — Prometheus Certified Associate | CNCF / Linux Foundation | QCM en ligne (90 min) | large (M21), notions d'observabilité complétées par M22 et M23 | §15 |
 | OTCA — OpenTelemetry Certified Associate | CNCF / Linux Foundation | QCM en ligne | large pour le Collector et les SDK (M23) | §16 |
 | CAPA — Certified Argo Project Associate | CNCF / Linux Foundation | QCM en ligne | Argo CD et Argo Rollouts (M20) ; **Argo Workflows et Argo Events non couverts** (près de la moitié de l'examen) | §17 |
 | CGOA — GitOps Certified Associate | CNCF / Linux Foundation | QCM en ligne | large (M20, avec Flux en comparaison) | §18 |
+| HashiCorp Certified: Vault Associate (003) | HashiCorp | QCM en ligne | **équivalence seulement** : le workbook pratique **OpenBao** (fork MPL 2.0 de Vault), pas Vault ; concepts, CLI et API quasi identiques, mais l'examen porte sur Vault et ses fonctions Enterprise/HCP (M25 ; Vault 2.2 en comparaison au M25-E30) | §22 |
 
 ---
 
@@ -204,9 +205,9 @@ Examen pratique de 2 heures, en ligne. Programme **v1.37**. Le point de vue est 
 
 Source : [programme CKAD v1.37 (CNCF)](https://github.com/cncf/curriculum).
 
-## 11. CKS — Certified Kubernetes Security Specialist (partiel)
+## 11. CKS — Certified Kubernetes Security Specialist
 
-Examen pratique de 2 heures, en ligne, qui exige une **CKA en cours de validité**. Programme **v1.34**. Le bloc C en couvre une bonne moitié : la chaîne d'approvisionnement (M12, M13), le contrôle d'accès, l'admission, l'audit et le chiffrement (M14), les politiques réseau et le chiffrement entre nœuds (M15). La sécurité à l'exécution (Falco, Tetragon), Kyverno, kube-bench et kubescape en profondeur, AppArmor dans Kubernetes et les conteneurs isolés (gVisor, Kata) arrivent au **module 26** (bloc F) : la colonne de droite dit ce qui reste.
+Examen pratique de 2 heures, en ligne, qui exige une **CKA en cours de validité**. Programme **v1.34**. Le bloc C en couvre une bonne moitié : la chaîne d'approvisionnement (M12, M13), le contrôle d'accès, l'admission, l'audit et le chiffrement (M14), les politiques réseau et le chiffrement entre nœuds (M15). La sécurité à l'exécution (Falco, Tetragon), Kyverno, kube-bench et kubescape en profondeur, AppArmor dans Kubernetes et les conteneurs isolés (gVisor, Kata) arrivent au **module 26** (bloc F) : la colonne de droite dit ce qui restait après le bloc C ; les exercices du bloc F qui les couvrent sont au §21.
 
 | Domaine (poids) | Exercices du bloc C | À venir (bloc F) |
 |---|---|---|
@@ -221,7 +222,7 @@ Source : [programme CKS v1.34 (CNCF)](https://github.com/cncf/curriculum).
 
 ## 12. KCNA et KCSA
 
-QCM en ligne, sans manipulation. **KCNA** (*Kubernetes and Cloud Native Associate*) vérifie les notions ; le bloc C les pratique toutes, au-delà de ce que demande l'examen. **KCSA** (*Kubernetes and Cloud Native Security Associate*) est le pendant théorique de la CKS : le bloc C en couvre la moitié, le bloc F le reste. Révise surtout le vocabulaire et l'écosystème de la CNCF, que le workbook n'aborde que par ce qu'il utilise.
+QCM en ligne, sans manipulation. **KCNA** (*Kubernetes and Cloud Native Associate*) vérifie les notions ; le bloc C les pratique toutes, au-delà de ce que demande l'examen. **KCSA** (*Kubernetes and Cloud Native Security Associate*) est le pendant théorique de la CKS : le bloc C en couvre la moitié, le bloc F le reste. Révise surtout le vocabulaire et l'écosystème de la CNCF, que le workbook n'aborde que par ce qu'il utilise. Les compléments du bloc F sont au §21.
 
 | Domaine KCNA (poids) | Exercices du bloc C |
 |---|---|
@@ -333,7 +334,47 @@ Les certifications Kubernetes (§9 à §12) gagnent quelques exercices avec les 
 | Certification | Domaines officiels | Bloc concerné |
 |---|---|---|
 | **CKA** (complément) | autoscaling des charges (HPA) | G (28) |
-| **CKS** (complément) | sécurité à l'exécution, AppArmor et seccomp dans les pods, conteneurs isolés, admission par politiques, CIS appliqué | F (24-26) |
-| **KCSA** (complément) | modèle de menaces, conformité | F, finaux F6 |
-| **LFCS** (compléments) | swap, automontage, ACL, LDAP | F (24) |
-| **Vault Associate**, **Certified Backstage Associate (CBA)**, **Kyverno Certified Associate (KCA)** | à relever si pertinents | F, G |
+| **KCSA** (complément) | conformité (HDS, ISO 27001) | finaux F6 |
+| **LFCS** (compléments) | swap, automontage, ACL POSIX | non prévus (révision personnelle) |
+| **Certified Backstage Associate (CBA)** | à relever si pertinent | G (28) |
+| **Kyverno Certified Associate (KCA)** | non relevé au bloc F : le M26 n'utilise que les politiques CEL de Kyverno 1.19 (`ClusterPolicy` dépréciée), à vérifier contre le programme de l'examen si l'apprenant le vise | — |
+
+## 21. Kubernetes, LFCS, RHCSA et RHCE : compléments du bloc F
+
+Le bloc F termine la CKS (§11) et la KCSA (§12) et ajoute des gestes Linux d'identité et de durcissement aux certifications système. Les domaines sont ceux des programmes cités plus haut.
+
+| Certification | Domaine | Exercices du bloc F |
+|---|---|---|
+| **CKS** | Cluster Setup : référentiel CIS ; NetworkPolicy ; métadonnées et points d'accès des nœuds | kube-bench (forcé sur `cis-1.12`, aucun référentiel pour 1.36) et kubescape : M26-E05, M26-E34 · NetworkPolicy par défaut générée, quarantaine : M26-E16, M26-E42 · kubelets à certificats vérifiés : M26-E25, M26-E41 · pare-feu d'hôte des nœuds : M26-E27, M26-E40 |
+| **CKS** | Cluster Hardening : RBAC minimal ; accès à l'API ; comptes de service ; montée de version | authentification OIDC structurée et kubelogin : M24-E16, M24-E36 · RBAC par groupes de l'annuaire, revue des accès : M24-E10, M24-E17, M24-E30 · comptes de service sans jeton monté : M26-E21 · audience des jetons de compte de service (méthode `kubernetes` d'OpenBao) : M25-E12 · correctifs du cluster : M26-E30 |
+| **CKS** | System Hardening : empreinte de l'hôte ; identités à moindre privilège ; accès réseau ; AppArmor et seccomp | rôle `durcissement` (SSH, PAM, sudo, noyau, services) : M26-E10, M26-E11, M26-E14 · AppArmor et SELinux, `appArmorProfile` dans les pods : M26-E13, M26-E21, M26-E39 · seccomp (`seccompDefault`, mutation par défaut) : M26-E16, M26-E25 · SSH par certificats courts, HBAC : M24-E19, M24-E20 |
+| **CKS** | Minimize Microservice Vulnerabilities : Pod Security Standards ; Secrets ; isolation ; chiffrement de pod à pod | PSA `restricted` imposé, panne : M26-E06, M26-E36 · Secrets par coffre et ESO : M25-E12, M25-E13 · identifiants dynamiques : M25-E14 · comparaison SOPS, Sealed Secrets, CSI : M25-E18, M25-E19 · chiffrement d'etcd (`secretbox` gardé, KMS v2 étudié et écarté) : M25-E31 · WireGuard étendu aux nœuds : M26-E26 · gVisor et Kata : **discutés seulement** (M26-E31), à pratiquer à côté |
+| **CKS** | Supply Chain Security : registres autorisés ; signer et valider ; analyse statique | admission Kyverno (registres, digest, limites) : M26-E07, M26-E16, M26-E18 · signatures Cosign exigées en recette et prod : M26-E15, M26-E35 · clé de signature dans le coffre (`transit`) : M25-E20 · politiques d'admission natives (VAP, MAP) : M26-E17 · analyse des manifestes et du Dockerfile : M26-E21, M26-E22 · vulnérabilités des images en service : M26-E30 |
+| **CKS** | Monitoring, Logging and Runtime Security : analyse comportementale ; phases d'une attaque ; immuabilité ; audit | Falco : M26-E08, M26-E19, M26-E37 · Tetragon (observer, bloquer) : M26-E20, M26-E29 · réponse à incident : M26-E33, M26-E42, M26-E43 · `readOnlyRootFilesystem` : M26-E21 · politique d'audit revisitée et détections : M26-E28 · mécanismes (eBPF, LSM, chaîne d'admission) : M26-E44 |
+| **KCSA** | Kubernetes Threat Model ; Platform Security ; Compliance and Security Frameworks | modèle de menace : M26-E02 · admission, PKI de services : M26-E07, M25-E16 · référentiels CIS, ANSSI, OpenSCAP : M26-E04, M26-E09, M26-E24 · registre des exceptions : M26-E23 · audit de conformité : M26-E34 · questions : M24-E45, M25-E45, M26-E45 |
+| **KCSA** | Kubernetes Security Fundamentals : authentification, Secrets, audit | M24-E07, M24-E16, M25-E12, M25-E21, M26-E28 |
+| **LFCS** | Users and Groups : comptes LDAP | inscription des VMs dans FreeIPA (SSSD, HBAC, sudo) : M24-E19, M24-E40 · annuaire en code, recherches LDAP : M24-E03, M24-E37 |
+| **LFCS** | Operations Deployment : SELinux ; paramètres du noyau ; journaux | M26-E10, M26-E12 (auditd, AIDE), M26-E13, M26-E39 |
+| **LFCS** | Networking : OpenSSH | ssh-audit et durcissement de sshd : M26-E03, M26-E11 · certificats SSH d'utilisateur : M24-E20 |
+| **RHCSA** | Manage security (SELinux : contextes, booléens, `semanage`, `restorecon`) ; Manage users and groups | SELinux *enforcing* sur Rocky 10 : M26-E13, M26-E39 · `authselect`, PAM : M26-E11 · FreeIPA sur Rocky 10, Kerberos (`kinit`) : M24-E02, M24-E03 · `firewalld` d'`ipa01` : M24-E06 · clients SSSD : M24-E19 |
+| **RHCE** | rôles et collections ; Ansible Vault ; variables par groupe | collection `freeipa.ansible_freeipa` : M24-E03 · rôle `durcissement` (exceptions, vagues `serial: 1`) : M26-E10, M26-E14 · Ansible lit ses secrets dans OpenBao (`community.hashi_vault`) : M25-E11 |
+
+Restent hors du workbook : pour la CKS, les conteneurs isolés (gVisor, Kata) en pratique et Istio ; pour la LFCS, swap, automontage et ACL POSIX.
+
+## 22. HashiCorp Certified: Vault Associate (003) — en équivalence
+
+**À lire avant tout** : le workbook n'installe pas HashiCorp Vault en production, il installe **OpenBao** 2.7, le fork communautaire de Vault (Linux Foundation, licence MPL 2.0), choisi parce que Vault est sous licence BUSL (ADR-0250). Les concepts (barrière, seal, jetons, baux, politiques, méthodes, moteurs), la CLI (`bao` au lieu de `vault`) et l'API (`/v1/...`) sont presque identiques, et le fournisseur OpenTofu utilisé est `hashicorp/vault`. Mais l'examen porte sur **Vault** : ses fonctions Enterprise et HCP (espaces de noms, réplication, *performance standby*, Sentinel, HSM), son interface et ses évolutions depuis le fork ne sont pas pratiquées ; M25-E30 installe Vault 2.2 sur `bao-essai` pour comparer. Compte une préparation propre à Vault (parcours officiel de HashiCorp) en plus du module.
+
+| Domaine officiel | Exercices du module 25 |
+|---|---|
+| **Authentication methods** | OIDC (Keycloak) : M25-E06 · AppRole et `secret_id` enveloppés : M25-E07, M25-E28 · JWT de GitLab (`bound_claims`) : M25-E10, M25-E36 · Kubernetes : M25-E12 |
+| **Vault policies** | M25-E05, M25-E22 (revue), M25-E40 (panne « permission denied ») |
+| **Vault tokens** | jetons, accesseurs, jetons périodiques : M25-E05 · jeton racine révoqué : M25-E08, M25-E28 · jeton du seal renouvelé : M25-E25, M25-E42 |
+| **Vault leases** | baux, renouvellement, révocation : M25-E09, M25-E14, M25-E38 · rotation : M25-E15, M25-E33, M25-E34 |
+| **Secrets engines** | KV v2 : M25-E04 · `database` (PostgreSQL dynamique) : M25-E14 · PKI : M25-E16, M25-E41 · `transit` : M25-E17, M25-E20 |
+| **Encryption as a Service** | M25-E17, M25-E18 (SOPS par `transit`), M25-E20 (Cosign par `transit`) |
+| **Vault architecture fundamentals** | barrière, seal Shamir, initialisation : M25-E03, M25-E09 · sous le capot (trousseau, Raft, baux) : M25-E44 · audit : M25-E21 |
+| **Vault deployment architecture** | grappe Raft et VIP : M25-E24 · auto-descellement `transit` : M25-E25, M25-E35, M25-E42 · instantanés et restauration : M25-E26 · supervision, durcissement : M25-E27, M25-E28 · montée de version : M25-E29 · panne sans leader : M25-E39 |
+| **Access management architecture** | modèle d'accès au coffre : M25-E05 · groupes externes tirés de l'annuaire : M25-E06, M25-E08 · ADR du coffre : M25-E31 |
+
+Sources : [Vault Associate (003), revue des objectifs (HashiCorp)](https://developer.hashicorp.com/vault/tutorials/associate-cert-003/associate-review-003) ; [page de la certification](https://developer.hashicorp.com/certifications/vault-associate).
