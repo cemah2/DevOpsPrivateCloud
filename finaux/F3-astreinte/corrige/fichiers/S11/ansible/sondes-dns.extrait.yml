@@ -1,8 +1,10 @@
 # plateforme/ansible — rôle supervision_temoin (mon01) : sondes DNS PAR RÉCURSEUR (F3-S11, PLAT-3311).
 # EXTRAIT en trois morceaux, à insérer dans les fichiers du rôle (M21-E11/E28). Pendant INC-5911, dns02
 # répondait SERVFAIL à tout par1.medisphere.internal (ancre DNSSEC fausse) ; dns01 masquait la panne pour
-# les VMs, pas pour les pods. Une sonde qui interroge « le DNS » ne l'aurait pas vu non plus : on sonde
-# CHAQUE récurseur, avec un nom de la zone signée.
+# les VMs comme pour CoreDNS (policy sequential). Seule la sonde « dns » du M21-E11 (SOA de par1, chaque
+# récurseur) l'a vue, sous l'alerte générique SondeEnEchec (5 min, runbook RB-210). Ce complément sonde
+# un NOM de la zone signée avec la réponse attendue (une mauvaise adresse est aussi un échec), sur chaque
+# récurseur, et lève une alerte dédiée qui renvoie à RB-337.
 # Vérification avant rechargement : « promtool check config » et « promtool check rules » (validate:).
 
 # --- 1. templates/blackbox.yml.j2, sous « modules: » ------------------------------------------------------
@@ -51,5 +53,5 @@ groups:
           equipe: plateforme
         annotations:
           resume: "Le récurseur {{ $labels.recurseur }} ne résout plus git01.par1.medisphere.internal"
-          description: "Sonde DNS en échec depuis 3 min sur {{ $labels.instance }} (SERVFAIL, délai ou mauvaise réponse). Les pods, qui interrogent les deux récurseurs, échouent une fois sur deux. RB-337 § 1."
+          description: "Sonde DNS en échec depuis 3 min sur {{ $labels.instance }} (SERVFAIL, délai ou mauvaise réponse). La redondance DNS est perdue : si l'autre récurseur tombe, plus aucun nom de par1 ne se résout. RB-337 § 1."
           runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/exploitation/runbooks/RB-337-noms-intermittents.md

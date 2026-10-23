@@ -7,11 +7,11 @@ tests:
   - name: une session tombe sur k8s-w02, les autres restent établies
     interval: 1m
     input_series:
-      - series: 'cilium_bgp_control_plane_session_state{instance="10.10.40.62:9962", neighbor="10.10.40.2", vrouter="65040"}'
+      - series: 'cilium_bgp_control_plane_session_state{instance="10.10.40.62:9962", instance_name="par1", local_asn="65040", neighbor="10.10.40.2", neighbor_asn="65000"}'
         values: '1x4 0x20'
-      - series: 'cilium_bgp_control_plane_session_state{instance="10.10.40.62:9962", neighbor="10.10.40.3", vrouter="65040"}'
+      - series: 'cilium_bgp_control_plane_session_state{instance="10.10.40.62:9962", instance_name="par1", local_asn="65040", neighbor="10.10.40.3", neighbor_asn="65000"}'
         values: '1x25'
-      - series: 'cilium_bgp_control_plane_session_state{instance="10.10.40.61:9962", neighbor="10.10.40.2", vrouter="65040"}'
+      - series: 'cilium_bgp_control_plane_session_state{instance="10.10.40.61:9962", instance_name="par1", local_asn="65040", neighbor="10.10.40.2", neighbor_asn="65000"}'
         values: '1x25'
     alert_rule_test:
       # Tombée à 5 min : pas encore d'alerte à 8 min (for: 5m)…

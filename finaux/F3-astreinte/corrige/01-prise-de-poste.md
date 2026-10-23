@@ -56,7 +56,7 @@ Une astreinte qui n'a pas vérifié ses accès découvre ses problèmes au pire 
 
 - Tester le bris de glace « en écriture » (changer un mot de passe, créer un objet) : c'est une modification non tracée de la configuration ; RB-240 dit **lecture**.
 - Laisser traîner la copie de `admin.conf` dans `/tmp`.
-- Poser l'alerte d'essai sans `--end` : elle reste active (et réveille) jusqu'à son expiration par défaut.
+- Poser l'alerte d'essai sans `--end` : sa durée dépend alors d'un réglage global (`resolve_timeout`, 5 min) au lieu d'être choisie et consignée. (Le contrôle de santé ignore les alertes dont le nom commence par `Essai`.)
 - Envoyer l'alerte d'essai avec `severity=critical` au lieu de `gravite=critique` : elle passe par la route de compatibilité du chart, pas par celle de MédiSphère.
 - Écrire l'index à la main sans les runbooks des modules anciens (RB-001 à RB-085) : ce sont eux qui servent quand le socle tombe.
 

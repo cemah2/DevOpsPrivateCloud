@@ -7,9 +7,10 @@
 #   1. RÉSOLUTION — récurseur de dns02 : l'ancre DNSSEC positive de par1.medisphere.internal
 #      (dnssec.trustanchors de /etc/powerdns/recursor.yml, M06-E26) reçoit une empreinte fausse
 #      (dernier chiffre hexadécimal changé), puis pdns-recursor est redémarré. dns02 répond SERVFAIL à
-#      tout nom de par1 (et de apps.par1, signée sous par1) ; dns01 va bien. Les VMs interrogent dns01
-#      d'abord et ne voient presque rien ; CoreDNS relaie vers les deux récurseurs : environ une
-#      requête sur deux des pods échoue. Le fichier est sauvegardé (sauver) avant ;
+#      tout nom de par1 (et de apps.par1, signée sous par1) ; dns01 va bien. Les VMs (glibc) et CoreDNS
+#      (policy sequential, M15-E04) interrogent dns01 d'abord : presque rien de visible, sauf la sonde
+#      « dns » du témoin de mon01 (SOA de par1 sur chaque récurseur, SondeEnEchec) ; redondance perdue
+#      (panne latente). Le fichier est sauvegardé (sauver) avant ;
 #   2. ROUTAGE — sur la passerelle ACTIVE (porteuse de 10.10.40.1), une règle nftables insérée en tête
 #      de « inet filter input » jette le BGP (TCP 179) d'UN travailleur : la session tombe à
 #      l'expiration du temps de maintien (puis du redémarrage gracieux), les /32 que ce nœud était seul
@@ -93,6 +94,8 @@ sauver "$f"
 sed -E "/$motif/{s/0([\"']?[[:space:]]*)\$/1\\1/;t;s/[0-9A-Fa-f]([\"']?[[:space:]]*)\$/0\\1/}" "$f" > "$f.f3"
 cmp -s "$f" "$f.f3" && { rm -f "$f.f3"; exit 10; }
 cat "$f.f3" > "$f" && rm -f "$f.f3"
+# Empreinte du fichier injecté : l'annulation ne restaure que s'il n'a pas été réparé depuis.
+sha256sum "$f" | cut -d' ' -f1 > "${WB_DIR:?}/${WB_EX:?}.injecte"
 systemctl restart pdns-recursor || exit 1
 journal "ancre(s) DNSSEC de recursor.yml modifiée(s), pdns-recursor redémarré"
 EOF
@@ -202,18 +205,45 @@ verifier_S11() {
 
 annuler_S11() {
   local g
-  # Récurseur de dns02 (sans effet si rien n'a été sauvegardé).
+  # Récurseur de dns02 (sans effet si rien n'a été sauvegardé). Le fichier n'est remis que s'il est
+  # encore exactement dans l'état injecté : une réparation par le playbook n'est jamais défaite, et le
+  # récurseur n'est pas redémarré pour rien (son cache serait vidé).
   wb_exec "$_S11_HOTE_DNS02" >/dev/null 2>&1 <<'EOF' || wb_avert "dns02 injoignable : restaure /etc/powerdns/recursor.yml par le playbook DNS (dns01.yml --limit dns02)"
-if [ -f "$WB_DIR/$WB_EX.manifeste" ]; then
-  restaurer_fichiers
-  systemctl restart pdns-recursor
-  journal "annulation : recursor.yml restauré, pdns-recursor redémarré"
+f=/etc/powerdns/recursor.yml
+m="${WB_DIR:?}/${WB_EX:?}.manifeste"
+inj="${WB_DIR:?}/${WB_EX:?}.injecte"
+if [ -f "$m" ]; then
+  if [ -f "$inj" ] && [ "$(sha256sum "$f" 2>/dev/null | cut -d' ' -f1)" = "$(cat "$inj")" ]; then
+    restaurer_fichiers
+    systemctl restart pdns-recursor
+    journal "annulation : recursor.yml restauré, pdns-recursor redémarré"
+  else
+    # Déjà réparé : on jette seulement la sauvegarde.
+    while IFS="$(printf '\t')" read -r _src dst; do
+      if [ "$dst" != ABSENT ] && [ -n "$dst" ]; then rm -f -- "$dst"; fi
+    done < "$m"
+    rm -f -- "$m"
+    journal "annulation : recursor.yml déjà réparé, laissé tel quel"
+  fi
+  rm -f -- "$inj"
 fi
 EOF
-  # Passerelles : les deux (la VIP a pu basculer depuis l'injection).
+  # Passerelles : les deux (la VIP a pu basculer depuis l'injection). La règle n'est retirée que si le
+  # handle noté désigne ENCORE la règle injectée : après un rechargement par le rôle pare_feu (« flush
+  # ruleset »), les handles sont renumérotés et le même numéro peut désigner une règle légitime.
   for g in "${_S11_GW[@]}"; do
-    wb_exec "$g" >/dev/null 2>&1 <<'EOF' || wb_avert "$g injoignable : vérifie à la main la règle nftables (179) et la route de 10.10.41.10"
-nft_annuler
+    wb_exec "$g" NOEUD="$(f3fp_lire S11 noeud)" >/dev/null 2>&1 <<'EOF' || wb_avert "$g injoignable : vérifie à la main la règle nftables (179) et la route de 10.10.41.10"
+f="${WB_DIR:?}/${WB_EX:?}.nft-ajouts"
+if [ -f "$f" ]; then
+  while read -r fam tab ch h; do
+    if [ -n "$NOEUD" ] && nft -a list chain "$fam" "$tab" "$ch" 2>/dev/null | grep -E "# handle $h\$" |
+      grep -qF "ip saddr $NOEUD tcp dport 179 drop"; then
+      nft delete rule "$fam" "$tab" "$ch" handle "$h" 2>/dev/null || true
+      journal "annulation : règle $fam $tab $ch handle $h retirée"
+    fi
+  done < "$f"
+  rm -f -- "$f"
+fi
 f="$WB_DIR/$WB_EX.route"
 if [ -f "$f" ]; then
   r="$(cat "$f")"
@@ -234,7 +264,7 @@ EOF
 symptome_S11() {
   local l
   case "$WB_VAR" in
-    1) l="Julien : « en recette ET en prod, nos pods ont des \"Temporary failure in name resolution\" sur les noms en par1, à peu près une fois sur deux ; depuis adm01, dig répond très bien »." ;;
+    1) l="Nadia : « la supervision témoin de mon01 voit une sonde DNS en échec (l'alerte va tomber dans quelques minutes), et un collègue dit qu'un nom en par1 \"ne répondait pas\" tout à l'heure ; depuis mon poste, tout répond. Je ne voudrais pas qu'on découvre le problème le jour où l'autre serveur tombe. »" ;;
     2) l="La supervision témoin de mon01 signale des points d'entrée injoignables ; Nadia : « certaines adresses en 10.10.41.x ne répondent plus du tout depuis le bureau, d'autres oui » (adresses touchées selon mon01 : $(f3fp_lire S11 adresses))." ;;
     *) l="Nadia : « des cabinets et des collègues n'arrivent plus à ouvrir les pages *.apps : chez certains ça n'aboutit jamais, chez d'autres tout va bien ; deux postes côte à côte n'ont pas le même résultat »." ;;
   esac

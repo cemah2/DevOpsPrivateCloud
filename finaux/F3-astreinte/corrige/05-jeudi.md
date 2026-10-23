@@ -3,7 +3,7 @@
 > ⚠️ Corrigé : à n'ouvrir qu'après avoir cherché. Les heures des exemples sont celles d'une exécution type du lab (jeudi 2026-11-05) ; les tiennes viennent de ta main courante.
 
 **Validé hors du lab** : règles et tests `promtool` de [`reseau-bordure`](fichiers/S11/observabilite/regles/reseau-bordure.yaml) (Prometheus 3.5, `promtool test rules`) ; `shellcheck -x` et `bash -n` sur les scripts.
-**Non testé en conditions réelles** (à vérifier sur ton lab, retours bienvenus) : sorties exactes de `ip -j route` avec des groupes de prochains sauts (`nhid`) ; comportement de zebra (FRR 10.7) face à une route noyau plus prioritaire pour une /32 apprise en BGP ; délai réel de chute d'une session BGP filtrée avec le redémarrage gracieux de Cilium ; mise à jour partielle d'un rôle `kubernetes` d'OpenBao 2.7 (le script de panne renvoie tous les champs par prudence) ; nom et étiquettes de la métrique `cilium_bgp_control_plane_session_state` en Cilium 1.20.
+**Non testé en conditions réelles** (à vérifier sur ton lab, retours bienvenus) : sorties exactes de `ip -j route` avec des groupes de prochains sauts (`nhid`) ; comportement de zebra (FRR 10.7) face à une route noyau plus prioritaire pour une /32 apprise en BGP ; délai réel de chute d'une session BGP filtrée avec le redémarrage gracieux de Cilium ; mise à jour partielle d'un rôle `kubernetes` d'OpenBao 2.7 (le script de panne renvoie tous les champs par prudence) ; valeurs réelles des étiquettes de `cilium_bgp_control_plane_session_state` (nom et étiquettes `instance_name`, `local_asn`, `neighbor`, `neighbor_asn` relevés dans la documentation de Cilium 1.20).
 
 ---
 
@@ -41,7 +41,7 @@ admin@adm01:~$ ssh vault02 'sudo journalctl -u keepalived --since -3h | tail -n 
 
 Cause racine : keepalived arrêté sur le **nœud actif**. Par conception (M25-E24), seuls les nœuds actifs sont éligibles (`curl -f` échoue sur 429) : arrêter keepalived sur l'actif retire la VIP de tout le monde. Correctif par le code : rejouer `playbooks/coffre.yml --limit vault02` par le pipeline d'Ansible (le rôle `keepalived` du M07 garantit `state: started, enabled: true`) ; la VIP revient dans les secondes qui suivent (`ip -br addr` sur `vault02`). Si le pipeline lui-même dépend du coffre (jetons `id_tokens` + `bao`), il échoue tant que la VIP manque : c'est **le** cas de geste d'exception documenté — `sudo systemctl start keepalived` sur l'actif, consigné, puis pipeline rejoué pour prouver que le code converge (aucun changement attendu).
 
-⚠️ **Gravité.** La production passe par la même VIP : ses identifiants expireront à la fin de leur bail courant (heure d'émission dans l'audit d'OpenBao, ou `bao list sys/leases/lookup/db-mediagenda/creds/mediagenda-api-prod` puis `bao lease lookup`). C'est un **SEV1** latent : à relever dès que c'est compris, avec l'échéance dans le message d'état.
+⚠️ **Gravité.** La production passe par la même VIP : ses identifiants expireront à la fin de leur bail courant (heure d'émission dans l'audit d'OpenBao, ou `bao list sys/leases/lookup/db-mediagenda/creds/mediagenda-api-prod` puis `bao lease lookup`). Tant que la VIP manque, ta CLI `bao` (et ta connexion OIDC) passe par un nœud : `BAO_ADDR=https://vault02.par1.medisphere.internal:8200` (un nœud en attente transfère aussi les requêtes à l'actif). C'est un **SEV1** latent : à relever dès que c'est compris, avec l'échéance dans le message d'état.
 
 **Variante 2 — le rôle d'ESO a été « restreint ».** Le magasin est prêt (il s'authentifie et lit le KV), mais le générateur reçoit `permission denied` sur `db-mediagenda/creds/mediagenda-api-recette`.
 
@@ -55,7 +55,7 @@ admin@adm01:~/src/secrets$ tofu -chdir=tofu plan
       ~ token_policies = [ - "eso-mediagenda-recette-kv", + "eso-mediagenda-recette" ]
 ```
 
-Cause racine : modification directe de la configuration d'OpenBao, hors de `plateforme/secrets` (dérive). L'audit (Loki, locataire `audit`, `{service="openbao"} |= "auth/k8s-par1/role/eso-mediagenda-recette"`) donne l'heure et l'identité. Correctif : relancer le pipeline de `main` de `plateforme/secrets` (le `tofu apply` remet `token_policies`) ; supprimer `eso-mediagenda-recette-kv` **par MR** si tu décides de la garder sous gestion, sinon `bao policy delete` consigné (une politique créée hors du code n'a pas de ressource OpenTofu à retirer). Si la restriction répond à un vrai besoin (moindre privilège), elle se fait en code : séparer `chemins_creds` du KV dans le gabarit `eso-espace.hcl.tftpl`, avec revue.
+Le générateur `VaultDynamicSecret` ouvre une session neuve (connexion `k8s-par1`) à chaque appel, sans le cache de jetons d'ESO (réservé aux magasins) : il reçoit les nouvelles politiques du rôle tout de suite, et la réparation prend effet dès le rafraîchissement suivant. Cause racine : modification directe de la configuration d'OpenBao, hors de `plateforme/secrets` (dérive). L'audit (Loki, locataire `audit`, `{service="openbao"} |= "auth/k8s-par1/role/eso-mediagenda-recette"`) donne l'heure et l'identité. Correctif : relancer le pipeline de `main` de `plateforme/secrets` (le `tofu apply` remet `token_policies`) ; supprimer `eso-mediagenda-recette-kv` **par MR** si tu décides de la garder sous gestion, sinon `bao policy delete` consigné (une politique créée hors du code n'a pas de ressource OpenTofu à retirer). Si la restriction répond à un vrai besoin (moindre privilège), elle se fait en code : séparer `chemins_creds` du KV dans le gabarit `eso-espace.hcl.tftpl`, avec revue.
 
 **Variante 3 — deux causes : client épinglé sur un nœud, et ce nœud arrêté.** La VIP répond ; un nœud répond `000` ; le magasin et les générateurs de la recette visent `https://vault0N.par1.medisphere.internal:8200`.
 
@@ -157,7 +157,7 @@ par1.medisphere.internal. 12345 13 2 9f…a1                     # dernier chiff
 admin@adm01:~$ ssh dns02 'sudo journalctl -u pdns-recursor --since -1h | grep -i bogus | tail -n 3'
 ```
 
-Cause : l'ancre de confiance de `par1.medisphere.internal` sur `dns02` ne correspond plus à la clé de la zone : toute réponse de `par1` (et de `apps.par1`, signée sous elle) est « bogus », donc `SERVFAIL`. Les VMs interrogent `dns01` en premier et ne voient presque rien ; CoreDNS répartit sur les deux récurseurs et ne réessaie pas un `SERVFAIL` : les **pods** échouent une fois sur deux. Correctif par le code : `playbooks/dns01.yml --limit dns02 --tags powerdns_recursor` par le pipeline Ansible ; le gabarit réécrit `recursor.yml` depuis `powerdns_recursor_ancres`, le gestionnaire redémarre le récurseur, et les tâches `ancres.yml` vérifient le drapeau `ad`. Avant : `diff` du fichier des deux récurseurs pour prouver la dérive.
+Cause : l'ancre de confiance de `par1.medisphere.internal` sur `dns02` ne correspond plus à la clé de la zone : toute réponse de `par1` (et de `apps.par1`, signée sous elle) est « bogus », donc `SERVFAIL`. Presque personne ne le voit : les VMs interrogent `dns01` en premier (et la glibc passe au serveur suivant sur un `SERVFAIL`), CoreDNS aussi (`policy sequential`, M15-E04 : `dns02` ne sert que si `dns01` est déclaré en panne). Seule la sonde `dns` du témoin de `mon01`, qui interroge **chaque** récurseur (M21-E11), passe au rouge (`SondeEnEchec` sur 10.10.20.16). C'est une panne **latente** : la redondance est perdue, et le jour où `dns01` tombe ou redémarre, tout `par1` tombe pour tout le monde. La gravité vient de là, pas du symptôme du moment. Correctif par le code : `playbooks/dns01.yml --limit dns02 --tags powerdns_recursor` par le pipeline Ansible ; le gabarit réécrit `recursor.yml` depuis `powerdns_recursor_ancres`, le gestionnaire redémarre le récurseur, et les tâches `ancres.yml` vérifient le drapeau `ad`. Avant : `diff` du fichier des deux récurseurs pour prouver la dérive.
 
 **Variante 2 — une session BGP de la passerelle maître ne monte plus.**
 
@@ -168,7 +168,7 @@ admin@adm01:~$ ssh gw01 'sudo vtysh -c "show bgp summary"' | grep 10.10.40.6
 *10.10.40.62  4 65040 …  00:04:51   Active          # ne monte plus
 *10.10.40.63  4 65040 …  05:12:33   4 (Policy)
 admin@adm01:~$ ssh gw02 'sudo vtysh -c "show bgp summary"' | grep 10.10.40.62   # établie côté gw02
-admin@adm01:~$ ssh gw01 'ip -4 route show 10.10.41.0/24 root 10.10.41.0/24' | grep -E 'blackhole|62'
+admin@adm01:~$ ssh gw01 'ip -4 route show root 10.10.41.0/24' | grep -E 'blackhole|62'
 admin@adm01:~$ ssh gw01 'sudo nft list chain inet filter input' | head -n 8
 		ip saddr 10.10.40.62 tcp dport 179 drop          # en tête de chaîne, absent du fichier généré
 admin@adm01:~$ ssh gw01 'sudo grep -n "179" /etc/nftables.conf'   # le fichier généré par le rôle pare_feu : pas de « drop »
@@ -194,7 +194,7 @@ Le hachage ECMP (par défaut sur les adresses source et destination) envoie touj
 
 **Vérification commune** : les deux récurseurs, les deux passerelles, trois sources (`adm01`, `mon01`, un pod de `wb-diagnostic`), puis `lab/bin/check F3 11`.
 
-**Prévention.** Sondes DNS **par récurseur** sur le témoin ([extrait](fichiers/S11/ansible/sondes-dns.extrait.yml)) ; alerte sur l'état des sessions BGP de Cilium ([règle](fichiers/S11/observabilite/regles/reseau-bordure.yaml) et [tests](fichiers/S11/observabilite/tests/reseau-bordure.test.yaml)) ; contrôle de dérive des passerelles ; runbook [RB-337](fichiers/S11/medisphere/docs/exploitation/runbooks/RB-337-noms-intermittents.md).
+**Prévention.** Sondes DNS **par récurseur** sur le témoin : la sonde `dns` du M21-E11 (SOA de `par1`) existe déjà et c'est elle qui voit la variante 1 ; complément par nom attendu et alerte dédiée renvoyant à RB-337 ([extrait](fichiers/S11/ansible/sondes-dns.extrait.yml)) ; alerte sur l'état des sessions BGP de Cilium ([règle](fichiers/S11/observabilite/regles/reseau-bordure.yaml) et [tests](fichiers/S11/observabilite/tests/reseau-bordure.test.yaml)) ; contrôle de dérive des passerelles ; runbook [RB-337](fichiers/S11/medisphere/docs/exploitation/runbooks/RB-337-noms-intermittents.md).
 
 #### Messages d'état types
 

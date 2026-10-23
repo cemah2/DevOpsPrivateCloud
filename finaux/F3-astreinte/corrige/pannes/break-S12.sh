@@ -24,8 +24,8 @@
 # quarantaine : c'est la preuve. Rien ne touche Falco, falcosidekick, Loki ni le compartiment preuves.
 # État local (lisible par le check) : ~/.local/state/workbook/F3-S12/{espace,pod,conteneur,cibles}.
 # Annulation : arrêt de la boucle (fichier d'arrêt ou signal au seul processus marqué), retrait du
-# fichier de /tmp ; un pod suspect sorti de son contrôleur ET en quarantaine est supprimé (fin de
-# l'incident, après ta collecte) ; sinon il est laissé tel quel.
+# fichier de /tmp ; le pod suspect n'est JAMAIS supprimé (l'éradication est ton geste, après la
+# collecte et l'accord de la RSSI).
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh disable=SC1091
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
@@ -173,9 +173,11 @@ for p in [x for x in os.listdir('/proc') if x.isdigit()]:
     # collecte : c'est toi qui lances --annuler). Sinon il est laissé tel quel.
     proprio="$(wb_kubectl -n "$ns" get pod "$pod" -o jsonpath='{.metadata.ownerReferences[0].kind}' 2>/dev/null || true)"
     quarantaine="$(wb_kubectl -n "$ns" get pod "$pod" -o jsonpath='{.metadata.labels.medisphere\.internal/quarantaine}' 2>/dev/null || true)"
+    # Jamais supprimé par l'annulation : la suppression est l'éradication, décidée avec la RSSI après le
+    # dépôt des preuves (l'annulation ne sait pas si la collecte est faite).
     if [[ -z "$proprio" && "$quarantaine" == oui ]]; then
-      wb_kubectl -n "$ns" delete pod "$pod" --wait=false >/dev/null 2>&1 || wb_avert "pod $ns/$pod non supprimé"
-      f3fp_journal S12 "annulation : pod suspect $ns/$pod (orphelin, en quarantaine) supprimé"
+      wb_avert "pod suspect $ns/$pod laissé en quarantaine : supprime-le toi-même APRÈS le dépôt des preuves et l'accord de Sophie (RB-262)"
+      f3fp_journal S12 "annulation : pod suspect $ns/$pod (orphelin, en quarantaine) laissé en place"
     elif [[ "$c" == diag ]]; then
       wb_avert "le conteneur éphémère « diag » reste décrit dans $ns/$pod (arrêté) jusqu'au remplacement du pod"
     fi

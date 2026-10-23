@@ -3,8 +3,8 @@
 # Pendant INC-5911, une session tombée a rendu injoignables les adresses de service en
 # externalTrafficPolicy: Local dont tous les pods étaient sur ce nœud, sans qu'aucune alerte ne le dise.
 # Métrique de l'agent Cilium (plan de contrôle BGP) : cilium_bgp_control_plane_session_state, 1 = établie,
-# 0 = autre état ; étiquettes vrouter (AS local) et neighbor (adresse du pair). ⚠️ À vérifier sur ta
-# version de Cilium (page « Metrics » de la documentation 1.20) : nom et étiquettes exacts.
+# 0 = autre état ; étiquettes instance_name (instance BGP du nœud), local_asn, neighbor (adresse du pair)
+# et neighbor_asn (page « Metrics » de la documentation de Cilium 1.20, section BGP Control Plane).
 # « instance » identifie le nœud (agent en réseau d'hôte, port 9962).
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule

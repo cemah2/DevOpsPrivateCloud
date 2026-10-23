@@ -119,10 +119,12 @@ _f3s_p_ceph() {
 }
 
 # _f3s_p_alertes — aucune alerte critique active (ni en silence, ni inhibée) dans l'Alertmanager du cluster.
+# Les alertes d'essai posées à la main (alertname « Essai… », ex. EssaiPriseDePoste de S01) sont ignorées :
+# elles expirent seules (--end) et ne disent rien de l'état du lab.
 _f3s_p_alertes() {
   local j r
   j="$(am_api "alerts?active=true&silenced=false&inhibited=false" 2>/dev/null)" || { echo "Alertmanager du cluster injoignable"; return 1; }
-  r="$(jq -r '[.[] | select(.labels.alertname != "Watchdog")
+  r="$(jq -r '[.[] | select(.labels.alertname != "Watchdog") | select((.labels.alertname // "") | test("^Essai") | not)
       | select((.labels.gravite // "") == "critique" or (.labels.severity // "") == "critical")
       | "\(.labels.alertname)\(if .labels.namespace then " (" + .labels.namespace + ")" else "" end)"] | unique | join(", ")' <<<"$j" 2>/dev/null)" || r="lecture impossible"
   [[ -z "$r" ]] && return 0

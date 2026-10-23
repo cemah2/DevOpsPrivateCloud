@@ -63,6 +63,12 @@ remplir=$((libre - garder))
 # Fichier NEUF (aucune sauvegarde nécessaire : l'annulation le supprime) ; refus s'il existe déjà.
 [ -e "$FICHIER" ] && exit 10
 mkdir -p "$(dirname "$FICHIER")"
+# Le fichier doit être sur le MÊME système de fichiers que /var/lib/kubelet (sinon on remplirait un
+# autre disque sans provoquer la pression attendue).
+if [ "$(stat -c %d /var/lib/kubelet)" != "$(stat -c %d "$(dirname "$FICHIER")")" ]; then
+  rmdir "$(dirname "$FICHIER")" 2>/dev/null || true
+  exit 10
+fi
 fallocate -l "$remplir" "$FICHIER" || { rm -f "$FICHIER"; exit 1; }
 journal "fichier $FICHIER de $remplir octets (libre avant : $libre / $taille)"
 EOF

@@ -90,6 +90,9 @@ printf '%s\n' "$cfg" | grep -E '^(scsi|virtio|sata)[0-9]+: ' | grep -v 'media=cd
   case "$val" in *iops_*|*mbps_*) continue ;; esac
   neuf="$val,iops_rd=8,iops_wr=8,mbps_rd=2,mbps_wr=2"
   qm set "$VMID" "--$cle" "$neuf" >/dev/null 2>&1 || continue
+  # Proxmox réécrit la définition dans son ordre canonique : on garde la forme RELUE, pour que
+  # l'annulation la reconnaisse (comparaison exacte).
+  neuf="$(qm config "$VMID" | sed -n "s/^$cle: //p")"
   printf '%s\t%s\t%s\n' "$cle" "$val" "$neuf" >> "$WB_DIR/F3-S08.disques"
   journal "VM $VMID : $cle bridé (iops 8, 2 Mo/s)"
 done

@@ -327,9 +327,13 @@ _f3p_retablir() {
     rm -f "$f"
   done <"$d/fichiers"
   if [[ "$(jq 'length' <<<"$actions")" -gt 0 ]]; then
-    _f3p_gl_pousser "$projet" "Annulation de l'injection F3-$ex (lab/bin/break F3 $((10#${ex#S})) --annuler)" \
-      "Lab workbook" "workbook@medisphere.internal" "$actions" ||
-      wb_avert "commit inverse impossible sur $projet : remets toi-même le contenu d'origine (copies : $d)"
+    if ! _f3p_gl_pousser "$projet" "Annulation de l'injection F3-$ex (lab/bin/break F3 $((10#${ex#S})) --annuler)" \
+      "Lab workbook" "workbook@medisphere.internal" "$actions"; then
+      # Les copies d'origine sont GARDÉES (elles sont la seule trace du contenu à remettre).
+      wb_avert "commit inverse impossible sur $projet : remets toi-même le contenu d'origine (copies : $d/orig-*)"
+      _f3p_journal "$ex" "annulation des commits [$cle] impossible : copies gardées dans $d"
+      return 0
+    fi
   fi
   rm -rf -- "$d"
   _f3p_journal "$ex" "annulation des commits [$cle]"

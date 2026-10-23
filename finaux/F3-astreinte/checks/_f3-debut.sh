@@ -88,7 +88,7 @@ _f3d_silences_larges() {
      | select(all(.matchers[];
          (($l[.name] // "") as $v | .value as $val
           | (if .isRegex then ($v | test("^(?:" + $val + ")$")) else ($v == $val) end) as $m
-          | if (.isEqual // true) then $m else ($m | not) end)))]
+          | if .isEqual == false then ($m | not) else $m end)))]
     | length' 2>/dev/null || echo "?"
 }
 
@@ -206,5 +206,6 @@ _f3d_ceph_quota_ok() {
 _f3d_vm_sans_limite_es() {
   local c
   c="$(remote "$WB_PVE_HOST" "qm config $1" 2>/dev/null </dev/null)" || return 1
-  [[ -n "$c" ]] && ! grep -E '^(scsi|virtio|sata)[0-9]+: ' <<<"$c" | grep -Eq '(iops|mbps)_(rd|wr)='
+  # Options de limite de Proxmox : iops, iops_rd, iops_wr, mbps, mbps_rd, mbps_wr (et leurs *_max).
+  [[ -n "$c" ]] && ! grep -E '^(scsi|virtio|sata|ide)[0-9]+: ' <<<"$c" | grep -Eq '[:,](iops|mbps)(_rd|_wr)?(_max)?='
 }

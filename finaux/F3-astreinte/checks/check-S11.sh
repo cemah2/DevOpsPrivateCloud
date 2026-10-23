@@ -52,7 +52,7 @@ _s11_bgp="$(_f3f_k get ciliumbgpnodeconfigs.cilium.io -o json)"
 check_cmd "Cilium : toutes les sessions BGP des nœuds sont établies (deux passerelles par nœud)" \
   _f3f_json "$_s11_bgp" '(.items | length) >= 1 and all(.items[];
     ([.status.bgpInstances[]?.peers[]?] | length) >= 2
-    and all(.status.bgpInstances[]?.peers[]?; (.peeringState // "") == "established"))'
+    and all(.status.bgpInstances[]?.peers[]?; (.peeringState // "" | ascii_downcase) == "established"))'
 
 # --- Joignabilité depuis adm01 ----------------------------------------------------------------------------
 read -r -a _s11_cibles <<<"${WB_F3_S11_CIBLES:-10.10.41.10:443 10.10.41.60:9090 10.10.41.61:9093 10.10.41.62:3100}"

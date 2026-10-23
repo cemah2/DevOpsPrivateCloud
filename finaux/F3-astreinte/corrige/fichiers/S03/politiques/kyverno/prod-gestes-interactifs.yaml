@@ -3,7 +3,8 @@
 # plateforme/k8s/espaces/, M26-E16), plus de geste interactif sur les pods :
 #   - pods/exec et pods/attach (sessions lancées « à la main » dans un pod de base ou d'application) ;
 #   - pods/resize (redimensionnement en place hors gabarit).
-# Exceptions : le bris de glace (admin.conf, groupe system:masters, RB-240 : usage tracé et alerté),
+# Exceptions : le bris de glace (admin.conf : utilisateur kubernetes-admin, groupe kubeadm:cluster-admins
+# depuis Kubernetes 1.29 ; super-admin.conf : system:masters ; RB-240 : usage tracé et alerté),
 # l'updater du VPA (redimensionnement automatique, s'il passe un jour en InPlaceOrRecreate en prod),
 # l'opérateur CloudNativePG (il exécute des commandes dans ses instances).
 # Les diagnostics en lecture restent possibles : kubectl cnpg psql passe par exec → en production,
@@ -37,7 +38,8 @@ spec:
         medisphere.internal/environnement: prod
   validations:
     - expression: >-
-        'system:masters' in request.userInfo.groups
+        'kubeadm:cluster-admins' in request.userInfo.groups
+        || 'system:masters' in request.userInfo.groups
         || request.userInfo.username == 'system:serviceaccount:vpa:vpa-updater'
         || request.userInfo.username.startsWith('system:serviceaccount:cnpg-system:')
       message: >-

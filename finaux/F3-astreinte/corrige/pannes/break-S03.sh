@@ -20,9 +20,13 @@
 #      consultations de créneaux vont à PostgreSQL. Annulation : maxmemory d'origine si la valeur
 #      injectée est toujours en vigueur. Compte d'administration de Valkey (Secret valkey-admin, M27).
 #   3. Ressources CPU de l'API réduites EN PLACE (sous-ressource resize, Kubernetes ≥ 1.35) sur chaque
-#      pod de l'API de prod : requests et limits CPU à 10m (« recommandation VPA appliquée à la main »).
-#      Le gabarit (Git, Deployment, Rollout) n'est pas touché : un pod recréé repart avec ses vraies
-#      ressources. Annulation : ressources d'origine remises par resize sur les pods encore réduits.
+#      pod de l'API de prod : requests CPU à 10m et limite CPU de 10m AJOUTÉE (le gabarit du M28 n'a
+#      pas de limite CPU ; la classe QoS reste Burstable car la mémoire a requête ≠ limite) —
+#      « recommandation VPA appliquée à la main ». Le gabarit (Git, Deployment, Rollout) n'est pas
+#      touché : un pod recréé repart avec ses vraies ressources. Une limite posée en place ne peut plus
+#      être retirée en place (limite documentée de Kubernetes) : l'annulation SUPPRIME, un à la fois,
+#      les pods encore réduits (recréés depuis le gabarit) en attendant chaque fois que le nombre de
+#      pods prêts soit revenu.
 #
 # Constat (toutes variantes) : la médiane de requêtes de créneaux « cache manqué » dépasse 1,5 s et le
 # triple de la référence (variantes 1 et 3) ; variante 2 : la valeur injectée est en vigueur et des clés
@@ -153,10 +157,12 @@ _s03_v3_poser() {
     [[ -n "$p" ]] || continue
     c="$(_s03_conteneur_api "$p")"
     res="$(wb_kubectl -n "$_F3P_PROD" get pod "$p" -o json | jq -c --arg c "$c" '[.spec.containers[] | select(.name == $c)][0].resources // {}')"
-    # Seulement si le conteneur déclare déjà une requête et une limite CPU (la classe QoS ne change pas).
-    jq -e '.requests.cpu and .limits.cpu' <<<"$res" >/dev/null 2>&1 || continue
+    # Seulement si le conteneur déclare une requête CPU (Burstable) ; l'API refuse le resize s'il
+    # changeait la classe QoS (ex. mémoire requête = limite) : le pod est alors laissé tel quel.
+    jq -e '.requests.cpu' <<<"$res" >/dev/null 2>&1 || continue
     printf '%s\t%s\t%s\n' "$p" "$c" "$res" >>"$d/pods"
-    wb_kubectl -n "$_F3P_PROD" patch pod "$p" --subresource resize --type merge -p \
+    # Patch stratégique (fusion des conteneurs par nom), comme la documentation de Kubernetes.
+    wb_kubectl -n "$_F3P_PROD" patch pod "$p" --subresource resize -p \
       "{\"spec\":{\"containers\":[{\"name\":\"$c\",\"resources\":{\"requests\":{\"cpu\":\"$_S03_CPU\"},\"limits\":{\"cpu\":\"$_S03_CPU\"}}}]}}" \
       >/dev/null 2>&1 || continue
     n=$((n + 1))
@@ -164,17 +170,30 @@ _s03_v3_poser() {
   ((n > 0)) || return 10
   _f3p_journal S03 "CPU de $n pod(s) de l'API réduit en place à $_S03_CPU"
 }
+# _s03_api_pretes N — au moins N pods de l'API de prod sont prêts.
+_s03_api_pretes() {
+  local n
+  n="$(wb_kubectl -n "$_F3P_PROD" get pods -l "$_F3P_API_SEL" -o json 2>/dev/null </dev/null | jq '[.items[]
+    | select(.metadata.deletionTimestamp == null)
+    | select(any(.status.conditions[]?; .type == "Ready" and .status == "True"))] | length' 2>/dev/null)" || n=0
+  ((${n:-0} >= $1))
+}
 _s03_v3_defaire() {
-  local d p c res cur
+  local d p c res cur avant
   d="$(_f3p_etat S03)/v3"
   [[ -f "$d/pods" ]] || return 0
   while IFS=$'\t' read -r p c res; do
-    cur="$(wb_kubectl -n "$_F3P_PROD" get pod "$p" -o json 2>/dev/null | jq -r --arg c "$c" '[.spec.containers[] | select(.name == $c)][0].resources.limits.cpu // empty')" || cur=""
+    cur="$(wb_kubectl -n "$_F3P_PROD" get pod "$p" -o json 2>/dev/null </dev/null | jq -r --arg c "$c" '[.spec.containers[] | select(.name == $c)][0].resources.limits.cpu // empty')" || cur=""
+    # Pod disparu ou ressources déjà changées (réparation) : rien à faire.
     [[ "$cur" == "$_S03_CPU" ]] || continue
-    wb_kubectl -n "$_F3P_PROD" patch pod "$p" --subresource resize --type merge -p \
-      "$(jq -c --arg c "$c" '{spec: {containers: [{name: $c, resources: {requests: {cpu: .requests.cpu}, limits: {cpu: .limits.cpu}}}]}}' <<<"$res")" \
-      >/dev/null 2>&1 || wb_avert "ressources de $p non rétablies : supprime le pod (il sera recréé depuis le gabarit)"
-    _f3p_journal S03 "ressources CPU de $p rétablies"
+    avant="$(wb_kubectl -n "$_F3P_PROD" get pods -l "$_F3P_API_SEL" -o json 2>/dev/null </dev/null | jq '[.items[]
+      | select(.metadata.deletionTimestamp == null)
+      | select(any(.status.conditions[]?; .type == "Ready" and .status == "True"))] | length' 2>/dev/null)" || avant=1
+    wb_kubectl -n "$_F3P_PROD" delete pod "$p" --wait=true --timeout=120s </dev/null >/dev/null 2>&1 ||
+      wb_avert "pod $p ($_F3P_PROD) non supprimé : supprime-le toi-même (il sera recréé depuis le gabarit)"
+    _f3p_attendre 240 _s03_api_pretes "${avant:-1}" </dev/null ||
+      wb_avert "après la suppression de $p, l'API de prod n'a pas retrouvé $avant pod(s) prêt(s) : vérifie le Rollout"
+    _f3p_journal S03 "pod $p (CPU réduit) recréé depuis le gabarit"
   done <"$d/pods"
   rm -rf -- "$d"
 }

@@ -106,7 +106,7 @@ Sur les nœuds du coffre, la VIP est l'affaire de keepalived et d'un script de s
 
 <details><summary>Indice 2</summary>
 
-Sur la passerelle maître, `ip route get <ADRESSE>` dit par où **ce** paquet partirait, `ip -4 route show 10.10.41.0/24 root 10.10.41.0/24` montre toutes les routes de la plage (protocole, métrique, prochains sauts), `vtysh -c 'show bgp summary'` l'état de chaque voisin. Compare avec `gw02` : la panne ne vit peut-être que sur l'une des deux.
+Sur la passerelle maître, `ip route get <ADRESSE>` dit par où **ce** paquet partirait, `ip -4 route show root 10.10.41.0/24` montre toutes les routes de la plage (protocole, métrique, prochains sauts), `vtysh -c 'show bgp summary'` l'état de chaque voisin. Compare avec `gw02` : la panne ne vit peut-être que sur l'une des deux.
 </details>
 
 <details><summary>Indice 3</summary>
