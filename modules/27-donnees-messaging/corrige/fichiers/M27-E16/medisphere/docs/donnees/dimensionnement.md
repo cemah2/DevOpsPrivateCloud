@@ -72,5 +72,3 @@ Version de PgBouncer servie (`kubectl -n mediagenda-prod exec deploy/mediagenda-
 ## Limites de la mesure
 
 Un seul banc, une seule fois, sur un Ceph **partagé** avec le reste du lab (variance d'un jour à l'autre : refaire 3 fois avant de comparer finement) ; perf-test ne fait aucun travail par message ; le TPC-B de `pgbench` n'est pas la charge de MédiAgenda (plus de lectures, transactions plus courtes) ; réseau du lab sans contention. Les ordres de grandeur sont solides ; les pourcentages, non.
-</content>
-</invoke>

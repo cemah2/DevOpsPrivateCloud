@@ -26,7 +26,7 @@ Prérequis : palier 1 terminé (`lab/bin/check 27 02` à `05` verts). Rappels : 
 |---|---|
 | Table | `rendez_vous` (`V1__init.sql`, index unique de `V2__index.sql`) |
 | Colonnes à ajouter | `canal_rappel` (`sms`, `mail` ou `aucun`, jamais nul), `contact_rappel` (texte ≤ 254, nul si et seulement si le canal vaut `aucun`) |
-| Migrations | **`V3__`** (*expand*) livrée avec la version de l'API qui gère le rappel ; **`V4__`** (*contract*) livrée **plus tard**, quand plus aucune ancienne version ne tourne. Numéros ≥ `V90__` réservés aux essais des pannes : n'y touche pas |
+| Migrations | **`V3__`** (*expand*) livrée avec la version de l'API qui gère le rappel ; **`V4__`** (*contract*) livrée **plus tard**, quand plus aucune ancienne version ne tourne. |
 | Code de l'API | champ facultatif `rappel` (`{canal, contact}`, défaut `{"canal": "aucun"}`) dans `POST /api/v1/rendez-vous`, écrit explicitement en base. Le sujet de l'exercice est la migration : tu peux écrire le code ou appliquer le correctif du corrigé (`corrige/fichiers/M27-E06/mediagenda-api/rappel.patch`) — mais lis-le |
 | Répétition | grappe jetable `schema-essai` (une instance) dans `wb-essais` |
 
@@ -121,7 +121,7 @@ Pour l'essai N−1 : l'image de l'API publiée contient le code **et** ses dépe
 *B. Le component*
 
 4. Génère les mots de passe dans OpenBao (`kv/mediagenda/recette/valkey`, puis prod et dev), sans historique de shell.
-5. Écris `components/valkey/` : ConfigMap de configuration, ExternalSecrets (le fichier ACL est construit par le **modèle** de l'ExternalSecret, avec des empreintes SHA-256 et non des mots de passe en clair), StatefulSet (contexte `restricted`, racine en lecture seule, ressources, sondes qui **authentifient** et **vérifient** la réponse, exportateur), Service, `NetworkPolicy` (entrée 6379 depuis l'API seulement), PodMonitor de l'exportateur (sélecteur de supervision), annotation de Reloader pour les comptes. Retire Valkey de `dependances`. Écris le component `racine-medisphere` et, par un correctif du component `valkey`, fais lire l'URL de l'API dans le Secret `mediagenda-valkey`.
+5. Écris `components/valkey/` : ConfigMap de configuration, ExternalSecrets (le fichier ACL est construit par le **modèle** de l'ExternalSecret, avec des empreintes SHA-256 et non des mots de passe en clair), StatefulSet (contexte `restricted`, racine en lecture seule, ressources, sondes qui **authentifient** et **vérifient** la réponse, exportateur), Service, `NetworkPolicy` (entrée 6379 depuis l'API seulement ; la collecte de l'exportateur sur 9121 passe par la politique de cluster `collecte-prometheus` de `plateforme/k8s` : ajoute-y le port), PodMonitor de l'exportateur (sélecteur de supervision), annotation de Reloader pour les comptes. Retire Valkey de `dependances`. Écris le component `racine-medisphere` et, par un correctif du component `valkey`, fais lire l'URL de l'API dans le Secret `mediagenda-valkey`.
 6. Dans chaque overlay : le `Certificate` `valkey-tls` (noms de l'espace) et ce qu'il faut à l'exportateur pour vérifier le nom du serveur en joignant `127.0.0.1` (il n'a pas d'option « nom attendu »). En prod : images par condensé (Kyverno), les deux.
 7. Vérifie le rendu : `kubectl kustomize overlays/recette`, puis `kubectl apply --dry-run=server` dans l'espace (Pod Security, Kyverno).
 

@@ -12,9 +12,11 @@
 #      (valeurs/chaos-mesh/values.yaml : chaosDaemon.socketPath vers un socket inexistant) : les
 #      chaos-daemon ne joignent plus containerd ; l'expérience, supprimée, reste bloquée sur son
 #      finaliseur et le netem reste dans les pods ;
-#   3. NetworkChaos « diagnostic-reseau » (48 h) créée DANS mediagenda-recette (hors de
-#      chaos-experiences), et une copie homonyme EN PAUSE dans chaos-experiences : Lucas croit l'avoir
-#      mise en pause, il a mis en pause la mauvaise.
+#   3. NetworkChaos « diagnostic-reseau » (48 h, chaos-experiences) que Lucas croit en pause : il a posé
+#      l'annotation « chaos-mesh.org/pause: "true" » (le préfixe de l'annotation des ESPACES,
+#      chaos-mesh.org/inject) au lieu de « experiment.chaos-mesh.org/pause » : le contrôleur l'ignore.
+#      (Une expérience hors de chaos-experiences est impossible : la ValidatingAdmissionPolicy
+#      medisphere-chaos-espaces de M29-E09 la refuse, administrateurs compris.)
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
@@ -25,7 +27,8 @@ _E20_GITOPS="${WB_M29_PROJET_GITOPS:-plateforme/gitops}"
 _E20_VALEURS="${WB_M29_FICHIER_VALEURS_CHAOS:-valeurs/chaos-mesh/values.yaml}"
 _E20_SOCKET_FAUX=/run/containerd/containerd-ancien.sock
 
-# _e20_netem NOM DURÉE ESPACE [pause] — manifeste d'une NetworkChaos de latence sur l'API de recette.
+# _e20_netem NOM DURÉE ESPACE [pause|fausse-pause] — manifeste d'une NetworkChaos de latence sur l'API
+# de recette ; « fausse-pause » pose une annotation de pause à la mauvaise clé (variante 3).
 _e20_netem() {
   cat <<EOF
 apiVersion: chaos-mesh.org/v1alpha1
@@ -38,6 +41,7 @@ metadata:
   annotations:
     medisphere.internal/hypothese: "Mesurer la latence ressentie par Julien (Lucas)"
 $( [[ "${4:-}" == pause ]] && printf '    experiment.chaos-mesh.org/pause: "true"\n' )
+$( [[ "${4:-}" == fausse-pause ]] && printf '    chaos-mesh.org/pause: "true"\n' )
 spec:
   action: delay
   mode: all
@@ -163,10 +167,8 @@ Suite à la mise à jour de containerd, chemin repris de la doc. -- Lucas" || re
       wb_kubectl -n "$_M29_CHAOS_NS" get networkchaos diagnostic-latence >/dev/null 2>&1 || return 10
       ;;
     3)
-      _e20_netem diagnostic-reseau 48h "$_M29_RECETTE" | wb_kubectl apply -f - >/dev/null || return 1
-      _e20_netem diagnostic-reseau 48h "$_M29_CHAOS_NS" pause | wb_kubectl apply -f - >/dev/null || return 1
-      m29_poser E20 objets "$_M29_RECETTE networkchaos diagnostic-reseau
-$_M29_CHAOS_NS networkchaos diagnostic-reseau"
+      _e20_netem diagnostic-reseau 48h "$_M29_CHAOS_NS" fausse-pause | wb_kubectl apply -f - >/dev/null || return 1
+      m29_poser E20 objets "$_M29_CHAOS_NS networkchaos diagnostic-reseau"
       m29_attendre 120 _e20_un_netem || return 10
       ;;
   esac
@@ -237,8 +239,8 @@ symptome_E20() {
          "Je n'ose plus rien toucher." ;;
     *) wb_symptome "Ticket INC-5620 — De : Lucas Martin" \
          "J'ai mis en pause mon expérience « diagnostic-reseau » dans chaos-experiences hier soir," \
-         "elle est bien marquée en pause, mais Julien dit que la recette est toujours lente. Je ne" \
-         "comprends pas, la pause est censée retirer la latence." ;;
+         "l'annotation de pause est bien sur l'objet (kubectl describe), mais Julien dit que la" \
+         "recette est toujours lente. Je ne comprends pas, la pause est censée retirer la latence." ;;
   esac
   printf '  %s\n\n' "Temps cible : 45 min. Contrôle : lab/bin/check 29 20"
 }

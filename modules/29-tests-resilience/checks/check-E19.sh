@@ -12,11 +12,21 @@ source "$(dirname "${BASH_SOURCE[0]}")/_m29-expert.sh"
 title "M29-E19 — Le plan dangereux est de nouveau refusé"
 require_cmd jq curl yq conftest opa
 
-check_cmd "plan de référence refusé par rego/tofu (main) avec les arguments de conftest de la CI" _m29x_plan_refuse
+check_cmd "plan de référence refusé par rego/tofu (main) avec les arguments du job de plan (espaces, données, contexte ${WB_M29_E19_ETAT:-socle})" _m29x_plan_refuse
 check_cmd "tous les paquets des règles de rego/tofu sont dans les espaces évalués par la CI" _m29x_paquets_evalues
-_m29_e19_opa() { local d; d="$(_m29x_rapatrier_rego)" && opa test "$d/rego" >/dev/null 2>&1; }
-check_cmd "opa test vert sur rego/ (main)" _m29_e19_opa
-check_cmd "plateforme/infra : aucun job de validation surchargé allow_failure: true" _m29x_sans_allow_failure "$_m29x_infra"
+# Racines explicites, comme le composant validation : « opa test rego » chargerait aussi les plans
+# d'exemple JSON de rego/exemples/ comme des données (conflit de fusion).
+_m29_e19_opa() {
+  local d
+  local -a r
+  d="$(_m29x_rapatrier_rego)" || return 1
+  r=("$d/rego/tofu")
+  [[ -d "$d/rego/donnees" ]] && r+=("$d/rego/donnees")
+  opa test "${r[@]}" >/dev/null 2>&1 || return 1
+  [[ ! -d "$d/rego/kubernetes" ]] || opa test "$d/rego/kubernetes" >/dev/null 2>&1
+}
+check_cmd "opa test vert sur rego/tofu (+ rego/donnees) et rego/kubernetes (main)" _m29_e19_opa
+check_cmd "plateforme/infra : aucun job de validation ni de plan (.plan, plan:*) en allow_failure: true" _m29x_sans_allow_failure "$_m29x_infra"
 _m29_e19_composant() {
   _m29p_fichier_main "$_m29x_ci" "$_m29x_composant" 2>/dev/null |
     yq -e '[select(document_index == 1) | to_entries[] | select(.value.allow_failure == true)] | length == 0' >/dev/null 2>&1

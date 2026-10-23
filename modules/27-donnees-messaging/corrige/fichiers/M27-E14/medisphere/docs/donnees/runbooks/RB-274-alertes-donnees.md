@@ -72,5 +72,3 @@ Délais mesurés en recette (M27-E14, étape 6, lab de référence ; remplace pa
 ## PostgresqlSecoursEnRetard
 
 - **Geste** : RB-275, section « Le secours décroche ».
-</content>
-</invoke>

@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck source-path=SCRIPTDIR
 # shellcheck disable=SC2016  # filtres jq entre apostrophes
 # _m27-operationnel.sh — fonctions partagées par les checks M27-E06 à M27-E12 (lecture seule).
 # Reprend celles du palier 1 (_m27-decouverte.sh : _m27d_k, _m27d_json, _m27d_app, _m27d_rmq,

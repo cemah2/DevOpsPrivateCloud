@@ -34,15 +34,15 @@ _m29x_hote() { remote "$1" "sudo -n bash -c $(printf '%q' "$2")" </dev/null >/de
 
 # --- Politiques (E19, E25) ----------------------------------------------------------------------------
 
-_m29x_tmp="${_m29x_tmp:-}"   # gardé si le fichier est sourcé plusieurs fois (mini-projet)
-_m29x_tmpdir() {
-  if [[ -z "$_m29x_tmp" ]]; then
-    _m29x_tmp="$(mktemp -d)"
-    # shellcheck disable=SC2064  # le chemin est fixé maintenant
-    trap "rm -rf -- '$_m29x_tmp'" EXIT
-  fi
-  printf '%s\n' "$_m29x_tmp"
-}
+# Dossier temporaire créé au chargement (jamais dans une substitution de commande : un piège EXIT posé
+# dans « $(…) » s'exécute à la fin de ce sous-shell et supprimerait le dossier aussitôt). Gardé si le
+# fichier est sourcé plusieurs fois (mini-projet). Un seul piège pour les deux dossiers temporaires
+# (paliers 1-2 : _M29D_TMP ; ici : _m29x_tmp), évalué à la sortie.
+if [[ -z "${_m29x_tmp:-}" ]]; then
+  _m29x_tmp="$(mktemp -d)"
+  trap 'rm -rf -- "$_m29x_tmp" ${_M29D_TMP:+"$_M29D_TMP"}' EXIT
+fi
+_m29x_tmpdir() { printf '%s\n' "$_m29x_tmp"; }
 
 # _m29x_rapatrier_rego — copie locale de rego/ de plateforme/politiques (main) ; affiche le dossier.
 _m29x_rapatrier_rego() {
@@ -84,15 +84,20 @@ _m29x_args_conftest() {
 }
 
 # _m29x_plan_refuse — le plan de référence est refusé (au moins un FAIL) par rego/tofu de main avec
-# les arguments de la CI.
+# les arguments de la CI : espaces, données rego/donnees ET contexte écrit par le job de plan
+# (.validation:conftest-plan, M29-E10). Sans le contexte, la règle « contexte absent » refuserait tout
+# plan et le contrôle ne prouverait rien.
 _m29x_plan_refuse() {
-  local d sortie rc=0
-  local -a a
+  local d sortie rc=0 ctx
+  local -a a donnees=()
   [[ -r "$_m29x_plan" ]] || return 1
   d="$(_m29x_rapatrier_rego)" || return 1
   mapfile -t a < <(_m29x_args_conftest)
-  sortie="$(conftest test --no-color -p "$d/rego/tofu" "${a[@]}" "$_m29x_plan" 2>&1)" || rc=$?
-  ((rc != 0)) && grep -q 'FAIL' <<<"$sortie"
+  ctx="$(_m29x_tmpdir)/contexte-e19.json"
+  jq -n --arg e "${WB_M29_E19_ETAT:-socle}" '{contexte: {etat: $e, etiquettes_mr: []}}' >"$ctx"
+  [[ -d "$d/rego/donnees" ]] && donnees=(--data "$d/rego/donnees")
+  sortie="$(conftest test --no-color -p "$d/rego/tofu" "${a[@]}" "${donnees[@]}" --data "$ctx" "$_m29x_plan" 2>&1)" || rc=$?
+  ((rc != 0)) && grep -q 'FAIL' <<<"$sortie" && ! grep -q 'contexte absent' <<<"$sortie"
 }
 
 # _m29x_paquets_evalues — tous les paquets des règles (fichiers non *_test.rego) de rego/tofu sont dans
@@ -112,11 +117,13 @@ _m29x_paquets_evalues() {
            awk '{print $2}' | sort -u)
 }
 
-# _m29x_allow_failure_validation PROJET — aucun job de validation (conftest, kubeconform, politiques,
-# validation:*) n'est surchargé « allow_failure: true » dans le .gitlab-ci.yml du projet.
+# _m29x_sans_allow_failure PROJET — aucun job de validation (conftest, kubeconform, politiques,
+# validation:*, ni les jobs de plan qui appellent .validation:conftest-plan et leur modèle .plan) n'est
+# surchargé « allow_failure: true » dans le .gitlab-ci.yml du projet. (« allow_failure: {exit_codes} »
+# des jobs de dérive du M05 n'est pas visé.)
 _m29x_sans_allow_failure() {
   _m29p_fichier_main "$1" .gitlab-ci.yml 2>/dev/null |
-    yq -e '[to_entries[] | select(.key | test("conftest|kubeconform|validation|politique|testinfra"))
+    yq -e '[to_entries[] | select(.key | test("conftest|kubeconform|validation|politique|testinfra|^\\.?plan"))
             | select(.value.allow_failure == true)] | length == 0' >/dev/null 2>&1
 }
 

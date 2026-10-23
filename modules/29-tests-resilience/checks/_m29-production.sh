@@ -94,7 +94,7 @@ _m29p_kq() {
   kube get "$@" -o json 2>/dev/null | jq -e "$f" >/dev/null 2>&1
 }
 
-# _m29p_lit_chaos — le compte des checks lit les objets de Chaos Mesh (ClusterRole wb-checks-services).
+# _m29p_lit_chaos — le compte des checks lit les objets de Chaos Mesh (ClusterRole wb-checks-services-m29, M29-E09).
 _m29p_lit_chaos() { kube get networkchaos.chaos-mesh.org -A -o name >/dev/null 2>&1; }
 
 # _m29p_types_chaos — types d'expériences (et Schedule, Workflow) de chaos-mesh.org, forme « nom.groupe ».

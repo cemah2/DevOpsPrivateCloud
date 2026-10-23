@@ -50,8 +50,13 @@ check_cmd "charge/resultats/ : analyse écrite (*analyse*.md) : corrélation cli
   bash -c 'grep -Eq "analyse[^/]*\.md$" <<<"$1"' _ "$_m29o_e06_res"
 
 # --- Effets sur la recette (Prometheus) -----------------------------------------------------------------
-_m29o_e06_hit="$(_m29d_prom_valeur 'sum(increase(mediagenda_cache_total{namespace="mediagenda-recette", resultat="hit"}[7d]))')"
-check_cmd "cache Valkey sollicité en recette ces 7 jours (succès : ${_m29o_e06_hit%%.*})" _m29d_superieur "$_m29o_e06_hit" 100
-_m29o_e06_hpa="$(_m29d_prom_valeur 'max(max_over_time(kube_horizontalpodautoscaler_status_current_replicas{namespace="mediagenda-recette"}[7d]) - min_over_time(kube_horizontalpodautoscaler_status_current_replicas{namespace="mediagenda-recette"}[7d]))')"
-check_cmd "l'HPA de MédiAgenda a ajouté au moins un réplica sous la charge (écart sur 7 jours : ${_m29o_e06_hpa%%.*})" \
-  _m29d_superieur "$_m29o_e06_hpa" 0
+# Au mini-projet (check-E25), la fenêtre de 7 jours est passée : contrôles sautés.
+if [[ -n "${_M29_MINI_PROJET:-}" ]]; then
+  skip "effets de la charge sur la recette (cache, HPA, 7 jours)" "mini-projet : vérifiés pendant M29-E06"
+else
+  _m29o_e06_hit="$(_m29d_prom_valeur 'sum(increase(mediagenda_cache_total{namespace="mediagenda-recette", resultat="hit"}[7d]))')"
+  check_cmd "cache Valkey sollicité en recette ces 7 jours (succès : ${_m29o_e06_hit%%.*})" _m29d_superieur "$_m29o_e06_hit" 100
+  _m29o_e06_hpa="$(_m29d_prom_valeur 'max(max_over_time(kube_horizontalpodautoscaler_status_current_replicas{namespace="mediagenda-recette"}[7d]) - min_over_time(kube_horizontalpodautoscaler_status_current_replicas{namespace="mediagenda-recette"}[7d]))')"
+  check_cmd "l'HPA de MédiAgenda a ajouté au moins un réplica sous la charge (écart sur 7 jours : ${_m29o_e06_hpa%%.*})" \
+    _m29d_superieur "$_m29o_e06_hpa" 0
+fi

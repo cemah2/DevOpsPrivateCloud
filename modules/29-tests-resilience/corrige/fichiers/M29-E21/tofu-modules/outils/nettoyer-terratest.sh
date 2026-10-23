@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# plateforme/tofu-modules — outils/nettoyer-terratest.sh (M29-E21, INC-5621 ; RB-298)
+# plateforme/tofu-modules — outils/nettoyer-terratest.sh (M29-E21, INC-5621 ; RB-293)
 # Retrouve et (sur demande) détruit les VMs laissées par Terratest sur Proxmox.
 # Une VM n'est retenue que si TOUTES les conditions sont vraies :
 #   - VMID dans la plage Terratest 2290-2299 (PLAN §4.13) ;
-#   - pool « lab » ;
+#   - sous-pool « lab/terratest » (M29-E08) ;
 #   - nom qui commence par « tt- » ;
 #   - étiquette « terratest » OU « env-m29 » (une VM de test sans « terratest » est signalée à part) ;
 #   - créée il y a plus de AGE_MIN minutes (meta.ctime), pour ne jamais tuer un test en cours.
 # Mode SIMULATION par défaut : affiche ce qui serait fait. --appliquer : arrête puis détruit.
-# Accès : API de Proxmox avec un jeton à droits limités (VM.Audit et VM.PowerMgmt, VM.Allocate sur
-# /pool/lab), dans les variables protégées du projet (même format que le fournisseur bpg/proxmox) :
+# Accès : API de Proxmox avec le jeton du test, wb-terratest@pve!terratest (M29-E08 : VM.Audit,
+# VM.PowerMgmt, VM.Config.Options, VM.Allocate sur /pool/lab/terratest SEULEMENT : même une erreur de
+# sélection ne peut rien détruire ailleurs), dans les variables protégées du projet (même format que le
+# fournisseur bpg/proxmox) :
 #   PROXMOX_VE_ENDPOINT   ex. https://pve01.par1.medisphere.internal:8006/
 #   PROXMOX_VE_API_TOKEN  utilisateur@royaume!jeton=secret   (jamais affiché)
 # Sortie : un journal sur la sortie standard ; code 0 si rien d'orphelin ou tout nettoyé, 3 si des
@@ -41,8 +43,9 @@ maintenant="$(date +%s)"
 orphelins=0
 echo "$(date -Is) nettoyage Terratest (mode : $([ "$appliquer" = 1 ] && echo APPLIQUER || echo simulation), âge minimal ${AGE_MIN} min)"
 
+# Champs vides remplacés par « - » : « read » avec IFS=tabulation fusionne les tabulations consécutives.
 while IFS=$'\t' read -r vmid noeud nom pool etiquettes etat; do
-  [[ "$pool" == lab && "$nom" == tt-* ]] || { echo "  $vmid ($nom) : hors critères (pool $pool) — ignorée, à examiner à la main"; continue; }
+  [[ "$pool" == lab/terratest && "$nom" == tt-* ]] || { echo "  $vmid ($nom) : hors critères (pool $pool) — ignorée, à examiner à la main"; continue; }
   case ";$etiquettes;" in
     *";terratest;"*) ;;
     *";env-m29;"*) echo "  $vmid ($nom) : étiquette « terratest » ABSENTE (seulement env-m29) — le test doit la poser" ;;
@@ -76,7 +79,9 @@ while IFS=$'\t' read -r vmid noeud nom pool etiquettes etat; do
   orphelins=$((orphelins - 1))
 done < <(api GET "/cluster/resources?type=vm" |
   jq -r --argjson a "$PLAGE_MIN" --argjson b "$PLAGE_MAX" \
-    '.data[] | select(.vmid >= $a and .vmid <= $b) | [.vmid, .node, (.name // ""), (.pool // ""), (.tags // ""), .status] | @tsv')
+    '.data[] | select(.vmid >= $a and .vmid <= $b) | [.vmid, .node, (.name // "-"), (.pool // "-"), ((.tags // "") | if . == "" then "-" else . end), .status] | @tsv')
 
 echo "$(date -Is) fin : $orphelins orpheline(s) restante(s)"
+# NetBox (adresses et VMs « terratest » restées après une destruction hors OpenTofu) : non traité ici,
+# voir RB-293 §3 ; le check de M29-E08 le signale.
 ((orphelins == 0)) || exit 3

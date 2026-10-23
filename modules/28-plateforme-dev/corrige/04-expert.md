@@ -6,9 +6,9 @@ Les corrigés des pannes suivent la trame habituelle : **symptômes → hypothè
 
 Les scripts d'injection sont dans `corrige/pannes/` : `_m28-commun.sh` contient les fonctions partagées — état local (`~/.local/state/workbook/M28-EXX/`), lecture de la source Git d'une Application Argo CD à partir de l'annotation de suivi d'un objet, et surtout les **commits de Lucas** : fichier lu sur `main`, transformé (`yq` de mikefarah, `sed`), poussé par l'API de GitLab avec l'auteur « Lucas Martin » et le marqueur `M28-EXX` (directement sur `main` si la branche l'accepte, sinon par une MR fusionnée après son pipeline), Argo CD invité à relire Git. L'annulation remet le contenu d'origine par un nouveau commit, **seulement** si le fichier est encore exactement dans l'état injecté (empreinte SHA-256) : ta réparation n'est jamais défaite. **Aucune panne ne modifie un secret ni ne redémarre ou ne coupe un composant partagé avec la production** (opérateur KEDA, webhooks de Capsule sans accord explicite).
 
-**Vérifié hors du lab** : transformations `yq` et `sed` rejouées sur les fichiers de référence des corrigés (overlays de M28-E03/E04, ApplicationSet de M28-E03, Tenant de M28-E05, modèle `nouveau-service` de M28-E08) ; les correctifs Kustomize ajoutés par les pannes construits par `kustomize build` 5.8.1 ; `shellcheck -x` et `bash -n` sur tous les scripts.
+**Vérifié hors du lab** : transformations `yq` et `sed` rejouées sur les fichiers de référence des corrigés (overlays de M28-E03/E04, ApplicationSet de M28-E03, Tenant de M28-E05, modèle `nouveau-service` de M28-E08, fichiers `espaces/medidoc-dev/` de M14-E33 pour E23 : `LimitRange` retirée, quota relevé, fichier vidé → suppression) ; les correctifs Kustomize ajoutés par les pannes construits par `kustomize build` 5.8.1 ; `shellcheck -x` et `bash -n` sur tous les scripts.
 
-**Non testé en conditions réelles** (signale tes retours) : délai entre un commit, la synchronisation d'Argo CD et l'effet (les scripts attendent jusqu'à 8 à 12 minutes) ; déclenchement effectif des évictions par l'updater du VPA (E20, variantes 1 et 3 : selon les recommandations du moment, la variante peut être sans effet et le script en essaie une autre) ; message exact des webhooks de Capsule 0.15 et de l'API d'impersonation ; délai de relecture d'un modèle par le catalogue.
+**Non testé en conditions réelles** (signale tes retours) : délai entre un commit, la synchronisation d'Argo CD et l'effet (les scripts attendent jusqu'à 8 à 12 minutes) ; déclenchement effectif des évictions par l'updater du VPA (E20, variantes 1 et 3 : selon les recommandations du moment, la variante peut être sans effet et le script en essaie une autre) ; message exact des webhooks de Capsule 0.15 et de l'API d'impersonation ; délai de relecture d'un modèle par le catalogue ; E23 : acceptation par l'API et par les quotas d'une request explicite `"0"`, tuerie du conteneur `tampon` par `dd bs=300M` (OOM du groupe de processus du conteneur, cgroup v2), regroupement des deux réplicas sur un nœud (affinité « préférée »).
 
 > **Remarque sur les traces** : le commit porte l'auteur « Lucas Martin », mais c'est **ton** jeton d'administration qui l'a poussé (le *committer* et le journal d'audit de GitLab le montrent). En production, ce serait l'identité de Lucas.
 
@@ -45,7 +45,7 @@ admin@adm01:~/src/medinotif-deploiement$ git log -p -3 -- overlays/recette/
 
 *Prévention* : [`RB-285`](fichiers/M28-E19/medisphere/docs/plateforme-dev/runbooks/RB-285-autoscaling-muet.md) ; `CODEOWNERS` sur `overlays/*/keda/` (approbation de la Plateforme) ; l'alerte de pause existe (E13) mais arrive tard : une alerte « file qui grossit sans que l'effectif bouge » (RabbitMQ + kube-state-metrics, *pour aller plus loin*) détecte en minutes.
 
-*Autres causes possibles, non injectées* (le runbook les couvre) : identifiants faux (401 : ExternalSecret `medinotif-rabbitmq`, version du secret `kv/medinotif/recette/keda`), réseau coupé entre `keda` et `messagerie` (délai dépassé : `hubble observe`). Elles ne sont pas injectées parce qu'elles exigeraient de toucher un secret réel ou un composant partagé avec la production.
+L'énoncé annonce deux variantes : ce sont les seules injectées. *Autres causes possibles, non injectées* (le runbook les couvre) : identifiants faux (401 : ExternalSecret `medinotif-rabbitmq`, version du secret `kv/medinotif/recette/keda`), réseau coupé entre `keda` et `messagerie` (délai dépassé : `hubble observe`). Elles ne sont pas injectées parce qu'elles exigeraient de toucher un secret réel ou un composant partagé avec la production.
 
 ---
 
@@ -109,6 +109,8 @@ admin@adm01:~/src/gitops$ git log -p -3 -- valeurs/capsule/
 | 3 | Commit de Lucas : `manager.options.protectedNamespaceRegex` trop large (`…medi[a-z]*-`) dans les valeurs du chart | refus du webhook : nom d'espace protégé |
 | 4 (sur accord) | CiliumNetworkPolicy `capsule-durcissement` posée à la main dans `capsule-system` : seuls les pods de l'espace entrent ; l'apiserver ne joint plus les webhooks | `failed calling webhook … context deadline exceeded` ; ⚠️ plus aucun pod ne démarre dans les espaces des locataires |
 
+La variante 4 n'est tirée que si `WB_M28_E21_WEBHOOK=oui` est posé dans `lab/lab.env` (accord explicite) : sinon le script la saute et injecte la suivante, même avec `--variante 4`.
+
 *Correctif* : revert par MR (variantes 1 à 3) ; suppression de la politique et signalement (variante 4 : « rien à la main », et un webhook en `Fail` est une dépendance critique). Contrôle : le même `--dry-run=server` passe. Ni `oidc:plateforme-admins` ni Argo CD n'ont besoin de droits supplémentaires pour réparer.
 
 *Prévention* : [`RB-287`](fichiers/M28-E21/medisphere/docs/plateforme-dev/runbooks/RB-287-locataire-bloque.md) ; alerte sur `apiserver_admission_webhook_rejection_count` et les échecs d'appel des webhooks de Capsule ; `CODEOWNERS` sur `locataires/` et `valeurs/capsule/`.
@@ -143,30 +145,51 @@ admin@adm01:~/src/portail-modeles$ git log -p -3 -- modeles/nouveau-service/temp
 
 **Démarche de diagnostic**
 
-*Symptômes* : recette lente pour plusieurs équipes, un travailleur à 100 % de CPU, pods de `medidoc-dev` tués par manque de mémoire en boucle, alertes de capacité.
+*Symptômes* : conteneurs de `medidoc-dev` tués en boucle (`OOMKilled`, `CrashLoopBackOff`), un travailleur dont le CPU bondit, recette « poussive », alertes de plusieurs équipes. Rien d'évincé, rien en attente : c'est un premier indice (la charge ne prend la place de personne **aux yeux de l'ordonnanceur**).
+
+*Hypothèses* : (a) une charge consomme bien plus qu'elle ne déclare ; (b) un garde-fou de l'espace ou du locataire a été retiré ; (c) une classe de priorité trop haute la protège ; (d) une application d'une autre équipe s'emballe (exclu vite : `kubectl top` désigne `medidoc-dev`).
 
 *Commandes, dans l'ordre*
 ```
 admin@adm01:~$ kubectl top nodes
 admin@adm01:~$ kubectl top pods -A --sort-by=cpu | head
-admin@adm01:~$ kubectl -n medidoc-dev get pods -o custom-columns=NOM:.metadata.name,PRIO:.spec.priorityClassName,REQ:.spec.containers[0].resources.requests,LIM:.spec.containers[0].resources.limits,RESTARTS:.status.containerStatuses[0].restartCount
+admin@adm01:~$ kubectl -n medidoc-dev get pods -o wide
+admin@adm01:~$ kubectl -n medidoc-dev get pods -l app.kubernetes.io/name=medidoc-indexation -o json \
+    | jq '.items[0] | {prio: .spec.priorityClassName, qos: .status.qosClass, res: [.spec.containers[] | {name, resources}],
+                      dernier_arret: [.status.containerStatuses[] | {name, reason: .lastState.terminated.reason}]}'
+admin@adm01:~$ kubectl describe node <NŒUD-CHAUD> | sed -n '/Allocated resources/,/Events/p'
 admin@adm01:~$ kubectl -n medidoc-dev get limitrange,resourcequota
+admin@adm01:~$ kubectl -n medidoc-dev get deploy medidoc-indexation -o jsonpath='{.metadata.annotations}{"\n"}{.metadata.managedFields[*].manager}{"\n"}'
+admin@adm01:~/src/k8s$ git log -p -3 -- espaces/medidoc-dev/
 admin@adm01:~$ kubectl get tenant medidoc -o jsonpath='{.spec.priorityClasses}{"\n"}'
-admin@adm01:~$ kubectl get events -A --field-selector reason=OOMKilling --sort-by=.lastTimestamp | tail
-admin@adm01:~/src/k8s$ git log -p -5 -- espaces/medidoc-dev/ locataires/
+admin@adm01:~/src/politiques$ yq '.spec.validations' kyverno/validation/exiger-limites.yaml
 ```
 
-*Cause racine* : un traitement par lots de MédiDoc lancé à la main, **sans requests** (l'ordonnanceur le croit gratuit et l'empile sur un nœud) ; il consomme tout le CPU que ses limites permettent et dépasse sa mémoire ; il a pu passer parce que les garde-fous de l'espace (LimitRange, quota) avaient été retirés ou relevés la veille par un commit dans `plateforme/k8s`. Lis l'historique : c'est l'auteur et la date de ce commit qui expliquent l'incident.
+*Cause racine* (une seule variante, en deux temps) :
+1. **La veille**, un commit de Lucas dans `plateforme/k8s` (marqueur `M28-E23`) a **retiré la `LimitRange`** de `medidoc-dev` et **relevé son quota** « pour le lot d'indexation », et l'état a été appliqué au cluster (`task espaces`, puis la `LimitRange` supprimée à la main : `task espaces` n'élague pas).
+2. **Le jour même**, un Deployment `medidoc-indexation` (2 réplicas, posé à la main : pas d'annotation de suivi d'Argo CD, gestionnaire `kubectl-client-side-apply`, annotation d'auteur) déclare des **requests à zéro** (`cpu: "0"`, `memory: "0"`) et des limites de 500m / 256 Mi par conteneur. L'ordonnanceur ne réserve rien pour lui et le place avec ses semblables sur un même nœud ; un conteneur boucle sur le CPU, l'autre dépasse sa limite mémoire et se fait tuer en boucle.
 
-*Endiguement* : après accord (Karim, équipe), `kubectl -n medidoc-dev scale deploy/<charge> --replicas=0`, noté dans le journal.
+Ce qui l'a laissé passer :
+- la politique Kyverno `exiger-limites` (M26-E16) vérifie la **présence** des clés `requests.cpu` et `requests.memory`, pas leur valeur : `"0"` passe ;
+- une `LimitRange` ne pose ses valeurs par défaut que sur les requests **absentes** : même la `LimitRange` d'origine (M14-E33 : `defaultRequest`, `default`, `max`) n'aurait **pas** empêché une request explicite à zéro — remettre les choses « comme avant » ne suffit pas ;
+- le budget du locataire et le quota de l'espace comptent des requests… nulles : ils ne voient rien ;
+- la classe `medisphere-lot` (`Never`, 100) n'y est pour rien : elle empêche la charge de préempter, pas de consommer du CPU libre. Une request nulle donne au conteneur un poids CFS minimal : sous contention, il cède ; le nœud est « plein » d'une charge que personne n'a réservée.
 
-*Correction durable* : revert des garde-fous par MR (LimitRange, quota de `medidoc-dev`) ; locataire `medidoc` sans `medisphere-critique`, budget global en place (E14) ; la charge relancée par l'équipe, dans son dépôt, avec requests et limites justes et la classe `medisphere-lot`.
+*Endiguement* : après accord (Karim, équipe MédiDoc), `kubectl -n medidoc-dev scale deploy/medidoc-indexation --replicas=0`, noté dans le journal avec l'heure. Ce n'est pas la correction.
 
-*Retour à la normale* : nœud revenu, plus aucun pod tué depuis 15 minutes, recette dans son SLO ; `lab/bin/check 28 23` ; `--annuler`.
+*Correction durable* (par MR, dans cet ordre) :
+1. `plateforme/k8s` : revert du commit de Lucas (quota d'origine, `LimitRange` rétablie) **et** une `LimitRange` qui fixe un **minimum** par conteneur (`min: {cpu: 10m, memory: 16Mi}` par exemple) — une request explicite sous ce minimum est refusée à l'admission ; `task espaces`. Même modèle pour les autres espaces du locataire (le modèle `nouveau-service` de E08 pose déjà une `LimitRange` : ajoute-lui le minimum).
+2. `plateforme/politiques` : `exiger-limites` exige des requests **strictement positives** (en CEL : `quantity(c.resources.requests.cpu).isGreaterThan(quantity('0'))`, idem pour la mémoire — bibliothèque `quantity` de Kubernetes, à vérifier dans les politiques CEL de ta version de Kyverno), essayée d'abord en `Audit`, puis `Deny`.
+3. Locataire `medidoc` inchangé : `medisphere-critique` interdite, budget global en place (E14) — vérifie-le, ne le desserre pas.
+4. La charge, si l'équipe en a besoin, revient par **son** dépôt et Argo CD : requests mesurées (ce qu'elle consomme vraiment), limites, `medisphere-lot`.
+
+*Retour à la normale* : plus aucun conteneur tué depuis 15 minutes, nœud revenu, recette dans son SLO ; `lab/bin/check 28 23` ; puis `lab/bin/break 28 23 --annuler` (il supprime le Deployment s'il est encore celui de la panne, et ne touche ni ta `LimitRange` ni ton quota ni tes commits).
 
 *Post-mortem et runbook* : [`INC-5523`](fichiers/M28-E23/medisphere/docs/kubernetes/post-mortems/AAAA-MM-JJ-INC-5523.md) (modèle), [`RB-289`](fichiers/M28-E23/medisphere/docs/plateforme-dev/runbooks/RB-289-locataire-sature.md).
 
-*Prévention* : `CODEOWNERS` sur `espaces/` et `locataires/` ; ValidatingPolicy Kyverno qui exige des requests dans les espaces des locataires ; alerte « part de CPU d'un locataire sur un nœud ».
+*Prévention* : `CODEOWNERS` sur `espaces/` et `locataires/` (la Plateforme relit) ; alerte « part de CPU consommée par un locataire au-delà de ses requests sur un nœud » (`sum by (namespace) (rate(container_cpu_usage_seconds_total[5m]))` contre `kube_pod_container_resource_requests`) ; alerte sur les conteneurs `OOMKilled` répétés ; rien « à la main » dans les espaces d'environnement (RBAC du M24 : l'équipe n'y est que `view`).
+
+*Pourquoi la panne est bornée* : la consommation ne peut pas dépasser 4 × 500m CPU et 4 × 256 Mi (limites) ; la mémoire est tuée **dans** la limite du conteneur, pas par pression sur le nœud ; la classe `medisphere-lot` ne préempte jamais. Le script n'a pas pu utiliser une classe dédiée : le locataire `medidoc` n'autorise que `medisphere-standard` et `medisphere-lot` (E14), le webhook de Capsule aurait refusé les pods.
 
 ---
 

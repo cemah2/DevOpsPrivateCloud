@@ -253,6 +253,7 @@ Ajout d'un espace visable = MR sur la VAP et sur l'espace, relue par Sophie ; jo
 - Règles Kubernetes : [`rego/kubernetes/`](fichiers/M29-E10/politiques/rego/kubernetes/) — `chaos.rego` (annotation hors liste, expérience sans durée, cible hors liste), `charges.rego` (conteneur sans limite de mémoire), `kubernetes_test.rego` (13 tests).
 - Consommateurs : extraits pour [`k8s`](fichiers/M29-E10/k8s/gitlab-ci.extrait-M29.yml), [`gitops`](fichiers/M29-E10/gitops/gitlab-ci.extrait-M29.yml), [`infra`](fichiers/M29-E10/infra/gitlab-ci.extrait-M29.yml) (le job `.plan` existant reçoit `!reference [.validation:conftest-plan, script]` après `tofu plan`), [`ansible`](fichiers/M29-E10/ansible/gitlab-ci.extrait-M29.yml) (remplace le job `testinfra` d'E04), [`politiques`](fichiers/M29-E10/politiques/gitlab-ci.extrait-M29.yml) (`tests_rego: true`).
 - Préalable : *Settings → CI/CD → Job token permissions* de `plateforme/k8s` et `plateforme/politiques` : autoriser les projets consommateurs.
+- `runner01` : le job de plan de `plateforme/infra` (exécuteur `shell`, M05) exécute `.validation:conftest-plan` lui-même ; le rôle `gitlab_runner` reçoit conftest 0.71.1 et OPA 1.21.3 (archives des publications GitHub, `sha256sum --check` contre le fichier de sommes publié, installation dans `/usr/local/bin`), comme Go en E08. Vérification : `ssh runner01 conftest --version` (le check le fait).
 
 **Explications**
 

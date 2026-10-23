@@ -188,11 +188,15 @@ Chaque exercice installe ce dont il a besoin, toujours avec **vérification d'em
 | k6 | 1.8.x | E05 |
 | Go | 1.26.x | E08 |
 
+`yq` (mikefarah v4) et `jq` sont sur `adm01` depuis le M02 ; les paliers 3 et 4 s'en servent.
+
+Sur **`runner01`** (exécuteur `shell`), les outils passent par son rôle Ansible `gitlab_runner` : Go 1.26 en E08 (job Terratest ; `tofu` y est depuis le M05), conftest 0.71 et OPA 1.21 en E10 (le job de plan de `plateforme/infra` vérifie ses plans en shell). Les autres jobs du composant `validation` tournent sur le runner `k8s-par1` avec l'image d'outils d'E10.
+
 Versions de référence et liens : [`annexes/versions-bloc-G.md`](../../../annexes/versions-bloc-G.md).
 
 ### Variables de `lab/lab.env`
 
-Facultatives (les valeurs par défaut conviennent au lab de référence) : `WB_M29_RECETTE_URL` (`https://mediagenda-recette.apps.par1.medisphere.internal`), `WB_M29_PROJET_RESILIENCE` (`plateforme/resilience`), `WB_M29_TEMOIN_URL` (Prometheus témoin de `mon01`, `http://mon01.par1.medisphere.internal:9090`), `WB_M29_CHAOS_NS` (`chaos-experiences`), `WB_M29_VERSION_VALIDATION` (`v2.11.0`), `WB_M29_GOSS_HOTES` (`dns02 nbx01`).
+Facultatives (les valeurs par défaut conviennent au lab de référence) : `WB_M29_RECETTE_URL` (`https://mediagenda-recette.apps.par1.medisphere.internal`), `WB_M29_PROJET_RESILIENCE` (`plateforme/resilience`), `WB_M29_TEMOIN_URL` (Prometheus témoin de `mon01`, `http://mon01.par1.medisphere.internal:9090`), `WB_M29_CHAOS_NS` (`chaos-experiences`), `WB_M29_VERSION_VALIDATION` (`v2.11.0` : la dernière étiquette publiée par les modules précédents est `v2.10.0`, composant `securite` du M25), `WB_M29_GOSS_HOTES` (`dns02 nbx01`). Les paliers 3 et 4 en ajoutent quelques-unes, présentées là où elles servent.
 
 ---
 

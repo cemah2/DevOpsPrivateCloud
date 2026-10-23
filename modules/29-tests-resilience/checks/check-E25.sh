@@ -16,8 +16,9 @@ title "M29-E25 — Tests et résilience de MédiSphère v1 : contrôle global"
 require_cmd kubectl jq curl yq ssh conftest opa
 
 # --- 1. Vérifications clés des exercices (chacune affiche son propre titre) ----------------------------
-# _M29_MINI_PROJET : les checks rejoués adaptent ce qui n'a de sens que pendant l'exercice (E13 : objets
-# de la série supprimés après l'exercice).
+# _M29_MINI_PROJET : les checks rejoués adaptent ce qui n'a de sens que pendant l'exercice (E05, E06 :
+# traces de charge des 7 derniers jours ; E07 : sondes Goss si l'essai a été retiré par décision écrite ;
+# E09 : première expérience supprimée depuis ; E13 : objets de la série supprimés après l'exercice).
 _M29_MINI_PROJET=1
 for _m29_e25_ex in 02 03 04 05 06 07 08 09 10 13 14 19 20 21 22; do
   _m29_e25_f="$_m29_e25_dir/check-E$_m29_e25_ex.sh"
@@ -84,8 +85,9 @@ check_cmd "journée de jeu : au moins une action ouverte en E16, aucune encore o
   '[[ "$1" -ge 1 && "$2" == 0 ]]' _ "$(_m29p_issues "$_m29p_resilience" journee-de-jeu all)" "$(_m29p_issues "$_m29p_resilience" journee-de-jeu opened)"
 
 # --- 3. Documentation et étiquette ------------------------------------------------------------------
-check_cmd "strategie-tests.md publié (main)" _m29p_doc docs/qualite '^strategie-tests' 'kubeconform' 'Testinfra' 'k6' 'Chaos Mesh'
-for _m29_e25_rb in RB-294 RB-295 RB-296 RB-297 RB-298; do
+check_cmd "strategie-tests.md à jour de la livraison (k6-operator, non-régression, journées de jeu, nettoyeur Terratest)" \
+  _m29p_doc docs/qualite '^strategie-tests' 'kubeconform' 'Testinfra' 'Chaos Mesh' 'k6-operator' 'non-r.{1,2}gression' 'journ.{1,2}es? de jeu|journees-de-jeu' 'nettoy'
+for _m29_e25_rb in RB-290 RB-291 RB-292 RB-293 RB-294 RB-295 RB-296 RB-297; do
   check_cmd "runbook $_m29_e25_rb publié (main)" _m29p_doc docs/qualite "^$_m29_e25_rb" '.'
 done
 check_cmd "ADR-0290 publié (main)" _m29p_doc docs/qualite/adr '^ADR-0290' 'Chaos Mesh' 'Litmus'

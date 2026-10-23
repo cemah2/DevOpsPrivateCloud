@@ -18,8 +18,8 @@ admin@adm01:~$ kubectl -n chaos-experiences get networkchaos <nom> -o jsonpath='
 |---|---|---|
 | `ownerReferences` vers un `Schedule`, étiquette `managed-by: <schedule>` | un `Schedule` recrée un enfant à chaque tick (avec `Forbid`, dès que l'enfant précédent a disparu) | pause du **Schedule** (`experiment.chaos-mesh.org/pause=true`), puis suppression du Schedule (ses enfants partent avec lui) |
 | `ownerReferences` vers un `WorkflowNode`, étiquette `chaos-mesh.org/controlled-by` | un `Workflow` en cours | pause puis suppression du **Workflow** |
-| expérience dans un **autre espace** que `chaos-experiences` (`-A` !) | quelqu'un l'a créée ailleurs (l'espace visé, par exemple) | pause / suppression là où elle est ; rappel de la règle (ADR-0290) |
-| deux objets du même nom dans deux espaces, l'un en pause | on a mis en pause **le mauvais** | idem |
+| annotation de pause présente mais `status.experiment.desiredPhase: Run`, condition `Paused` à `False` | pause mal posée : mauvaise clé (`chaos-mesh.org/pause` au lieu de `experiment.chaos-mesh.org/pause`) ou mauvaise valeur (seul `"true"` compte) | vraie pause, puis suppression ; retirer la fausse annotation |
+| expérience dans un **autre espace** que `chaos-experiences` (`-A` !) | ne devrait pas exister : la VAP `medisphere-chaos-espaces` (M29-E09) la refuse ; si elle existe, la VAP a été contournée (liaison en `Warn`, exclusion trop large) | pause / suppression là où elle est ; incident de sécurité : qui, comment (ADR-0290) |
 
 Ce que le contrôleur **veut** sur un pod se lit dans l'objet intermédiaire `PodNetworkChaos` (même nom que le pod, dans l'espace du pod) : `kubectl -n mediagenda-recette get podnetworkchaos <pod> -o yaml` (`spec.tcs`, `spec.ipsets`, `spec.iptables`, et `metadata.annotations`/`spec` qui disent de quelle expérience vient chaque règle).
 

@@ -15,17 +15,17 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
   ```
   admin@adm01:~/DevOpsPrivateCloud$ lab/bin/break 28 19
   ```
-  Le script tire une variante au hasard et n'affiche que le **symptôme**, comme un ticket. Chaque panne a 2 à 4 variantes : refais l'exercice jusqu'à les avoir toutes rencontrées (`--variante N` force une variante). Si une variante n'a pas d'effet sur ton lab (ta configuration diffère de celle du corrigé), le script en essaie une autre. Une injection prend **de 1 à 15 minutes** : certaines passent par un commit dans GitLab, la synchronisation d'Argo CD et l'attente d'un effet visible.
-- **Avant d'injecter**, lance le contrôle de l'exercice (`lab/bin/check 28 19`) : il doit être vert. Le script refuse de casser un lab qui ne va pas bien.
+  Le script tire une variante au hasard et n'affiche que le **symptôme**, comme un ticket. Les pannes E19 à E22 ont 2 à 4 variantes (l'astreinte E23 n'en a qu'une) : refais l'exercice jusqu'à les avoir toutes rencontrées (`--variante N` force une variante). Si une variante n'a pas d'effet sur ton lab (ta configuration diffère de celle du corrigé), le script en essaie une autre. Une injection prend **de 1 à 15 minutes** : certaines passent par un commit dans GitLab, la synchronisation d'Argo CD et l'attente d'un effet visible.
+- **Avant d'injecter**, lance le contrôle de l'exercice (`lab/bin/check 28 19`) : il doit être vert, sauf les lignes qui portent sur ce que l'exercice te fait écrire ou ajouter (runbook, post-mortem, et pour E23 le minimum du `LimitRange`). Le script refuse de casser un lab qui ne va pas bien.
 - **Prérequis techniques** : `admin.conf` (`WB_K8S_ADMIN_KUBECONFIG`, bris de glace : les pannes ne peuvent pas passer par une connexion OIDC interactive, et E21 emprunte l'identité d'un membre de MédiDoc en `--dry-run=server`) ; le jeton d'administration GitLab de M01 (`WB_GITLAB_ADMIN_TOKEN_FILE`, portée `api`, expiration courte) ; le jeton des checks du portail (E22) ; `yq` de mikefarah (v4), `jq`, `curl` sur `adm01`.
-- **Commits de Lucas.** Certaines pannes modifient un dépôt par un commit signé « Lucas Martin » (marqueur `M28-EXX` dans le message) ; si `main` refuse la poussée directe, elles passent par une MR que le script fusionne après son pipeline. C'est un vrai changement : il apparaît dans `git log`, dans l'historique d'Argo CD et dans le journal d'audit de GitLab. Corrige comme tu le ferais d'un vrai commit fautif (revert par MR, ou correction par MR). D'autres pannes changent un droit dans GitLab ou ajoutent un objet « posé à la main » dans le cluster. **Aucune panne ne modifie un secret** (OpenBao, Secret Kubernetes) ni ne redémarre ou ne coupe un composant partagé avec la production.
+- **Commits de Lucas.** Certaines pannes modifient un dépôt par un commit signé « Lucas Martin » (marqueur `M28-EXX` dans le message) ; si `main` refuse la poussée directe, elles passent par une MR que le script fusionne après son pipeline. C'est un vrai changement : il apparaît dans `git log`, dans l'historique d'Argo CD et dans le journal d'audit de GitLab. Corrige comme tu le ferais d'un vrai commit fautif (revert par MR, ou correction par MR). D'autres pannes changent un droit dans GitLab ou ajoutent, suppriment ou modifient un objet « à la main » dans le cluster. **Aucune panne ne modifie un secret** (OpenBao, Secret Kubernetes) ni ne redémarre ou ne coupe un composant partagé avec la production.
 - **Ne lis pas** les scripts de `corrige/pannes/`, ni `~/.local/state/workbook/` sur `adm01` : ils contiennent la cause.
 - Une seule panne active à la fois par exercice. Si tu abandonnes : `lab/bin/break 28 19 --annuler` remet l'état sain (filet de sécurité, pas un correctif). **Quand tu as réparé**, lance aussi `--annuler` pour **clore** la panne : l'annulation ne défait jamais ta réparation (elle ne touche un fichier, un secret ou un droit que s'il est encore exactement dans l'état injecté), et une panne laissée ouverte bloque l'astreinte M28-E23 et le mini-projet.
-- Les pannes n'agissent que sur : la **recette** et le **dev** des applications (`medinotif-recette`, `mediagenda-recette`, `medidoc-dev`), les dépôts `medinotif/deploiement`, `mediagenda/deploiement` (overlays de recette), `plateforme/k8s/locataires/`, `plateforme/gitops` (`valeurs/capsule/`, modèle de l'ApplicationSet `medinotif`), `plateforme/portail-modeles`, l'appartenance de `svc-portail` aux groupes GitLab, et un objet ajouté dans `capsule-system` (E21, sur accord explicite). **Jamais** la production, `kube-system`, `kyverno`, `argocd` ; **jamais** les droits de la plateforme ni d'Argo CD sur Capsule ; aucun message RabbitMQ n'est perdu (les files sont seulement moins consommées).
+- Les pannes n'agissent que sur : la **recette** et le **dev** des applications (`medinotif-recette`, `mediagenda-recette`, `medidoc-dev`), les dépôts `medinotif/deploiement`, `mediagenda/deploiement` (overlays de recette), `plateforme/k8s/locataires/` et `plateforme/k8s/espaces/medidoc-dev/` (E23), `plateforme/gitops` (`valeurs/capsule/`, modèle de l'ApplicationSet `medinotif`), `plateforme/portail-modeles`, l'appartenance de `svc-portail` aux groupes GitLab, un objet ajouté dans `capsule-system` (E21, sur accord explicite), les garde-fous et une charge de `medidoc-dev` (E23). **Jamais** la production, `kube-system`, `kyverno`, `argocd` ; **jamais** les droits de la plateforme ni d'Argo CD sur Capsule ; aucun message RabbitMQ n'est perdu (les files sont seulement moins consommées).
 - **Tiens un journal de diagnostic** pour chaque panne, dans `docs/kubernetes/journal/` de `~/medisphere` : heure, hypothèse, commande, résultat observé, conclusion. Il alimente les runbooks RB-285 à RB-289 et le post-mortem de M28-E23.
 - Le **temps cible** est indicatif. Le dépasser n'est pas un échec ; corriger sans comprendre en est un.
 
-> ⚠️ **Effets de bord** : pendant M28-E21, une variante rend les webhooks de Capsule injoignables ; elle n'est tirée que si tu l'acceptes explicitement (`WB_M28_E21_WEBHOOK=oui` dans `lab/lab.env`), car tant qu'elle est active **aucun espace ne peut être créé dans le cluster et aucun pod ne peut démarrer dans un espace de locataire — production comprise** (les webhooks de Capsule refusent quand ils ne répondent pas). Ne la lance qu'à un moment où rien ne doit être déployé, et garde `--annuler` sous la main. Pendant M28-E23, une charge mal configurée vole du CPU sur un travailleur et ses propres pods peuvent être tués par manque de mémoire ; sa consommation est bornée et elle ne peut préempter aucun autre pod.
+> ⚠️ **Effets de bord** : pendant M28-E21, une variante rend les webhooks de Capsule injoignables ; elle n'est tirée que si tu l'acceptes explicitement (`WB_M28_E21_WEBHOOK=oui` dans `lab/lab.env`), car tant qu'elle est active **aucun espace ne peut être créé dans le cluster et aucun pod ne peut démarrer dans un espace de locataire — production comprise** (les webhooks de Capsule refusent quand ils ne répondent pas). Ne la lance qu'à un moment où rien ne doit être déployé, et garde `--annuler` sous la main. Pendant M28-E23, une charge mal configurée occupe du CPU sur un travailleur et ses propres conteneurs sont tués par manque de mémoire ; sa consommation est bornée par ses limites, elle tourne dans une classe qui ne préempte jamais et ne pousse aucun autre pod dehors.
 
 ---
 
@@ -49,7 +49,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 **Travail demandé**
 1. Constate sans rien toucher : état de la file (messages prêts, consommateurs), effectif de MédiNotif, état du `ScaledObject` (`kubectl get scaledobject` : colonnes `READY`, `ACTIVE`, `FALLBACK`, `PAUSED`), de l'HPA `keda-hpa-medinotif`, événements de l'espace.
 2. Situe le maillon : le `ScaledObject` est-il réconcilié ? Le scaler interroge-t-il (journaux de `keda-operator`, `keda_scaler_detail_errors_total`, `keda_scaler_metrics_value`) ? Que renvoie la métrique externe (`kubectl get --raw`) ? La `TriggerAuthentication` trouve-t-elle son Secret, et l'ExternalSecret est-il à jour ? Le réseau laisse-t-il passer (`hubble observe --from-namespace keda --to-namespace messagerie`) ?
-3. Trouve la cause racine et son auteur (commit, version du secret dans OpenBao, objet ajouté à la main), corrige-la **au bon endroit** (Git, OpenBao, ou suppression de l'objet), sans redémarrer KEDA « pour voir ».
+3. Trouve la cause racine et son auteur, corrige-la **au bon endroit** (le dépôt, le coffre ou le cluster, selon ce que tu as prouvé), sans redémarrer KEDA « pour voir ».
 4. Vérifie : une petite campagne (`campagne.sh 300`) réveille MédiNotif et vide la file ; `lab/bin/check 28 19`.
 5. Écris le runbook **RB-285** « L'autoscaling ne suit plus la charge » (`docs/plateforme-dev/runbooks/RB-285-*.md`) : arbre de décision par maillon, avec la commande qui prouve chaque branche.
 
@@ -72,7 +72,7 @@ Une erreur 401 de l'API de gestion : identifiants (le Secret est-il celui qu'ESO
 
 <details><summary>Indice 3</summary>
 
-`git log -p` des overlays de `medinotif/deploiement`, `argocd app history medinotif-recette`, `kubectl get ciliumnetworkpolicies -A` (et leur date de création), `bao kv metadata get -mount=kv <chemin>` (date de chaque version) : la panne a laissé une trace. Pour forcer ESO à relire un secret corrigé : l'annotation `force-sync` de l'ExternalSecret (doc d'ESO).
+`git log -p` des overlays de `medinotif/deploiement` et `argocd app history medinotif-recette` : une panne a toujours laissé une trace. Si la cause avait été ailleurs, d'autres traces t'auraient répondu de la même façon : `bao kv metadata get -mount=kv <chemin>` (date de chaque version d'un secret ; l'annotation `force-sync` fait relire un ExternalSecret), date de création des politiques Cilium (`kubectl get ciliumnetworkpolicies -A`).
 </details>
 
 **Pour aller plus loin** (facultatif) : écris une alerte qui détecte « file qui grossit alors que MédiNotif ne bouge pas » sans dépendre de KEDA (métriques de RabbitMQ et de kube-state-metrics), et explique pourquoi elle complète `KedaScalerEnErreur`.
@@ -226,7 +226,7 @@ Pour tester le jeton sans l'exposer : `kubectl -n portail get secret <secret> -o
 
 **Objectifs pédagogiques**
 - Mener un incident de capacité de bout en bout : constat, endiguement, cause, correction, retour à la normale, post-mortem.
-- Relier les symptômes dispersés (latence en recette, pods évincés ou en attente, alertes de plusieurs équipes) à une seule charge et à son locataire.
+- Relier les symptômes dispersés (CPU d'un nœud, conteneurs tués en boucle, recette poussive, alertes de plusieurs équipes) à une seule charge et à son locataire.
 - Utiliser les leviers de la plateforme (budget du locataire, classes de priorité, `LimitRange`, isolement de la charge) au lieu de redémarrer au hasard.
 
 **Prérequis** : M28-E14, M28-E15, M28-E19 à M28-E22 (pannes closes) ; `lab/bin/check 28 23` vert avant l'injection.
@@ -234,38 +234,38 @@ Pour tester le jeton sans l'exposer : `kubectl -n portail get secret <secret> -o
 
 **Contexte technique** : le tableau « Capacité et locataires » (E14), Prometheus, Loki, Hubble, `kubectl top`. L'incident se déclare pendant la journée ; plusieurs équipes se plaignent en même temps. Tu es seul d'astreinte, Karim est joignable pour une décision.
 
-**Injection** : `lab/bin/break 28 23`.
+**Injection** : `lab/bin/break 28 23` (une variante ; l'injection prend jusqu'à 10 minutes).
 
-> ⚠️ **Attention** : tant que l'incident dure, un travailleur est ralenti (CPU volé) et la recette en souffre. Endigue d'abord, enquête ensuite. Si le lab devient inutilisable, `lab/bin/break 28 23 --annuler` arrête tout.
+> ⚠️ **Attention** : tant que l'incident dure, un travailleur porte une charge CPU qu'il n'a pas prévue et la recette peut en souffrir. Endigue d'abord, enquête ensuite. Si le lab devient inutilisable, `lab/bin/break 28 23 --annuler` arrête tout (sans défaire ce que tu as déjà réparé).
 
 **Travail demandé**
 1. **Constat (10 min).** Ce qui est touché (applications, nœuds, alertes), depuis quand, et qui l'a signalé ; ouvre ton journal d'incident.
 2. **Endiguement.** Trouve la charge responsable et arrête la dégradation par le geste le plus petit et le plus réversible ; prends la décision avec Karim si elle touche une équipe (écris-la).
-3. **Cause.** Pourquoi cette charge a-t-elle pu faire ça : ses `requests` et `limits` effectives, sa classe de priorité, ce que le locataire et l'espace auraient dû empêcher (budget, `LimitRange`, classes autorisées), qui l'a lancée et par quel chemin.
-4. **Correction durable** par le code : ce qui manquait dans le locataire, l'espace ou les politiques. La charge de l'équipe, si elle est légitime, doit pouvoir tourner **dans son cadre** (classe `lot`, requests et limites justes, budget).
+3. **Cause.** Pourquoi cette charge a-t-elle pu faire ça : ses `requests` et `limits` effectives, sa classe de priorité, ce que le locataire, l'espace et les politiques d'admission auraient dû empêcher (budget, quota, `LimitRange`, Kyverno), qui l'a lancée, qui a changé quoi et par quel chemin.
+4. **Correction durable** par le code : ce qui manquait dans le locataire, l'espace ou les politiques — demande-toi si remettre les choses « comme avant » aurait suffi à empêcher l'incident. La charge de l'équipe, si elle est légitime, doit pouvoir tourner **dans son cadre** (classe `lot`, requests et limites justes, budget).
 5. **Retour à la normale** : plus aucun pod évincé ni en attente anormalement, nœuds sans pression, applications de recette de nouveau dans leur SLO.
 6. **Post-mortem** `docs/kubernetes/post-mortems/AAAA-MM-JJ-INC-5523.md` (sans reproche : chronologie, impact, détection, cause, ce qui a bien marché, ce qui a manqué, actions avec propriétaire et date) et runbook **RB-289** « Un locataire sature le cluster » (`docs/plateforme-dev/runbooks/RB-289-*.md`).
 
 **Critères de réussite**
-- [ ] La charge responsable ne tourne plus hors de son cadre (requests et limites déclarées, classe `medisphere-lot` ou arrêtée) ; aucun pod de `medidoc-dev` tué par manque de mémoire depuis 15 minutes.
-- [ ] Le locataire responsable n'autorise pas `medisphere-critique` ; chacun de ses espaces a un `LimitRange` ; son budget global est en place.
+- [ ] La charge responsable ne tourne plus hors de son cadre (requests non nulles et limites déclarées, classe `medisphere-lot`, ou arrêtée) ; aucun conteneur de `medidoc-dev` tué par manque de mémoire depuis 15 minutes ; aucun nœud en pression mémoire.
+- [ ] Le locataire responsable n'autorise pas `medisphere-critique` ; chacun de ses espaces a un `LimitRange`, et celui de `medidoc-dev` refuse un conteneur qui déclare une request nulle ; son budget global est en place.
 - [ ] Le post-mortem INC-5523 et RB-289 sont publiés.
 
 **Vérification** : `lab/bin/check 28 23`
 
 <details><summary>Indice 1</summary>
 
-Commence large : `kubectl get pods -A --field-selector=status.phase=Failed`, `kubectl get events -A --field-selector reason=Evicted`, `kubectl describe node` (conditions et `Allocated resources`), `kubectl top pods -A --sort-by=memory | head`. Le tableau de bord de capacité montre quel locataire a bougé.
+Commence large : `kubectl top nodes`, `kubectl top pods -A --sort-by=cpu | head`, `kubectl get pods -A | grep -v ' 0 '` (redémarrages), `kubectl describe node` (conditions et `Allocated resources` : compare ce qui est **réservé** à ce qui est **consommé** sur le nœud chaud). Le tableau de bord de capacité montre quel locataire a bougé.
 </details>
 
 <details><summary>Indice 2</summary>
 
-Le kubelet évince d'abord les pods qui dépassent leurs `requests`, par **priorité** croissante. Une charge qui déclare peu, consomme beaucoup et porte une priorité haute est protégée… pendant que les autres partent. Regarde `spec.priority`, `spec.priorityClassName` et `resources` **effectives** du pod (ce qu'un `LimitRange` ou Capsule y a mis, ou pas).
+L'ordonnanceur place les pods d'après leurs `requests`, pas d'après leur consommation : une charge qui déclare zéro « tient » partout. Regarde `resources` **effectives** du pod (ce qu'un `LimitRange` ou Capsule y a mis, ou pas), `spec.priorityClassName`, et relis la politique Kyverno du M26 qui « exige des requests » : que vérifie-t-elle exactement ? Et un `LimitRange` : quand ses valeurs par défaut s'appliquent-elles ?
 </details>
 
 <details><summary>Indice 3</summary>
 
-Endiguer, c'est souvent réduire l'effectif de la charge fautive à 0 (`kubectl scale`) après accord, en le notant : ce n'est pas la correction. La correction est dans `plateforme/k8s` (locataire, espace) et dans le dépôt de l'équipe (requests, classe). Demande-toi aussi pourquoi aucune alerte n'a prévenu **avant** les évictions.
+Endiguer, c'est souvent réduire l'effectif de la charge fautive à 0 (`kubectl scale`) après accord, en le notant : ce n'est pas la correction. La correction est dans `plateforme/k8s` (locataire, espace), dans `plateforme/politiques` si une règle d'admission était trop lâche, et dans le dépôt de l'équipe pour relancer sa charge (requests, classe). Demande-toi aussi pourquoi aucune alerte n'a prévenu **avant** les évictions.
 </details>
 
 **Pour aller plus loin** (facultatif) : rejoue l'incident avec un essai de charge du M29 en classe `lot` et vérifie qu'il attend son tour sans rien évincer.

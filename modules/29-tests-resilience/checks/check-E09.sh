@@ -59,11 +59,15 @@ check_cmd "VAP hostPath : chemins de chaos-daemon déclarés pour l'espace chaos
   "$(_m29d_k get configmap -n kube-system medisphere-hostpath -o json)" '(.data["chaos-mesh"] // "") | test("/run/containerd")'
 
 # --- 4. Première expérience -----------------------------------------------------------------------------
-_m29o_e09_exp="$(_m29d_k get podchaos -n "$_M29O_CHAOS_NS" e09-pod-failure-api -o json)"
-check_cmd "PodChaos e09-pod-failure-api : pod-failure, une durée, mediagenda-recette seulement" _m29d_json "$_m29o_e09_exp" \
-  '.spec.action == "pod-failure" and (.spec.duration // "") != "" and .spec.selector.namespaces == ["mediagenda-recette"]'
-check_cmd "PodChaos e09-pod-failure-api : un pod a été visé puis rétabli (Selected et AllRecovered)" _m29d_json "$_m29o_e09_exp" \
-  '[.status.conditions[]? | select(.status == "True") | .type] as $c | ($c | index("Selected")) != null and ($c | index("AllRecovered")) != null'
+if [[ -n "${_M29_MINI_PROJET:-}" ]]; then
+  skip "PodChaos e09-pod-failure-api" "mini-projet : l'expérience a pu être supprimée depuis M29-E09"
+else
+  _m29o_e09_exp="$(_m29d_k get podchaos -n "$_M29O_CHAOS_NS" e09-pod-failure-api -o json)"
+  check_cmd "PodChaos e09-pod-failure-api : pod-failure, une durée, mediagenda-recette seulement" _m29d_json "$_m29o_e09_exp" \
+    '.spec.action == "pod-failure" and (.spec.duration // "") != "" and .spec.selector.namespaces == ["mediagenda-recette"]'
+  check_cmd "PodChaos e09-pod-failure-api : un pod a été visé puis rétabli (Selected et AllRecovered)" _m29d_json "$_m29o_e09_exp" \
+    '[.status.conditions[]? | select(.status == "True") | .type] as $c | ($c | index("Selected")) != null and ($c | index("AllRecovered")) != null'
+fi
 check_cmd "aucun objet de chaos hors de chaos-experiences" _m29d_json \
   "$(_m29d_k get podchaos,networkchaos,stresschaos,iochaos,timechaos,schedules,workflows -A -o json)" \
   'all(.items[]; .metadata.namespace == $ns)' --arg ns "$_M29O_CHAOS_NS"

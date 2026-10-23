@@ -53,7 +53,7 @@ Matrice : `docs/kubernetes/reseau/matrice-flux-cluster.md` (MédiAgenda → pool
 |---|---|
 | Tableau de bord | Grafana « Données et messagerie » (`m27-donnees`) |
 | Alertes et premier geste | [RB-274](runbooks/RB-274-alertes-donnees.md) |
-| Maintenance et bascule PostgreSQL | RB-270 à RB-273 |
+| Maintenance et bascule PostgreSQL ; redémarrage de RabbitMQ par roulement | [RB-270](runbooks/RB-270-postgresql-maintenance-bascule.md) ; [RB-271](runbooks/RB-271-rabbitmq-redemarrage-roulement.md) |
 | Reprise sur le secours, définitions RabbitMQ | [RB-275](runbooks/RB-275-reprise-secours.md) |
 | Écritures bloquées | [RB-276](runbooks/RB-276-ecritures-bloquees.md) |
 | Consommateur arrêté, rejouer le rebut | [RB-277](runbooks/RB-277-consommateur-arrete.md) |

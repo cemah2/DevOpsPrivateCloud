@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck source-path=SCRIPTDIR
 # shellcheck disable=SC2016  # filtres jq entre apostrophes
 # _m27-decouverte.sh — fonctions partagées par les checks M27-E02 à M27-E05 (lecture seule).
 # Sourcé par les check-EXX.sh du palier 1 (lab/bin/check ne lance que les check-EXX.sh).

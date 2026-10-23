@@ -55,5 +55,3 @@ Il n'y en a pas : une fois promue, la copie est une base indépendante, l'ancien
 1. La prod archive-t-elle ? `kubectl -n mediagenda-prod get cluster mediagenda-db -o jsonpath='{.status.conditions[?(@.type=="ContinuousArchiving")]}'`.
 2. Le secours lit-il ? Journaux du pod (`kubectl -n mediagenda-secours logs mediagenda-db-secours-1 -c postgres | grep -i restore`), identité S3 (expirée, révoquée), flux vers `s3-01`.
 3. Un trou dans l'archive (segment manquant) ne se rattrape pas : reconstruire le secours depuis la dernière sauvegarde de base (supprimer et réappliquer le `Cluster` du secours — c'est une copie, pas la prod).
-</content>
-</invoke>

@@ -3,11 +3,16 @@
 # l'entrée simulée de son test ; ce job prouve qu'elle se déclenche sur la structure d'un vrai plan, avec
 # les MÊMES arguments que la CI des projets (espaces évalués).
 #
-# CONFTEST_ESPACES doit être identique à l'entrée du composant validation de plateforme/ci-templates
+# CONFTEST_ESPACES et les données doivent être identiques à ce que lance .validation:conftest-plan du
+# composant validation (M29-E10) : « --namespace tofu », --data rego/donnees et un contexte.json
 # (une seule source : si l'un change, l'autre aussi, dans la même MR — règle de revue, CODEOWNERS).
+# Le contexte des plans de référence est celui d'un plan de l'état socle, sans étiquette de MR
+# (tests/plans/contexte-socle.json) : sans contexte, la règle « contexte absent » refuserait tout et
+# masquerait une règle devenue muette.
 # Le second script refuse tout paquet de règles de rego/tofu qui ne serait pas dans cette liste.
 variables:
-  CONFTEST_ESPACES: "--namespace tofu.socle"   # ← recopie exacte de l'entrée du composant validation
+  CONFTEST_ESPACES: "--namespace tofu"   # ← recopie exacte de .validation:conftest-plan (composant validation)
+  CONFTEST_DONNEES: "--data rego/donnees --data tests/plans/contexte-socle.json"
 
 non-regression-plans:
   stage: test
@@ -23,14 +28,14 @@ non-regression-plans:
       # 1. Le plan dangereux DOIT être refusé : code 1 ET au moins un FAIL (un code 2 = erreur d'analyse,
       #    un « command not found » = 127 : ce ne sont pas des refus).
       rc=0
-      sortie="$(conftest test --no-color -p rego/tofu $CONFTEST_ESPACES tests/plans/plan-dangereux.json 2>&1)" || rc=$?
+      sortie="$(conftest test --no-color -p rego/tofu $CONFTEST_ESPACES $CONFTEST_DONNEES tests/plans/plan-dangereux.json 2>&1)" || rc=$?
       echo "$sortie"
-      if [ "$rc" -ne 1 ] || ! echo "$sortie" | grep -q '^FAIL'; then
+      if [ "$rc" -ne 1 ] || ! echo "$sortie" | grep -q '^FAIL' || echo "$sortie" | grep -q 'contexte absent'; then
         echo "RÉGRESSION : le plan de référence dangereux n'est plus refusé (code $rc : règle muette, espace non évalué ou erreur)."
         exit 1
       fi
       echo "OK : plan dangereux refusé."
-    - conftest test --no-color -p rego/tofu $CONFTEST_ESPACES tests/plans/plan-sain.json
+    - conftest test --no-color -p rego/tofu $CONFTEST_ESPACES $CONFTEST_DONNEES tests/plans/plan-sain.json
     - |
       # 2. Tout paquet de règles de rego/tofu est dans les espaces évalués.
       evalues=" $(echo "$CONFTEST_ESPACES" | sed 's/--namespace//g') "

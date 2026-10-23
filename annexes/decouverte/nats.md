@@ -25,7 +25,7 @@ Autour : comptes et isolation multi-locataires (*accounts*), authentification pa
 | File de tâches avec rebut | natif : rejet → échange de rebut, `delivery-limit`, `x-death` | à construire (republication sur un *topic* de rebut) | `max_deliver` puis **avis** (*advisory*) `MAX_DELIVERIES` : le rebut se construit (un consommateur des avis republie ou un stream dédié) |
 | Relecture de l'historique | non (sauf *streams* RabbitMQ) | oui, c'est sa raison d'être | oui (consumer depuis une date ou une séquence) |
 | Réplication | files quorum (Raft), métadonnées Khepri (Raft) | KRaft + réplication des partitions (ISR) | Raft par stream (R1/R3/R5) et pour les métadonnées |
-| Empreinte (3 nœuds, lab) | ≈ 1,5 Gi | ≈ 4,5 Gi | quelques centaines de Mio |
+| Empreinte (3 nœuds, lab) | ≈ 3,5 Gi réservés (3 × 1 Gi + opérateurs) | ≈ 4,5 Gi | quelques centaines de Mio |
 | Déclaratif dans Kubernetes | Cluster Operator + Messaging Topology Operator (vhosts, files, politiques, utilisateurs, permissions) | Strimzi (`Kafka`, `KafkaTopic`, `KafkaUser`) | chart + NACK (streams, consumers) ; comptes et utilisateurs par JWT, outillage à part (`nsc`) |
 | Compétences dans l'équipe, écosystème | les plus répandues | répandues | plus rares |
 
@@ -33,7 +33,7 @@ Autour : comptes et isolation multi-locataires (*accounts*), authentification pa
 
 1. **Le besoin est une file de tâches avec rebut**, que RabbitMQ couvre nativement (rejet, limite de livraison, `x-death`, rejeu par *shovel*) ; avec JetStream, le rebut et son exploitation seraient à construire.
 2. **Déclaratif incomplet** pour notre façon de travailler : la topologie de RabbitMQ (vhosts, utilisateurs, permissions) est entièrement dans Git par le Topology Operator ; côté NATS, la gestion des comptes et des utilisateurs passe par un outillage séparé.
-3. **Une brique de plus à apprendre et à exploiter** sans gain mesurable : nos volumes (≈ 20 messages par seconde en pointe, M27-E16) sont très loin des limites de RabbitMQ.
+3. **Une brique de plus à apprendre et à exploiter** sans gain mesurable : nos volumes (≈ 20 messages par seconde au pic du lot de rappels de 18 h en janvier, M27-E16) sont très loin des limites de RabbitMQ.
 4. **Gouvernance** : en 2025, l'entreprise qui porte NATS (Synadia) a envisagé de retirer le projet de la CNCF et de changer sa licence ; l'accord trouvé a maintenu NATS à la CNCF sous Apache 2.0. Rien d'inquiétant aujourd'hui, mais un point de vigilance pour une brique centrale.
 
 On rouvrira la question (ADR-0270, conditions de révision) si apparaît un besoin de messagerie **hors du cluster** (sites distants, agences, objets connectés) où les *leaf nodes* font la différence, ou un besoin combiné file de tâches + relecture que ni RabbitMQ seul ni Kafka seul ne couvrent bien.
@@ -49,5 +49,3 @@ Un conteneur suffit (`nats:2.15.1` avec l'option `-js` pour activer JetStream) e
 - Code du serveur : <https://github.com/nats-io/nats-server> (étiquettes `v2.15.x`, fichier `LICENSE`)
 - Charts Helm : <https://github.com/nats-io/k8s> ; contrôleur NACK : <https://github.com/nats-io/nack>
 - Fiche CNCF : <https://www.cncf.io/projects/nats/>
-</content>
-</invoke>

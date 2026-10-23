@@ -148,11 +148,11 @@ Un service systemd peut tourner sous un utilisateur créé à la volée (`Dynami
 - VMs de test : nom **`tt-<suffixe>`** (6 caractères en minuscules), VMID **2290-2299** (le premier libre), VNet **`vsandbox`**, étiquettes **`env-m29`** et **`terratest`**, sous-pool Proxmox **`lab/terratest`** (pools imbriqués). Une seule VM à la fois.
 - Identité dédiée : **`wb-terratest@pve`**, jeton **`terratest`**, créée par un script `plateforme/infra/outils/proxmox/pve-terratest-compte.sh` à lancer en root sur `pve01` (modèle : `pve-tofu-compte.sh` du M05). Le jeton est rangé dans `~/.config/workbook/pve-terratest.env` (`PROXMOX_VE_ENDPOINT`, `PROXMOX_VE_API_TOKEN`) et dans les variables protégées et masquées de `plateforme/tofu-modules`. Le jeton NetBox d'automatisation (`netbox-tofu.env`, M06) sert à l'allocation d'adresse.
 - Le test est compilé seulement avec l'étiquette de construction **`integration`** (`go test ./...` sans elle ne crée rien).
-- CI : job **`terratest:vm-debian`**, **manuel**, sur `runner01` (Go 1.26 et `tofu` à installer par le rôle `gitlab_runner`), un seul à la fois dans toute l'instance.
-- Runbook **RB-293** (« VMs de test orphelines ») dans `docs/qualite/runbooks/`.
+- CI : job **`terratest:vm-debian`**, **manuel**, sur `runner01` (Go 1.26 à ajouter par le rôle `gitlab_runner` ; `tofu` y est depuis le M05), un seul à la fois dans toute l'instance.
+- Runbook **RB-293** (« VMs de test orphelines ») dans `docs/qualite/runbooks/` ; le palier 4 (M29-E21) le complétera.
 
 **Travail demandé**
-1. Installe Go 1.26.x sur `adm01` (archive officielle, empreinte vérifiée) et ajoute Go et `tofu` à `runner01` par son rôle.
+1. Installe Go 1.26.x sur `adm01` (archive officielle, empreinte vérifiée) et ajoute Go 1.26.x à `runner01` par son rôle `gitlab_runner` (vérifie que `tofu version` y répond aussi).
 2. Conçois l'identité de test : quels privilèges, sur quels chemins d'ACL, pour cloner un modèle doré, créer, configurer, démarrer, lire l'agent et détruire une VM du sous-pool, et **rien d'autre**. Écris le script de création (rejouable), lance-le, et prouve avec `pveum user token permissions` que le jeton n'a **aucun** droit d'écriture sur le reste du pool `lab`.
 3. Écris la configuration de test `fixtures/vm/` (appel du module, variables validées : nom au bon format, VMID dans la plage) et le test `TestVmDebian` :
    - nom unique et premier VMID libre de la plage (lu dans l'API de Proxmox) ;
@@ -277,11 +277,11 @@ Une expérience qui ne trouve aucun pod n'est pas refusée à la création : ell
 - Consommateurs : `plateforme/k8s`, `plateforme/gitops`, `plateforme/infra`, `plateforme/ansible`. Les règles Rego elles-mêmes sont testées dans la CI de `plateforme/politiques`.
 - Noms des jobs (les vérifications s'en servent) : préfixe **`validation:`** (par exemple `validation:manifestes`, `validation:rego`, `validation:testinfra`). La vérification des plans est un modèle caché **`.validation:conftest-plan`** que le job de plan de `plateforme/infra` étend.
 - Les entrées comprennent au moins : la version du paquet `schemas-crd`, la version des politiques (une **étiquette** `vX.Y.Z` de `plateforme/politiques`, que tu commences à publier ici), la version de Kubernetes, et l'activation (booléenne) de Testinfra.
-- Les outils (kubeconform, conftest, OPA, kustomize, helm, yq) viennent d'une image construite par `plateforme/ci-templates`, poussée dans Harbor et référencée **par empreinte**.
+- Les outils (kubeconform, conftest, OPA, kustomize, helm, yq) viennent d'une image construite par `plateforme/ci-templates`, poussée dans Harbor et référencée **par empreinte**. Exception : le job de plan de `plateforme/infra` tourne sur `runner01` (exécuteur `shell`, M05) et y lance conftest lui-même ; conftest 0.71 et OPA 1.21 s'installent sur `runner01` par le rôle `gitlab_runner` (binaires vérifiés par empreinte).
 
 **Travail demandé**
 1. Conçois et publie le composant : validation des manifestes rendus (Kustomize et charts des Applications) avec les schémas du paquet et les politiques Kubernetes, sans jamais ignorer un schéma manquant ; tests et vérifications de format des politiques Rego ; vérification des plans **dans** le job qui les produit ; Testinfra facultatif.
-2. Construis l'image d'outils : versions épinglées, binaires vérifiés par empreinte, image signée comme les autres images de la plateforme.
+2. Construis l'image d'outils : versions épinglées, binaires vérifiés par empreinte, image signée comme les autres images de la plateforme. Ajoute conftest et OPA au rôle `gitlab_runner` et applique-le sur `runner01`.
 3. Ajoute dans `plateforme/politiques` au moins deux règles Kubernetes utiles aux manifestes rendus (par exemple : une expérience de chaos sans durée, une charge de travail sans limites de mémoire), avec leurs tests.
 4. Branche le composant dans les quatre dépôts consommateurs et dans la CI de `plateforme/politiques`. Remplace ce que le composant rend inutile (le job Testinfra d'E04, les validations ad hoc).
 5. Prouve que la CI **bloque** : une MR de démonstration par étage (une `Application` avec un champ inconnu, un plan qui remplace une VM du socle, une règle Rego cassée) doit échouer, puis être fermée.
@@ -291,7 +291,7 @@ Une expérience qui ne trouve aucun pod n'est pas refusée à la création : ell
 **Critères de réussite**
 - [ ] L'étiquette du composant est publiée ; `validation` a des entrées typées, dont la version des schémas et la référence des politiques.
 - [ ] Le composant lance kubeconform en mode strict avec le paquet `schemas-crd`, sans `-ignore-missing-schemas` ; il lance conftest (manifestes et plans) et `opa test` ; Testinfra est activable par une entrée.
-- [ ] Les quatre dépôts incluent `validation@vX.Y.Z` par étiquette ; le job de plan de `plateforme/infra` étend `.validation:conftest-plan`.
+- [ ] Les quatre dépôts incluent `validation@vX.Y.Z` par étiquette ; le job de plan de `plateforme/infra` étend `.validation:conftest-plan` ; conftest 0.71 répond sur `runner01`.
 - [ ] Les derniers pipelines de `main` de `plateforme/k8s` et `plateforme/gitops` ont réussi avec un job `validation:…` ; ceux de `plateforme/infra` et de `plateforme/politiques` ont réussi, les règles Rego testées.
 - [ ] Les trois MR de démonstration ont échoué pour la bonne raison.
 

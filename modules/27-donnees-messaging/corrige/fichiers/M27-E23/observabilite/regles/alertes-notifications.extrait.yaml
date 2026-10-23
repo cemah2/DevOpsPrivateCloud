@@ -1,13 +1,14 @@
 # plateforme/observabilite — regles/alertes-donnees.yaml : EXTRAIT à ajouter (M27-E23, INC-5423).
 # Ce qui a manqué pendant l'incident : un signal sur les publications ratées de MédiAgenda (silencieuses
 # par conception, M27-E08) et sur un rebut qui se remplit. La métrique de M27-E08 compte les publications
-# par résultat : adapte la valeur d'échec (« echec » ici) à celle de ton correctif.
+# par résultat (valeurs du correctif d'E08 : publiee, echec, desactivee). « desactivee » (pas de
+# MEDIAGENDA_AMQP_URL, cas du dev) n'est ni un succès ni un échec : il est exclu du rapport.
     - name: donnees.notifications
       rules:
         - alert: MediagendaPublicationEnEchec
           expr: |
-            sum by (namespace) (rate(mediagenda_notifications_total{resultat!~"publie|ok|succes"}[10m]))
-              / sum by (namespace) (rate(mediagenda_notifications_total[10m])) > 0.05
+            sum by (namespace) (rate(mediagenda_notifications_total{resultat="echec"}[10m]))
+              / sum by (namespace) (rate(mediagenda_notifications_total{resultat=~"publiee|echec"}[10m])) > 0.05
           for: 10m
           labels:
             gravite: critique

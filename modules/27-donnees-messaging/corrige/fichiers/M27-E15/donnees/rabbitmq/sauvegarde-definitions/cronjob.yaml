@@ -93,7 +93,9 @@ spec:
           volumes:
             - name: script
               configMap: {name: export-definitions}
-            - name: racine
-              secret: {secretName: medisphere-ca}
+            - name: racine        # ConfigMap de la racine MédiSphère posée dans messagerie par M27-E03
+              configMap:
+                name: racine-medisphere
+                items: [{key: medisphere-root-ca.crt, path: ca.crt}]
             - name: travail
               emptyDir: {sizeLimit: 64Mi}

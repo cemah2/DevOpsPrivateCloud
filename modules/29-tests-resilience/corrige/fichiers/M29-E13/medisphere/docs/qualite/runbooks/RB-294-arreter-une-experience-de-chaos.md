@@ -6,6 +6,7 @@
 | Quand | une expérience dépasse son critère d'arrêt, quelqu'un demande l'arrêt, ou on ne sait plus ce qui tourne |
 | Qui | toute personne de la plateforme ; l'astreinte en dehors des heures ouvrées |
 | Durée | 2 à 5 minutes |
+| Voir aussi | **RB-292** (M29-E09) : arrêt d'urgence de **tout** le chaos, applicable par l'astreinte seule, jusqu'à couper Chaos Mesh. RB-294 le complète par l'outil `chaos-arret.sh` et la **preuve du retrait** expérience par expérience ; RB-297 traite ce qui ne s'arrête pas. |
 
 ## 1. Arrêter tout, tout de suite
 

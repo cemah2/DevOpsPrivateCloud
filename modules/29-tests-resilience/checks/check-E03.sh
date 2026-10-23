@@ -19,8 +19,8 @@ check_cmd "conftest 0.71 sur adm01" _m29d_version_outil conftest '^Conftest: 0\.
 # --- 1. Les fichiers ---------------------------------------------------------------------------------
 _m29d_e03_d="$_M29D_TMP/politiques"
 _m29d_e03_n="$(_m29d_copier "$_M29D_P_POLITIQUES" rego "$_m29d_e03_d")"
-_m29d_e03_regles="$(find "$_m29d_e03_d/rego/tofu" -name '*.rego' ! -name '*_test.rego' 2>/dev/null | wc -l)"
-_m29d_e03_tests="$(find "$_m29d_e03_d/rego/tofu" -name '*_test.rego' 2>/dev/null | wc -l)"
+_m29d_e03_regles="$(find "$_m29d_e03_d/rego/tofu" -name '*.rego' ! -name '*_test.rego' 2>/dev/null | wc -l || true)"
+_m29d_e03_tests="$(find "$_m29d_e03_d/rego/tofu" -name '*_test.rego' 2>/dev/null | wc -l || true)"
 check_cmd "plateforme/politiques : rego/tofu/ contient des règles (${_m29d_e03_regles}) et des tests (${_m29d_e03_tests}) — ${_m29d_e03_n:-0} fichiers lus" \
   bash -c '(( $1 >= 1 && $2 >= 1 ))' _ "$_m29d_e03_regles" "$_m29d_e03_tests"
 check_cmd "plateforme/politiques : rego/donnees/plages-vmid.yaml" test -s "$_m29d_e03_d/rego/donnees/plages-vmid.yaml"

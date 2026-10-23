@@ -45,7 +45,7 @@ true
 Démonstration de Sophie (répétée avant, dans `chaos-experiences`, 10 s) :
 
 ```
-admin@adm01:~$ cat <<'EOF' | kubectl apply -f -
+admin@adm01:~$ cat > /tmp/demo-prod.yaml <<'FIN'
 apiVersion: chaos-mesh.org/v1alpha1
 kind: PodChaos
 metadata: {name: demo-prod-refusee, namespace: chaos-experiences}
@@ -54,17 +54,19 @@ spec:
   mode: one
   selector: {namespaces: [mediagenda-prod]}
   duration: 10s
-EOF
-admin@adm01:~$ kubectl -n chaos-experiences describe podchaos demo-prod-refusee | tail -5
-  Warning  Failed  …  Failed to select targets: no pod is selected        (texte exact selon la version)
-admin@adm01:~$ kubectl -n chaos-experiences delete podchaos demo-prod-refusee
+FIN
+admin@adm01:~$ kubectl apply --dry-run=server -f /tmp/demo-prod.yaml
+The podchaos "demo-prod-refusee" is invalid: : ValidatingAdmissionPolicy 'medisphere-chaos-espaces' with binding
+'medisphere-chaos-espaces' denied request: expérience visant un espace non autorisé : mediagenda-prod      (texte exact selon la version)
+admin@adm01:~$ kubectl annotate ns mediagenda-prod chaos-mesh.org/inject=enabled --dry-run=server
+… denied request: annotation chaos-mesh.org/inject=enabled interdite sur l'espace mediagenda-prod …
 ```
 
-Explication à donner : l'objet est **accepté** par l'API (le webhook ne connaît pas les annotations d'espaces), mais le sélecteur du contrôleur écarte tout pod d'un espace sans `chaos-mesh.org/inject=enabled` : rien n'est injecté. Le garde-fou repose donc sur deux choses : le filtre (valeur de Chaos Mesh, dans Git) et les annotations (posées par `plateforme/k8s/espaces/`, relues en MR) ; un `kubectl annotate` manuel sur `mediagenda-prod` le contournerait — d'où la règle Kyverno du M26 qui interdit cette annotation hors des espaces autorisés (à ajouter si elle n'existe pas) et la vérification du check.
+Explication à donner : **deux barrières indépendantes**. (1) La politique d'admission `medisphere-chaos-espaces` (M29-E09, liaison en `Deny`) refuse à la création toute expérience dont `selector.namespaces` sort de la liste fermée, et toute annotation `chaos-mesh.org/inject=enabled` hors de cette liste, administrateurs compris. (2) Si la première tombait (liaison repassée en `Warn`, exclusion trop large), le filtre d'espaces de Chaos Mesh (`enableFilterNamespace`, valeur dans Git) écarterait tout pod d'un espace non annoté : l'objet existerait, la condition `Selected` resterait à `False` avec un événement « no pod is selected », rien ne serait injecté. Les deux sont dans Git (valeurs de Chaos Mesh, `plateforme/k8s/admission/`), relus en MR, et vérifiés par `lab/bin/check 29 09`.
 
 *5. Journée de jeu suivie d'effets.* Chaque issue `journee-de-jeu` est fermée avec un commentaire qui pointe la preuve : MR fusionnée (alerte, `preStop`), règle chargée dans Prometheus, test ajouté ; ou reportée par une décision écrite (commentaire daté de Claire Morel) — dans ce cas l'issue reste ouverte et le check reste rouge : c'est voulu, on livre quand c'est **décidé**. L'action `/pret` : soit le correctif de M29-E23 est fusionné par l'équipe de Julien, soit sa décision écrite (avec échéance) est dans l'issue et l'issue est close par la plateforme avec lien vers le ticket `DEV-3013` qui la porte désormais.
 
-*6. Documentation.* `docs/qualite/` : `strategie-tests.md` (M29-E12, mis à jour : ce qui a été réellement livré et où), ADR-0290, RB-290 à RB-298, rapport E15, journées de jeu, post-mortem INC-5623, `sous-le-capot-chaos-mesh.md`, et la note de livraison [`livraison-resilience-v1.md`](fichiers/M29-E25/medisphere/docs/qualite/livraison-resilience-v1.md).
+*6. Documentation.* `docs/qualite/` : `strategie-tests.md` (M29-E12, mis à jour : ce qui a été réellement livré et où — [extrait des modifications](fichiers/M29-E25/medisphere/docs/qualite/strategie-tests.extrait-E25.md) ; le check vérifie qu'elle cite k6-operator, la non-régression, les journées de jeu et le nettoyeur), ADR-0290, RB-290 à RB-297, rapport E15, journées de jeu, post-mortem INC-5623, `sous-le-capot-chaos-mesh.md`, et la note de livraison [`livraison-resilience-v1.md`](fichiers/M29-E25/medisphere/docs/qualite/livraison-resilience-v1.md).
 
 *7. Livraison.* Pipelines de `main` verts (`plateforme/resilience`, `plateforme/politiques`, `plateforme/ci-templates`), puis :
 

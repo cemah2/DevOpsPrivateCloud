@@ -2,7 +2,7 @@
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
-Ce corrigé suit l'ordre de l'énoncé. Les fichiers complets sont dans [`fichiers/`](fichiers/), exercice par exercice : `gitops/` reproduit `plateforme/gitops`, `k8s/` `plateforme/k8s`, `charts-miroir/` les entrées de `charts.yaml`, `donnees/` `plateforme/donnees`, `secrets/` `plateforme/secrets`, `deploiement-mediagenda/`, `deploiement-medinotif/`, `deploiement-medidoc/` les dépôts de déploiement, `medisphere/` la documentation. Un fichier `*.extrait-*` ne contient que ce qui change ; un fichier sans ce suffixe est complet.
+Ce corrigé suit l'ordre de l'énoncé. Les fichiers complets sont dans [`fichiers/`](fichiers/), exercice par exercice : `gitops/` reproduit `plateforme/gitops`, `k8s/` `plateforme/k8s`, `charts-miroir/` les entrées de `charts.yaml`, `donnees/` `plateforme/donnees`, `secrets/` `plateforme/secrets`, `mediagenda-deploiement/`, `medinotif-deploiement/`, `medidoc-deploiement/` les dépôts de déploiement, `medisphere/` la documentation. Un fichier `*.extrait-*` ne contient que ce qui change ; un fichier sans ce suffixe est complet.
 
 **Ce qui a été vérifié à la rédaction** (23/10/2026) :
 - empreintes des charts dans les index amont **et** recalculées sur les archives téléchargées : `keda` 2.21.0, `vpa` 5.1.0 (VPA 1.7.1), `capsule` 0.15.1 ;
@@ -58,8 +58,8 @@ Ce corrigé suit l'ordre de l'énoncé. Les fichiers complets sont dans [`fichie
    { "spec": { "replicas": 2 }, "status": { "replicas": 2, "selector": "app.kubernetes.io/component=api,app.kubernetes.io/instance=mediagenda,app.kubernetes.io/name=mediagenda,…" } }
    ```
    L'objet `Scale` (`autoscaling/v1`) ne porte que le nombre voulu, le nombre actuel et le sélecteur : c'est tout ce que l'HPA lit et écrit.
-2. **Les requêtes.** `kubectl top pods -n mediagenda-recette`, puis sous charge (`charge.sh -d 300`) ; PromQL dans [`autoscaling.md`](fichiers/M28-E02/medisphere/docs/plateforme-dev/autoscaling.md). Valeurs (à remplacer par les tiennes) dans [`values-communes.extrait`](fichiers/M28-E02/deploiement-mediagenda/base/values-communes.extrait-M28-E02.yaml) : CPU 200 m, mémoire 192 Mi, limite 384 Mi. `outils/rendre-base.sh`, rendu commité (M17-E09).
-3. **L'HPA.** [`components/autoscaling/`](fichiers/M28-E02/deploiement-mediagenda/components/autoscaling/) : HPA `mediagenda` (Rollout, CPU 70 %, `behavior`) et `remove /spec/replicas` sur le Rollout. Overlays : [recette](fichiers/M28-E02/deploiement-mediagenda/overlays/recette/kustomization.extrait-M28-E02.yaml), [prod](fichiers/M28-E02/deploiement-mediagenda/overlays/prod/kustomization.extrait-M28-E02.yaml) — en prod, l'ancien `replace /spec/replicas` **disparaît** et un correctif fixe 3 → 6. Contrôle :
+2. **Les requêtes.** `kubectl top pods -n mediagenda-recette`, puis sous charge (`charge.sh -d 300`) ; PromQL dans [`autoscaling.md`](fichiers/M28-E02/medisphere/docs/plateforme-dev/autoscaling.md). Valeurs (à remplacer par les tiennes) dans [`values-communes.extrait`](fichiers/M28-E02/mediagenda-deploiement/base/values-communes.extrait-M28-E02.yaml) : CPU 200 m, mémoire 192 Mi, limite 384 Mi. `outils/rendre-base.sh`, rendu commité (M17-E09).
+3. **L'HPA.** [`components/autoscaling/`](fichiers/M28-E02/mediagenda-deploiement/components/autoscaling/) : HPA `mediagenda` (Rollout, CPU 70 %, `behavior`) et `remove /spec/replicas` sur le Rollout. Overlays : [recette](fichiers/M28-E02/mediagenda-deploiement/overlays/recette/kustomization.extrait-M28-E02.yaml), [prod](fichiers/M28-E02/mediagenda-deploiement/overlays/prod/kustomization.extrait-M28-E02.yaml) — en prod, l'ancien `replace /spec/replicas` **disparaît** et un correctif fixe 3 → 6. Contrôle :
    ```
    admin@adm01:~/src/mediagenda-deploiement$ kustomize build overlays/prod | yq 'select(.kind == "Rollout") | .spec.replicas'
    null
@@ -143,7 +143,7 @@ Alerte « HPA au maximum depuis 15 min » (`kube_horizontalpodautoscaler_status_
        https://rabbitmq.apps.par1.medisphere.internal/api/queues/medinotif-recette/notifications | jq '{messages, messages_ready, messages_unacknowledged}'
    admin@adm01:~$ unset rabbitmq_mdp
    ```
-6. **MédiNotif** : [`overlays/recette/keda/`](fichiers/M28-E03/deploiement-medinotif/overlays/recette/keda/) (ExternalSecret avec l'adresse de l'API en clé `hote`, `TriggerAuthentication` qui ne référence que le Secret, `ScaledObject`), [`kustomization.extrait`](fichiers/M28-E03/deploiement-medinotif/overlays/recette/kustomization.extrait-M28-E03.yaml), [`ApplicationSet medinotif.extrait`](fichiers/M28-E03/gitops/applications/medinotif.extrait-M28-E03.yaml).
+6. **MédiNotif** : [`overlays/recette/keda/`](fichiers/M28-E03/medinotif-deploiement/overlays/recette/keda/) (ExternalSecret avec l'adresse de l'API en clé `hote`, `TriggerAuthentication` qui ne référence que le Secret, `ScaledObject`), [`kustomization.extrait`](fichiers/M28-E03/medinotif-deploiement/overlays/recette/kustomization.extrait-M28-E03.yaml), [`ApplicationSet medinotif.extrait`](fichiers/M28-E03/gitops/applications/medinotif.extrait-M28-E03.yaml).
 7. **Observe** :
    ```
    admin@adm01:~$ kubectl -n medinotif-recette get scaledobject medinotif
@@ -197,7 +197,7 @@ Compte `keda-prod` et `ScaledObject` de prod au palier 3 (M28-E13), avec zéro e
    admin@adm01:~$ kubectl get mutatingwebhookconfiguration vpa-webhook-config -o jsonpath='{.webhooks[0].failurePolicy}{"\n"}'
    Ignore
    ```
-3. **Recommandations** : [`components/recommandations/`](fichiers/M28-E04/deploiement-mediagenda/components/recommandations/) pour MédiAgenda (Rollout), [`vpa.yaml` recette et prod](fichiers/M28-E04/deploiement-medinotif/overlays/) pour MédiNotif, [`vpa.yaml`](fichiers/M28-E04/deploiement-medidoc/overlays/recette/vpa.yaml) pour MédiDoc.
+3. **Recommandations** : [`components/recommandations/`](fichiers/M28-E04/mediagenda-deploiement/components/recommandations/) pour MédiAgenda (Rollout), [`vpa.yaml` recette et prod](fichiers/M28-E04/medinotif-deploiement/overlays/) pour MédiNotif, [`vpa.yaml`](fichiers/M28-E04/medidoc-deploiement/overlays/recette/vpa.yaml) pour MédiDoc.
 4. **Lecture** :
    ```
    admin@adm01:~$ kubectl -n mediagenda-recette get vpa mediagenda -o json | jq '.status.recommendation.containerRecommendations[] | {containerName, target, lowerBound, upperBound, uncappedTarget}'

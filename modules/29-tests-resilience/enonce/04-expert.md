@@ -17,12 +17,12 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
   ```
   Le script tire une variante au hasard et n'affiche que le **symptôme**. Chaque panne a 2 à 3 variantes (`--variante N` force une variante sans dire laquelle est laquelle). Si une variante n'a pas d'effet sur ton lab (ta configuration diffère de celle du corrigé), le script en essaie une autre ; si aucune n'a d'effet, il remet tout en état et te dit quel prérequis manque. Une injection prend **de 1 à 15 minutes** : certaines passent par un commit, la synchronisation d'Argo CD, une mise à l'échelle par l'HPA, et le script attend de constater l'effet.
 - **Avant d'injecter**, lance le contrôle de l'exercice (`lab/bin/check 29 19`) : il doit être vert. Le script refuse de casser un lab qui ne va pas bien.
-- **Prérequis techniques** sur `adm01` : le jeton d'administration GitLab de M01 (`WB_GITLAB_ADMIN_TOKEN_FILE`, portée `api`) ; `yq` de mikefarah (v4), `jq`, `opa`, `conftest`, `kubectl` ; SSH vers les nœuds de `k8s-par1`, vers `pve01` (root) et vers les VMs du socle.
+- **Prérequis techniques** sur `adm01` : le jeton d'administration GitLab de M01 (`WB_GITLAB_ADMIN_TOKEN_FILE`, portée `api`) ; `yq` de mikefarah (v4) et `jq` (M02), `opa` 1.21 et `conftest` 0.71 (M29-E03), `kubectl` ; SSH vers les nœuds de `k8s-par1`, vers `pve01` (root) et vers les VMs du socle.
 - **Commits de Lucas.** Certaines pannes modifient un dépôt (`plateforme/politiques`, `plateforme/infra`, `plateforme/gitops`, `mediagenda/deploiement`) par un commit signé « Lucas Martin », avec le marqueur `M29-EXX` dans le message ; si `main` refuse la poussée directe, elles passent par une MR fusionnée par le script après son pipeline. C'est un vrai changement : il apparaît dans `git log`, dans Argo CD, dans le journal d'audit de GitLab. Corrige-le comme un vrai commit fautif (revert ou correction par MR).
 - **Ne lis pas** les scripts de `corrige/pannes/`, ni `/var/lib/workbook/` sur les hôtes, ni `~/.local/state/workbook/` sur `adm01`.
 - Une seule panne active à la fois par exercice. `lab/bin/break 29 19 --annuler` remet l'état sain (filet de sécurité, pas un correctif). **Quand tu as réparé**, lance aussi `--annuler` pour **clore** la panne : l'annulation ne défait jamais ta réparation (un fichier n'est remis que s'il est encore exactement dans l'état injecté), et une panne ouverte bloque l'astreinte M29-E23 et le mini-projet.
-- Les pannes n'agissent que sur : les dépôts cités plus haut ; les objets des espaces `chaos-experiences`, `mediagenda-recette`, `medinotif-recette` et `wb-essais` ; les pods de `chaos-mesh` (par leurs valeurs Git) ; les VM **2298-2299** du pool `lab` sur `pve01` ; un fichier temporaire sur `adm01` ; une VM non critique du socle (`nbx01` ou `mon01`, par `WB_M29_E22_HOTES`) dont les fichiers modifiés sont sauvegardés. **Jamais** `*-prod`, `messagerie`, `kube-system`, `argocd`, `kyverno` ; aucune donnée détruite.
-- **Journal de diagnostic** pour chaque panne dans `docs/qualite/journal/` de `~/medisphere` : heure, hypothèse, commande, résultat, conclusion. Il nourrit les runbooks RB-297 et RB-298 et le post-mortem de M29-E23.
+- Les pannes n'agissent que sur : les dépôts cités plus haut ; les objets des espaces `chaos-experiences`, `mediagenda-recette`, `medinotif-recette` et `wb-essais` ; les pods de `chaos-mesh` (par leurs valeurs Git) ; les VM **2298-2299** du sous-pool `lab/terratest` sur `pve01` ; un fichier temporaire sur `adm01` ; une VM non critique du socle (`nbx01` ou `mon01`, par `WB_M29_E22_HOTES`) dont les fichiers modifiés sont sauvegardés. **Jamais** `*-prod`, `messagerie`, `kube-system`, `argocd`, `kyverno` ; aucune donnée détruite.
+- **Journal de diagnostic** pour chaque panne dans `docs/qualite/journal/` de `~/medisphere` : heure, hypothèse, commande, résultat, conclusion. Il nourrit les runbooks RB-294, RB-297 et RB-293 (complété en E21) et le post-mortem de M29-E23.
 - Le **temps cible** est indicatif. Le dépasser n'est pas un échec ; corriger sans comprendre en est un.
 
 > ⚠️ **Effets de bord** : E20 et E23 dégradent réellement la **recette** de MédiAgenda (latence, indisponibilité) le temps de l'exercice ; préviens Julien. E21 crée deux VMs (arrêtées) sur `pve01` ; E22 dérègle un service d'une VM du socle (l'heure, `sshd` ou l'exportateur de métriques) : la supervision de `mon01` peut alerter, c'est attendu.
@@ -35,14 +35,14 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 > *(Le détail s'affiche à l'injection : un plan de référence qui détruit une VM du socle n'est plus refusé par la chaîne de validation de `plateforme/infra`.)*
 
 **Objectifs pédagogiques**
-- Remonter la chaîne de validation d'un plan OpenTofu : job de CI, composant `validation`, arguments de `conftest` (`--policy`, `--namespace`), paquets Rego, règles, tests.
+- Remonter la chaîne de validation d'un plan OpenTofu : job de plan, composant `validation` (`.validation:conftest-plan`), arguments de `conftest` (`--policy`, `--namespace`, `--data`), paquets Rego, règles, tests.
 - Distinguer « la règle n'est pas évaluée », « la règle est évaluée mais ne peut plus se déclencher » et « la règle refuse mais le pipeline ne s'arrête pas ».
 - Rendre ce type de régression **impossible à rater** : test de non-régression des politiques sur des plans réels.
 
 **Prérequis** : M29-E03, M29-E10 ; `lab/bin/check 29 19` vert avant l'injection.
 **Durée indicative** : 30 min (temps cible).
 
-**Contexte technique** : `ressources/E19-plan-dangereux/plan-dangereux.json` est la sortie `tofu show -json` d'un plan de `plateforme/infra` qui **supprime** la VM `nbx01` et crée une VM sans étiquette d'environnement ; les politiques de M29-E03 le refusaient (vérifie-le d'abord sur ton historique : `conftest test` à une date antérieure, ou le check de cet exercice). Le script vérifie, avant d'injecter, que ce plan est refusé avec **les arguments de ta CI** ; tu peux désigner un autre plan de référence par `WB_M29_E19_PLAN`.
+**Contexte technique** : `ressources/E19-plan-dangereux/plan-dangereux.json` est la sortie `tofu show -json` d'un plan de `plateforme/infra` qui **supprime** la VM `nbx01` et crée une VM sans étiquette d'environnement ; les politiques de M29-E03 le refusaient (vérifie-le d'abord sur ton historique : `conftest test` à une date antérieure, ou le check de cet exercice). Le script vérifie, avant d'injecter, que ce plan est refusé avec **les arguments du job de plan** (espaces, `--data rego/donnees`, et le contexte que le job écrit, ici celui de l'état `socle` sans étiquette de MR) ; tu peux désigner un autre plan de référence par `WB_M29_E19_PLAN` et son état par `WB_M29_E19_ETAT`.
 
 **Injection** : `lab/bin/break 29 19` (3 variantes).
 
@@ -54,7 +54,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 
 **Critères de réussite**
 - [ ] Le plan de référence est de nouveau refusé par les politiques de `main`, avec les arguments de la CI de `plateforme/infra`.
-- [ ] Aucun job de validation de `plateforme/infra` n'est autorisé à échouer ; les paquets Rego de `rego/tofu/` sont dans les espaces évalués par la CI.
+- [ ] Aucun job de validation ni de plan de `plateforme/infra` n'est autorisé à échouer ; les paquets Rego de `rego/tofu/` sont dans les espaces évalués par la CI.
 - [ ] `plateforme/politiques` contient un test de non-régression sur un plan réel (fichier JSON versionné) ; la panne est close.
 
 **Vérification** : `lab/bin/check 29 19`
@@ -71,7 +71,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 
 <details><summary>Indice 3</summary>
 
-Un pipeline peut être vert avec un job rouge : `allow_failure`. Dans GitLab, le job apparaît alors en orange avec un point d'exclamation, et le pipeline est « passed ». La clé peut se poser dans le composant ou dans le `.gitlab-ci.yml` qui l'inclut, en surchargeant le job par son nom.
+Un pipeline peut être vert avec un job rouge : `allow_failure`. Dans GitLab, le job apparaît alors en orange avec un point d'exclamation, et le pipeline est « passed ». La clé peut se poser dans le composant, dans le `.gitlab-ci.yml` qui l'inclut en surchargeant le job par son nom, ou dans un **modèle caché** que les jobs étendent (`extends`) : regarde aussi ceux-là.
 </details>
 
 **Pour aller plus loin** (facultatif) : ajoute à la CI de `plateforme/politiques` un test de mutation léger : pour chaque règle, une copie du plan de référence « corrigée » juste assez pour qu'elle passe, et vérifie que **seule** la règle concernée change de verdict.
@@ -84,7 +84,7 @@ Un pipeline peut être vert avec un job rouge : `allow_failure`. Dans GitLab, le
 > *(Le détail s'affiche à l'injection : selon le cas, la recette de MédiAgenda reste lente alors que l'expérience a été supprimée, ou une expérience refuse de disparaître.)*
 
 **Objectifs pédagogiques**
-- Trouver **toutes** les expériences actives qui touchent un pod, où qu'elles soient (`Schedule`, expériences d'autres espaces, objets intermédiaires `PodNetworkChaos`).
+- Trouver **toutes** les expériences actives qui touchent un pod et leur état réel (`Schedule`, pause réellement prise en compte ou non, objets intermédiaires `PodNetworkChaos`).
 - Comprendre le cycle de vie d'une expérience (`desiredPhase`, enregistrements par conteneur, finaliseur `chaos-mesh/records`) et ce qui bloque sa suppression.
 - Retirer à la main, proprement, ce que le `chaos-daemon` n'a pas pu retirer, et le prouver sur le nœud.
 
@@ -105,7 +105,7 @@ Un pipeline peut être vert avec un job rouge : `allow_failure`. Dans GitLab, le
 5. Complète **RB-294** et écris **RB-297** « Une expérience de chaos ne s'arrête pas » : arbre de décision (qui la recrée ? qui empêche son retrait ?), commandes de preuve, retrait manuel, forçage du finaliseur en dernier recours (`chaos-mesh.chaos-mesh.org/cleanFinalizer`), vérification finale.
 
 **Critères de réussite**
-- [ ] Aucune expérience ni `Schedule` actif ne vise la recette hors de `chaos-experiences` ; aucun `Schedule` non en pause n'embarque une expérience sans durée.
+- [ ] Aucun objet de chaos hors de `chaos-experiences` ; aucune expérience « en pause » par une annotation qui n'est pas `experiment.chaos-mesh.org/pause=true` ; aucun `Schedule` non en pause n'embarque une expérience sans durée.
 - [ ] Les `chaos-daemon` sont prêts sur tous les travailleurs, avec le socket containerd attendu ; aucune expérience bloquée en suppression.
 - [ ] Aucun `qdisc` `netem` ne reste sur les pods de l'API MédiAgenda ; la latence p95 de la recette est revenue sous 250 ms.
 - [ ] RB-297 est publié ; la panne est close.
@@ -114,7 +114,7 @@ Un pipeline peut être vert avec un job rouge : `allow_failure`. Dans GitLab, le
 
 <details><summary>Indice 1</summary>
 
-`kubectl api-resources --api-group=chaos-mesh.org -o name` donne tous les types ; une boucle `kubectl get <type> -A` les passe tous. Un objet qui revient après suppression a un parent : regarde `ownerReferences` et les étiquettes posées par un `Schedule`. Un `PodNetworkChaos` porte le nom du pod visé, dans l'espace du pod : il dit ce que le contrôleur **veut** sur ce pod.
+`kubectl api-resources --api-group=chaos-mesh.org -o name` donne tous les types ; une boucle `kubectl get <type> -A` les passe tous. Un objet qui revient après suppression a un parent : regarde `ownerReferences` et les étiquettes posées par un `Schedule`. Une expérience « en pause » l'est si son **statut** le dit (`desiredPhase`, condition `Paused`), pas parce qu'une annotation contient le mot « pause ». Un `PodNetworkChaos` porte le nom du pod visé, dans l'espace du pod : il dit ce que le contrôleur **veut** sur ce pod.
 </details>
 
 <details><summary>Indice 2</summary>
@@ -144,22 +144,22 @@ Si le finaliseur ne part pas, c'est que le contrôleur n'arrive pas à faire ret
 **Prérequis** : M29-E08 ; `lab/bin/check 29 21` vert avant l'injection.
 **Durée indicative** : 30 min (temps cible).
 
-**Contexte technique** : les VMs de Terratest sont en **2290-2299**, nommées `tt-<suffixe>`, étiquetées `env-m29` et `terratest`, dans le pool `lab`. Terratest copie le module dans un répertoire temporaire (`test_structure.CopyTerraformFolderToTemp`) où vit l'état local du test. Le budget mémoire du lab est serré (PLAN §3.3) : une VM oubliée et démarrée prend 1 Go à tout le monde.
+**Contexte technique** : les VMs de Terratest sont en **2290-2299**, nommées `tt-<suffixe>`, étiquetées `env-m29` et `terratest`, dans le sous-pool Proxmox **`lab/terratest`**, avec une adresse allouée par NetBox (M29-E08). Terratest copie le module dans un répertoire temporaire (`test_structure.CopyTerraformFolderToTemp`) où vit l'état local du test (sous `test/fixtures/vm/` de la copie). Le budget mémoire du lab est serré (PLAN §3.3) : une VM oubliée et démarrée prend 1 Go à tout le monde.
 
 **Injection** : `lab/bin/break 29 21` (3 variantes).
 
-> ⚠️ **Attention** : sur `pve01`, ne détruis **rien** hors de la plage 2290-2299 et hors du pool `lab`. Avant tout `qm destroy`, montre la VM (nom, étiquettes, date de création, disques) et vérifie qu'aucun test n'est en cours (pipeline Terratest en marche ?).
+> ⚠️ **Attention** : sur `pve01`, ne détruis **rien** hors de la plage 2290-2299 et hors du sous-pool `lab/terratest`. Avant tout `qm destroy`, montre la VM (nom, étiquettes, note, date de création, disques) et vérifie qu'aucun test n'est en cours (job `terratest:vm-debian` en marche ?). De préférence, détruis avec le jeton `wb-terratest` (M29-E08) : il ne peut rien toucher d'autre.
 
 **Travail demandé**
-1. Inventorie : VMs de 2290-2299 (nom, état, étiquettes, pool, date de création dans `meta`), pipelines Terratest récents et leur fin, états locaux restés sur le poste qui lance les tests.
+1. Inventorie : VMs de 2290-2299 (nom, état, étiquettes, pool, note, date de création dans `meta`), pipelines Terratest récents et leur fin, états locaux restés sur le poste qui lance les tests, adresses et VMs `terratest` restées dans NetBox.
 2. Explique pourquoi le pipeline échoue par intermittence et ce qui, sur ce lab, transforme un test interrompu en VM oubliée.
 3. Nettoie : de préférence avec l'état orphelin quand il est cohérent (`tofu destroy` dans son répertoire), sinon par l'API de Proxmox, VM par VM ; supprime l'état orphelin ensuite.
-4. **Prévention** : vérifie et corrige le test (`defer terraform.Destroy` placé **avant** `InitAndApply`, délai explicite de `go test` supérieur au pire cas, nom et étiquettes obligatoires) ; écris `plateforme/tofu-modules/outils/nettoyer-terratest.sh` (lecture par l'API de Proxmox, sélection par plage **et** étiquette **et** préfixe de nom **et** âge, mode simulation par défaut, journal) et planifie-le (pipeline planifié de `plateforme/tofu-modules`) ; runbook **RB-298** « Ressources de test orphelines ».
+4. **Prévention** : vérifie et corrige le test (destruction enregistrée par `t.Cleanup` ou `defer` **avant** `InitAndApply`, délais emboîtés d'E08 : attentes du test < `go test -timeout` < `timeout` du job, protection forcée à `false`, nom et étiquettes obligatoires) ; écris `plateforme/tofu-modules/outils/nettoyer-terratest.sh` (lecture par l'API de Proxmox avec le jeton `wb-terratest`, sélection par plage **et** sous-pool **et** étiquette **et** préfixe de nom **et** âge, mode simulation par défaut, journal) et planifie-le (pipeline planifié de `plateforme/tofu-modules`) ; **complète RB-293** (M29-E08) : causes, nettoyeur, ce qui reste dans NetBox.
 
 **Critères de réussite**
 - [ ] Aucune VM dans 2290-2299 sur `pve01` ; aucun état Terratest orphelin sur `adm01`.
-- [ ] Le test de `vm-debian` diffère sa destruction avant l'application et fixe un délai explicite.
-- [ ] `outils/nettoyer-terratest.sh` existe (sélection par étiquette et plage, simulation par défaut) et un pipeline planifié de `plateforme/tofu-modules` l'appelle ; RB-298 est publié ; la panne est close.
+- [ ] Le test de `vm-debian` enregistre sa destruction avant l'application et le job fixe un délai explicite (`go test -timeout`).
+- [ ] `outils/nettoyer-terratest.sh` existe (sélection par étiquette et plage, simulation par défaut) et un pipeline planifié de `plateforme/tofu-modules` l'appelle ; RB-293 est complété (nettoyeur, causes) ; la panne est close.
 
 **Vérification** : `lab/bin/check 29 21`
 
@@ -170,7 +170,7 @@ Si le finaliseur ne part pas, c'est que le contrôleur n'arrive pas à faire ret
 
 <details><summary>Indice 2</summary>
 
-`go test` a un délai **par défaut** de 10 minutes ; au-delà, il fait paniquer le processus de test : aucun `defer` ne s'exécute. Un `defer` placé après un `InitAndApply` qui échoue à mi-chemin ne s'exécute pas non plus si l'échec a lieu avant (`t.Fatal` arrête la fonction **après** les `defer` déjà enregistrés seulement). Cherche les répertoires temporaires de Terratest sur le poste (`find /tmp -name terraform.tfstate -path '*vm-debian*'`).
+`go test` a un délai **par défaut** de 10 minutes ; au-delà, il fait paniquer le processus de test : ni `defer` ni `t.Cleanup` ne s'exécutent (d'où l'échéance interne d'E08, plus courte). Une destruction enregistrée **après** un `InitAndApply` qui échoue à mi-chemin ne s'exécute pas non plus (`t.Fatal` n'exécute que ce qui est déjà enregistré). Un job annulé ou un runner redémarré tue le processus : rien ne s'exécute. Cherche les répertoires temporaires de Terratest sur le poste (`find /tmp -name terraform.tfstate -path '*vm-debian*'`).
 </details>
 
 **Pour aller plus loin** (facultatif) : donne au nettoyeur une alerte : s'il trouve une VM `terratest` de plus de 2 h, il écrit une métrique dans le collecteur textfile de `node_exporter` de `runner01` et une règle de `mon01` prévient la plateforme.
@@ -280,7 +280,7 @@ Un rôle qui pose **ses** fichiers ne voit pas un fichier **de plus** posé à c
 **Durée indicative** : 2 h 30.
 
 **Contexte technique**
-- Tout se passe dans **`wb-essais`** (annoté) sur des pods jetables que tu crées : `cible-e24` (un serveur HTTP minimal, image de Harbor) et `client-e24` (une boucle `wget` vers `cible-e24`). Aucune expérience sur la recette dans cet exercice.
+- Tout se passe dans **`wb-essais`** (annoté) sur des pods jetables que tu crées : `cible-e24` (un serveur HTTP minimal, image de Harbor) et `client-e24` (une boucle `wget` vers `cible-e24`). Les expériences, elles, se créent dans `chaos-experiences` (VAP `medisphere-chaos-espaces`, M29-E09) et visent `wb-essais`. Aucune expérience sur la recette dans cet exercice.
 - Le `chaos-daemon` tourne en `hostPID` et privilégié ; son image contient `tc`, `ipset`, `iptables` (variante *legacy*), `stress-ng`, `memStress`, `nsexec`, `toda`. Sur les nœuds Debian 13, `iptables` est la variante *nft* : ce que tu vois avec l'une ne se voit pas avec l'autre.
 - `crictl` sur les nœuds (`sudo crictl inspectp`, `sudo crictl inspect`), `nsenter` (util-linux).
 
@@ -298,7 +298,7 @@ Un rôle qui pose **ses** fichiers ne voit pas un fichier **de plus** posé à c
 **Critères de réussite**
 - [ ] `sous-le-capot-chaos-mesh.md` décrit `PodNetworkChaos`, gRPC, `netem`, `ipset`/`iptables`, `stress-ng` et cgroup, finaliseur et `containerRecords`, avec au moins une sortie réelle de nœud.
 - [ ] Une politique réseau de l'espace `chaos-mesh` limite qui joint le port gRPC du `chaos-daemon` (au contrôleur seulement).
-- [ ] À la fin : aucun pod ni aucune expérience `*-e24` restants dans `wb-essais`.
+- [ ] À la fin : aucun pod `*-e24` dans `wb-essais`, aucune expérience `*-e24` dans `chaos-experiences`.
 
 **Vérification** : `lab/bin/check 29 24`
 

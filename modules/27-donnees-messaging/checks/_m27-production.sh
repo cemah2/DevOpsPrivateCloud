@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck source-path=SCRIPTDIR
 # shellcheck disable=SC2016  # filtres jq et requêtes entre apostrophes
 # _m27-production.sh — fonctions partagées par les vérifications du palier 3 du module 27 (check-E13 à
 # check-E17), réutilisées par le palier 4 et le mini-projet. Sourcé, jamais lancé seul.

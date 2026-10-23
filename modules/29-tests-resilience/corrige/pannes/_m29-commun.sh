@@ -9,7 +9,7 @@
 # Principes (CONVENTIONS §8, PLAN §4.13 « Pannes du bloc G ») :
 #   - cibles : dépôts plateforme/politiques, plateforme/infra, plateforme/gitops, mediagenda/deploiement
 #     (overlay recette seulement) ; objets de chaos-experiences, mediagenda-recette, medinotif-recette,
-#     wb-essais ; VMs 2298-2299 du pool lab ; un fichier temporaire d'adm01 ; une VM non critique du socle
+#     wb-essais ; VMs 2298-2299 du sous-pool lab/terratest ; un fichier temporaire d'adm01 ; une VM non critique du socle
 #     (nbx01 ou mon01). JAMAIS *-prod, messagerie, kube-system, argocd, kyverno ;
 #   - une modification de dépôt est un COMMIT IDENTIFIABLE : auteur « Lucas Martin »
 #     (lucas.martin@medisphere.internal), marqueur « M29-EXX » ; l'annulation est un commit inverse,

@@ -2,7 +2,7 @@
 # shellcheck source-path=SCRIPTDIR
 # shellcheck disable=SC2016  # filtres jq entre apostrophes
 # check-E23.sh — M28-E23 « Un locataire sature le cluster » : plus de charge hors cadre dans medidoc-dev
-# (pods sans requests, priorité critique), plus de conteneur tué récemment, garde-fous du locataire et
+# (pods aux requests absentes ou nulles, priorité critique), plus de conteneur tué récemment, garde-fous du locataire et
 # des espaces (LimitRange partout, budget global, pas de medisphere-critique), post-mortem INC-5523,
 # RB-289 ; panne close. Lecture seule.
 
@@ -12,11 +12,21 @@ source "$(dirname "${BASH_SOURCE[0]}")/_m28-expert.sh"
 title "M28-E23 — Le locataire MédiDoc est de nouveau dans son cadre"
 require_cmd kubectl jq curl
 
+# Hors cadre : classe medisphere-critique, ou un conteneur dont la request CPU ou mémoire est absente ou
+# nulle (« 0 », « 0m », « 0Mi »… : l'ordonnanceur ne réserve rien pour lui).
 _m28_e23_cadre() {
   kube -n medidoc-dev get pods -o json 2>/dev/null | jq -e '
+    def nulle: (. // "0") | tostring | test("^0+(\\.0+)?[a-zA-Z]*$");
     [.items[] | select(.status.phase == "Running" or .status.phase == "Pending")
      | select((.spec.priorityClassName // "") == "medisphere-critique"
-              or any(.spec.containers[]; (.resources.requests // {}) | length == 0))] | length == 0' >/dev/null 2>&1
+              or any(.spec.containers[]; (.resources.requests.cpu | nulle) or (.resources.requests.memory | nulle)))]
+    | length == 0' >/dev/null 2>&1
+}
+# Le LimitRange de medidoc-dev fixe un minimum CPU et mémoire par conteneur : une request nulle déclarée
+# explicitement est refusée (les valeurs par défaut, elles, ne s'appliquent qu'aux requests absentes).
+_m28_e23_minimum() {
+  kube -n medidoc-dev get limitranges -o json 2>/dev/null | jq -e '
+    any(.items[].spec.limits[]?; .type == "Container" and (.min.cpu // null) != null and (.min.memory // null) != null)' >/dev/null 2>&1
 }
 _m28_e23_limitrange_partout() {
   local ns n
@@ -32,7 +42,7 @@ _m28_e23_noeuds() {
 }
 
 if _m28p_api_repond; then
-  check_cmd "medidoc-dev : aucun pod en medisphere-critique ni sans requests" _m28_e23_cadre
+  check_cmd "medidoc-dev : aucun pod en medisphere-critique ni avec une request absente ou nulle" _m28_e23_cadre
   check_cmd "medidoc-dev : aucun conteneur OOMKilled depuis 15 min" _m28x_aucun_oom medidoc-dev "" 15
   check_cmd "aucun nœud en pression mémoire" _m28_e23_noeuds
   check_cmd "locataire medidoc : medisphere-critique non autorisée" _m28p_tenant medidoc \
@@ -40,6 +50,7 @@ if _m28p_api_repond; then
   check_cmd "locataire medidoc : budget global en place" _m28p_tenant medidoc \
     '[.spec.rules[]? | select((.quota // []) | length > 0) | select((.namespaceSelector // null) == null)] | length >= 1'
   check_cmd "chaque espace du locataire medidoc a un LimitRange" _m28_e23_limitrange_partout
+  check_cmd "LimitRange de medidoc-dev : minimum CPU et mémoire par conteneur" _m28_e23_minimum
 else
   skip "charge, nœuds, locataire" "l'API ne répond pas au compte des checks"
 fi

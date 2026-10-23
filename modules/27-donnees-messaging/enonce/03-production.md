@@ -14,19 +14,19 @@ Ce que les paliers 1 et 2 ont laissé, et que ce palier suppose. Si un nom diff�
 
 | Élément | Nom et emplacement | Exercice |
 |---|---|---|
-| Base de MédiAgenda | `Cluster` CNPG **`mediagenda-db`** dans `mediagenda-recette` (déclaré dans `plateforme/k8s/espaces/mediagenda-recette/`) et `mediagenda-prod` (rendu par `mediagenda/deploiement`) ; 3 instances, réplication synchrone `method: any`, `number: 1`, `dataDurability: required` ; archivage par le plugin Barman Cloud (`ObjectStore` **`cnpg-s3`**) | M16, M25, E02 |
-| Rôles et bases | rôles gérés (`spec.managed.roles`) dont `mediagenda_api` (groupe des comptes dynamiques d'OpenBao `mediagenda-api-<env>`) et `openbao` ; compte de migration dynamique `mediagenda-migrateur-<env>` ; CRD `Database` | M25, E02 |
-| *Pooler* | `Pooler` **`mediagenda-db-pooler-rw`** (type `rw`, mode `transaction`) en recette et en prod ; MédiAgenda s'y connecte | E02 |
-| Lecture des CRD par les checks | ClusterRole agrégée **`wb-checks-services`** (CNPG, `rabbitmq.com`) | E02 |
-| Opérateurs RabbitMQ | Cluster Operator 2.23 et Messaging Topology Operator 1.20, espace **`rabbitmq-system`**, manifestes dans `plateforme/donnees/vendor/rabbitmq/` ; Application `rabbitmq-operateurs` | E03 |
-| Grappe RabbitMQ | `RabbitmqCluster` **`rabbitmq`**, espace **`messagerie`**, 3 nœuds, RabbitMQ **4.3.x**, AMQPS 5671 dans le cluster, plugin Prometheus (15692), interface `https://rabbitmq.apps.par1.medisphere.internal` ; Secret `rabbitmq-default-user` = bris de glace ; Application `rabbitmq` | E03 |
-| Topologie | `plateforme/donnees/topologie/medinotif-{recette,prod}/` (Application `rabbitmq-topologie`) : vhosts **`medinotif-recette`**, **`medinotif-prod`** ; échange `notifications` (direct) ; file quorum **`notifications`** ; échange et file **`notifications.rebut`** ; limite de livraison ; utilisateurs **`medinotif-<env>`** (consommation), **`mediagenda-<env>`** (publication seule), **`wb-checks`** (étiquette `monitoring`) | E04 |
-| MédiNotif | dépôt **`medinotif/deploiement`** (`overlays/recette`, `overlays/prod`), ApplicationSet **`medinotif`**, espaces **`medinotif-recette`**, **`medinotif-prod`**, Deployment **`medinotif`**, ExternalSecret `medinotif-amqp` (`kv/medinotif/<env>/amqp`), métriques 9100 | E04, E08 |
-| MédiAgenda publie | variable `MEDIAGENDA_AMQP_URL`, échange `notifications`, confirmations de publication, métrique `mediagenda_notifications_total{resultat}` ; une publication ratée ne fait pas échouer la requête | E08 |
-| Migrations | image `registry.par1.medisphere.internal/medisphere/mediagenda-migrations:vX.Y.Z` (Flyway 13.11 Community), Job hook **`mediagenda-migrations`** (Sync, vague −1), table `flyway_schema_history`, `baseline` à 2, migrations `V3__` (*expand*) et `V4__` (*contract*) | E05, E06 |
-| Valkey | StatefulSet **`valkey`** de MédiAgenda (là où il existe) en 9.1.x, ACL (utilisateur `mediagenda`, `default` désactivé), TLS, `maxmemory` + `allkeys-lru`, exportateur en *sidecar* ; secret `kv/mediagenda/<env>/valkey` | E07 |
-| Kafka | **retiré** à la fin de M27-E10 (Application, espace `kafka-essai`, PVC) ; comparaison écrite `docs/donnees/comparatif-messagerie.md` | E09, E10 |
-| Runbooks | RB-270 à RB-273 (dont la maintenance et la bascule de PostgreSQL, M27-E12) | E12 |
+| Base de MédiAgenda | `Cluster` CNPG **`mediagenda-db`** dans `mediagenda-recette` (`plateforme/k8s/espaces/mediagenda-recette/50-mediagenda-db.yaml`, `task appliquer`) et `mediagenda-prod` (rendu par `components/dependances` de `mediagenda/deploiement`, corrigé par `overlays/prod/`) ; 3 instances, réplication synchrone `method: any`, `number: 1`, `dataDurability: required` ; `pg_stat_statements` ; archivage par le plugin Barman Cloud (`ObjectStore` **`cnpg-s3`**) en recette depuis M16-E19 — pour la prod, M27-E15 le vérifie | M16, M25, E02 |
+| Rôles et bases | rôles gérés (`spec.managed.roles`) dont `mediagenda_api` (groupe des comptes dynamiques d'OpenBao `mediagenda-api-<env>`), `openbao`, et en recette `mediagenda_lecture` / `lucas_lecture` ; compte de migration dynamique `mediagenda-migrateur-<env>` ; CRD `Database` `mediagenda-db-mediagenda` (`databaseReclaimPolicy: retain`) | M25, E02 |
+| *Pooler* | `Pooler` **`mediagenda-db-pooler-rw`** (type `rw`, mode `transaction`, 2 instances, PgBouncer 1.26.1 épinglé, métriques 9127, PodMonitor du component `supervision`) en recette et en prod ; l'URL de l'API (ExternalSecret `mediagenda-db-api` du component `identifiants-dynamiques`) vise le *pooler*, celle du migrateur `mediagenda-db-rw` | E02 |
+| Lecture des CRD par les checks | ClusterRole agrégée **`wb-checks-services`** (`rabbitmq.com`, `kafka.strimzi.io` ; CNPG déjà lisible par `wb-checks-stockage`) | E02 |
+| Opérateurs RabbitMQ | Cluster Operator 2.23.1 et Messaging Topology Operator 1.20.4, espace **`rabbitmq-system`**, manifestes dans `plateforme/donnees/vendor/rabbitmq/` ; Application `rabbitmq-operateurs` | E03 |
+| Grappe RabbitMQ | `RabbitmqCluster` **`rabbitmq`**, espace **`messagerie`**, 3 nœuds, RabbitMQ **4.3.7**, certificat `rabbitmq-tls` (`openbao-services`), AMQPS 5671 dans le cluster, plugin Prometheus (15692), CiliumNetworkPolicy `rabbitmq` (`rabbitmq/reseau.yaml`), interface `https://rabbitmq.apps.par1.medisphere.internal` (client Keycloak `rabbitmq`) ; Secret `rabbitmq-default-user` = bris de glace ; utilisateur `wb-checks` (`kv/plateforme/rabbitmq/wb-checks`) ; Application `rabbitmq` | E03 |
+| Topologie | `plateforme/donnees/topologie/medinotif-{recette,prod}/` (Application `rabbitmq-topologie`) : vhosts **`medinotif-recette`**, **`medinotif-prod`** ; échange `notifications` (direct) ; file quorum **`notifications`** ; échange (fanout) et file quorum **`notifications.rebut`** ; politique `notifications-rebut` (`delivery-limit: 5`, `dead-letter-strategy: at-least-once`, `overflow: reject-publish`) ; utilisateurs **`medinotif-<env>`** (lecture de `notifications`), **`mediagenda-<env>`** (écriture sur l'échange `notifications`), permission vide de **`wb-checks`** (étiquette `monitoring`) | E04, E08 |
+| MédiNotif | dépôt **`medinotif/deploiement`** (`base/`, `overlays/recette`, `overlays/prod` : 2 réplicas, PDB), ApplicationSet **`medinotif`** (prod synchronisée à la main), espaces **`medinotif-recette`**, **`medinotif-prod`**, Deployment **`medinotif`**, ExternalSecret `medinotif-amqp` (`kv/medinotif/<env>/amqp`), métriques 9100 (`medinotif_messages_total{resultat}`) | E04, E08 |
+| MédiAgenda publie | component `notifications` de `mediagenda/deploiement` (ExternalSecret `mediagenda-amqp` → `MEDIAGENDA_AMQP_URL`, NetworkPolicy vers `messagerie`), racine MédiSphère par le component `racine-medisphere` ; échange `notifications`, confirmations de publication, `mandatory` ; métrique `mediagenda_notifications_total{resultat}` (`publiee`, `echec`, `desactivee`) ; une publication ratée ne fait pas échouer la requête | E07, E08 |
+| Migrations | image `registry.par1.medisphere.internal/medisphere/mediagenda-migrations:vX.Y.Z` (Flyway 13.11.1 Community), Job hook **`mediagenda-migrations`** (Sync, vague −1, conteneur `flyway`, connexion directe à `mediagenda-db-rw`), table `flyway_schema_history`, `baseline` à 2 ; `V3__rappel_expand` (`canal_rappel` NOT NULL DEFAULT `'aucun'`, `contact_rappel`, contraintes `NOT VALID`, `lock_timeout` 5 s) et `V4__rappel_contract` (contraintes validées, défaut retiré) : **V4 est la dernière migration** | E05, E06 |
+| Valkey | component **`valkey`** de `mediagenda/deploiement` dans les trois overlays : StatefulSet **`valkey`** en 9.1.2, conteneurs `valkey` et `exportateur` (9121), TLS seul (`valkey-tls`, `openbao-services`), fichier ACL (`default` désactivé ; utilisateurs `mediagenda`, `exportateur`, `sonde`, `admin` de bris de glace), `maxmemory` + `allkeys-lru`, `tls-auto-reload-interval 3600` ; Secrets `valkey-comptes`, `valkey-admin` (clé `mot_de_passe`), `mediagenda-valkey` (clé `url`) ; `kv/mediagenda/<env>/valkey` | E07 |
+| Kafka | **retiré** à la fin de M27-E10 (Application, espace `kafka-essai`, PVC, CRD) ; comparaison écrite `docs/donnees/comparatif-messagerie.md` | E09, E10 |
+| Runbooks | RB-270 (maintenance et bascule de PostgreSQL) et, facultatif, RB-271 (redémarrage de RabbitMQ par roulement) ; RB-272 et RB-273 restent libres | E12 |
 
 ---
 
@@ -110,6 +110,8 @@ Pour mesurer l'indisponibilité, horodate chaque `INSERT` réussi côté client 
 3. **Valkey** : vérifie que l'exportateur de M27-E07 est collecté (`redis_up`, `redis_memory_used_bytes`, `redis_memory_max_bytes`, `redis_evicted_keys_total`) ; sinon, ajoute son ServiceMonitor ou PodMonitor.
 4. **Règles** : `regles/alertes-donnees.yaml` avec au moins : réplication PostgreSQL en retard ; primaire absent (aucune instance hors récupération, ou collecteur muet) ; réplication synchrone dégradée ; clients du *pooler* en attente ; file `notifications` qui grossit ; file sans consommateur ; alarme mémoire ou disque de RabbitMQ ; cache Valkey plein (mémoire au plafond **et** évictions ou refus d'écriture). Justifie chaque seuil et chaque `for:` en commentaire. Passe-les à `promtool check rules` et ajoute des tests unitaires (`promtool test rules`) pour deux d'entre elles.
 5. **Tableau** : « Données et messagerie » (UID **`m27-donnees`**, dossier « Plateforme », variable `${datasource}`, variable d'environnement) : PostgreSQL (primaire, réplicas, retard, connexions, attentes), *pooler* (clients actifs et en attente, connexions serveur), RabbitMQ (messages prêts et non acquittés par file, consommateurs, débit de publication et de livraison, alarmes, mémoire et disque libre), Valkey (mémoire, évictions, taux de succès du cache de MédiAgenda).
+> ⚠️ **Attention** (étape 6) : arrêter MédiNotif de recette laisse s'accumuler les notifications de recette (rien n'est perdu : elles attendent dans la file quorum) ; isoler un réplica avec `fencing` n'est sûr que pour **un seul** réplica à la fois (`dataDurability: required` : avec deux réplicas isolés, les écritures de la recette se bloquent). Vérifie avant `kubectl cnpg status` (trois instances saines). Retour arrière : MR inverse pour MédiNotif, `kubectl cnpg fencing off`.
+
 6. **Essai** : déclenche **en recette** deux alertes sans rien casser de durable : arrête MédiNotif de recette (MR qui le met à zéro réplica, puis retour) et regarde « file sans consommateur » puis « file qui grossit » passer en *pending* puis *firing* ; isole un réplica de la base de recette avec `kubectl cnpg fencing on` puis `off`. Note les délais réels.
 7. Écris **RB-274** « Alertes des données et de la messagerie » (`docs/donnees/runbooks/`) : pour chaque alerte, ce qu'elle veut dire, la première commande à lancer, les causes probables et le geste. Pose le `runbook_url` de chaque alerte.
 
@@ -170,6 +172,8 @@ Un cache plein n'est pas une panne avec `allkeys-lru` : c'est sa vie normale. Ce
 4. Écris **RB-275** « Reprendre MédiAgenda sur le réplica de secours » : quand le déclencher (et qui décide), les étapes (promotion, pointer le *pooler* — `spec.cluster` d'un `Pooler` est **immuable** —, archivage sous un **nouveau** `serverName`, sauvegarde aussitôt), le RPO et le RTO mesurés, le retour arrière (il n'y en a pas : pourquoi), la restauration des définitions RabbitMQ.
 5. **Définitions RabbitMQ.** Dans `plateforme/donnees/rabbitmq/sauvegarde-definitions/`, un CronJob nocturne exporte les définitions de la grappe **sans les empreintes de mots de passe** et les dépose sur `s3-01`, compartiment **`messagerie-definitions`** (identité dédiée par ESO, rétention 30 jours). Lance-le une fois à la main (`kubectl create job --from=cronjob/…`), relis le fichier, puis réimporte le vhost `medinotif-recette` exporté dans un vhost d'essai de la grappe jetable de l'étape 6.
 6. **Répétition de la montée 4.3 → 4.4.** Dans `wb-essais`, une grappe jetable **`rabbitmq-essai`** (3 nœuds, ressources réduites) en **même version 4.3.x que la prod**, avec la topologie de recette réimportée et des messages dans une file quorum et une file classique. Vérifie les *feature flags*, monte en 4.4.0 par l'opérateur, observe la montée nœud par nœud (files quorum : leader, membres), vérifie qu'aucun message n'est perdu, essaie de **redescendre** en 4.3 et note ce qui se passe. Supprime la grappe jetable.
+> ⚠️ **Attention** (étape 7) : la montée de `messagerie/rabbitmq` en 4.4 est **irréversible** (stockage v2 des files classiques, *feature flags*) et touche la grappe partagée par la recette **et la production**. Ne l'applique qu'après une répétition réussie, en fenêtre annoncée, définitions exportées juste avant ; il n'y a pas de retour arrière en 4.3 autre qu'une grappe neuve et le réimport des définitions (les messages en file seraient perdus).
+
 7. **Décision.** Écris `docs/donnees/montee-rabbitmq-4.4.md` : ce que la répétition a montré, la décision (appliquer ou rester en 4.3 jusqu'à une date), et, si tu appliques : MR sur `plateforme/donnees/rabbitmq/` en fenêtre annoncée (CHG-2815), export des définitions juste avant, suivi des files quorum pendant la montée, contrôle après.
 
 **Critères de réussite**
@@ -216,7 +220,7 @@ Pour la grappe jetable : `spec.resources` réduites (le défaut de l'opérateur 
 - Banc PostgreSQL : un `Cluster` **`bench-essai`** (une instance, mêmes ressources et même classe de stockage qu'une instance de `mediagenda-db`) et un `Pooler` **`bench-essai-pooler-rw`** (mode `transaction`) dans `wb-essais`. `kubectl cnpg pgbench` crée un Job qui vise le Service `-rw` du cluster ; pour passer par le *pooler*, écris ton Job avec l'image PostgreSQL de CNPG (elle contient `pgbench`).
 - `pgbench` : `-i -s` (initialisation), `-c` (clients), `-j` (fils), `-T` (durée), `-C` (une connexion par transaction), `-S` (lecture seule), `-P` (progression), `-M` (protocole).
 - `rabbitmq-perf-test` 2.25 : image `pivotalrabbitmq/perf-test` par le cache Harbor (`registry.par1.medisphere.internal/dockerhub/pivotalrabbitmq/perf-test:2.25.0`). Options : `--uri`, `-x`/`-y` (producteurs, consommateurs), `--quorum-queue` (`-qq`), `-u` (file), `-c` (confirmations en vol, `-1` = sans), `-q` (`prefetch`), `-s` (taille), `-r` (débit visé), `-z` (durée), `-f persistent`, `--auto-delete false`.
-- Grappe RabbitMQ de banc : réutilise le manifeste de `rabbitmq-essai` (M27-E15) : mêmes ressources que la prod, détruite après la mesure.
+- Grappe RabbitMQ de banc : le manifeste de `rabbitmq-essai` (M27-E15), mais avec les ressources de la grappe de production (pas celles, réduites, de l'essai de montée) pour que les chiffres vaillent pour elle ; détruite après la mesure.
 
 **Travail demandé**
 1. Déploie le banc PostgreSQL (manifestes dans `plateforme/donnees/outils/banc/`), initialise à l'échelle 20.
@@ -286,6 +290,11 @@ Une bonne condition de révision est **observable** : « le jour où un deuxièm
 > **Ticket PLAT-2818** — *De : Karim Benali*
 > Avant de te laisser seul(e) d'astreinte sur ces briques, réponds-moi par écrit. Argumente : « ça dépend » n'est une réponse que si tu dis de quoi.
 
+**Objectifs pédagogiques**
+- Raisonner sur les garanties réelles (durabilité, livraison, compatibilité) des briques du module dans des situations d'astreinte.
+- Relier chaque réponse à un mécanisme vu dans le module et à un geste d'exploitation.
+
+**Prérequis** : paliers 1 à 3 (M27-E02 à M27-E17).
 **Durée indicative** : 45 min. Réponds dans un fichier personnel ; les réponses argumentées sont dans le corrigé.
 
 1. MédiAgenda valide la transaction du rendez-vous, puis publie la demande de notification. Le pod est tué entre les deux. Que se passe-t-il ? Décris deux façons de rendre l'envoi fiable (*outbox* avec relais, capture des changements), leur coût, et pourquoi « publier d'abord, valider ensuite » est pire.
@@ -294,11 +303,25 @@ Une bonne condition de révision est **observable** : « le jour où un deuxièm
 4. La réplication synchrone de `mediagenda-db` est en `dataDurability: required`. Les deux réplicas tombent. Que voit MédiAgenda ? Que voit Nadia ? Quand choisirais-tu `preferred`, et que perdrais-tu ?
 5. Décris un *split-brain* PostgreSQL : comment Patroni l'évite-t-il, comment CloudNativePG l'évite-t-il (bail du primaire, contrôle d'isolement, clôture de l'ancien primaire), et dans quel cas restant une écriture validée peut-elle être perdue ?
 6. Une partition réseau sépare un nœud RabbitMQ des deux autres. Que deviennent les files quorum dont le leader était sur le nœud isolé ? Les clients connectés à ce nœud ? Les métadonnées (Khepri) ? Qu'est-ce qui a changé par rapport à l'époque de Mnesia et de `cluster_partition_handling` ?
-7. Le *pooler* est en mode `transaction`. Citez trois choses que MédiAgenda ne doit pas faire (ou doit faire autrement) dans ce mode, et une raison de garder une connexion directe pour le Job de migration.
+7. Le *pooler* est en mode `transaction`. Cite trois choses que MédiAgenda ne doit pas faire (ou doit faire autrement) dans ce mode, et une raison de garder une connexion directe pour le Job de migration.
 8. Un collègue propose le chart Bitnami pour RabbitMQ, « tout le monde l'utilise ». Que réponds-tu, faits datés à l'appui ? Quels risques prend-on en restant sur une image figée ?
 9. Comment fait-on une montée **majeure** de PostgreSQL (18 → 19) avec CloudNativePG ? Compare la montée en place (`pg_upgrade` déclenché par `imageName`), l'import logique et la réplication logique : indisponibilité, retour arrière, archive des WAL, statistiques.
 10. Une migration Flyway *contract* (`V4__`) supprime une colonne. Le Rollout de MédiAgenda est en *canary* à 20 %. Que se passe-t-il, et comment l'ordre des vagues d'Argo CD et la règle *expand/contract* l'évitent ?
 11. Valkey est « un cache » : décris ce que perd MédiAgenda si Valkey disparaît, et trois réglages qui garantissent que sa perte dégrade sans casser (côté serveur et côté client).
 12. Le réplica de secours a 7 minutes de retard. La prod brûle. Qui décide la promotion, sur quels éléments, et que dis-tu aux centres de santé sur les rendez-vous pris pendant ces 7 minutes ?
-</content>
-</invoke>
+
+<details><summary>Indice 1</summary>
+
+Pour chaque question, cherche d'abord **où** l'état vit (WAL, journal Raft, DCS, file, base, mémoire d'un processus) et **qui** confirme quoi à qui : la plupart des réponses en découlent.
+</details>
+
+<details><summary>Indice 2</summary>
+
+Les exercices qui en parlent : E02, E06, E08 (Q1, Q2, Q7, Q10) ; E04, E20 (Q3) ; E13, E19, E24 (Q4, Q5) ; E15, E24 (Q6, Q12) ; E07, E22 (Q11).
+</details>
+
+**Critères de réussite**
+- [ ] Tu as répondu par écrit aux 12 questions avant d'ouvrir le corrigé, chaque réponse avec son mécanisme et sa conséquence pour MédiSphère.
+- [ ] Tu as comparé avec le corrigé et noté les écarts (et l'exercice du module qui les traite).
+
+**Vérification** : pas de script (questions) ; compare avec le corrigé.

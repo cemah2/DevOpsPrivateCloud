@@ -14,9 +14,13 @@
 #   2. plateforme/politiques : « resource_changes » réécrit « resource_change » dans les règles ET dans
 #      les entrées simulées des tests : opa test reste vert, les règles ne se déclenchent plus sur un vrai
 #      plan. Sans effet si un test lit un vrai plan (opa test passe alors au rouge) ;
-#   3. plateforme/infra : le job conftest du composant validation est surchargé « allow_failure: true »
-#      dans .gitlab-ci.yml : le job échoue, le pipeline passe. Sans effet si le nom du job n'est pas
-#      lisible dans le composant.
+#   3. plateforme/infra : le modèle caché .plan (M05), que les jobs plan:* étendent et qui appelle
+#      « !reference [.validation:conftest-plan, script] » (M29-E10), reçoit « allow_failure: true » dans
+#      .gitlab-ci.yml : le job de plan échoue sur le refus de conftest, le pipeline passe. Sans effet si
+#      .gitlab-ci.yml n'a pas de clé .plan.
+# Le plan est évalué comme dans le job de plan : espaces de la CI, --data rego/donnees et un contexte
+# {"contexte": {"etat": "socle", "etiquettes_mr": []}} (WB_M29_E19_ETAT) ; sans contexte, la règle
+# « contexte absent » de M29-E03 refuserait tout et masquerait la panne.
 # Vérification : localement (conftest et opa sur adm01), le plan n'est plus refusé (1, 2), ou la surcharge
 # est sur main (3). Annulation : commit inverse si les fichiers sont encore dans l'état injecté.
 
@@ -30,6 +34,7 @@ _E19_INFRA="${WB_M29_PROJET_INFRA:-plateforme/infra}"
 _E19_CI="${WB_M29_PROJET_CI_TEMPLATES:-plateforme/ci-templates}"
 _E19_COMPOSANT="${WB_M29_COMPOSANT_VALIDATION:-templates/validation/template.yml}"
 _E19_PLAN="${WB_M29_E19_PLAN:-$WB_ROOT/modules/29-tests-resilience/ressources/E19-plan-dangereux/plan-dangereux.json}"
+_E19_ETAT="${WB_M29_E19_ETAT:-socle}"
 
 # _e19_rapatrier DOSSIER — copie locale de rego/ de plateforme/politiques (main).
 _e19_rapatrier() {
@@ -80,15 +85,24 @@ _e19_espaces() {
 # _e19_refuse DOSSIER — le plan est refusé (au moins un FAIL) par les politiques de DOSSIER/rego/tofu
 # avec les arguments de la CI.
 _e19_refuse() {
-  local -a a
-  local sortie rc=0
+  local -a a donnees=()
+  local sortie rc=0 ctx
   mapfile -t a < <(_e19_args)
-  sortie="$(conftest test --no-color -p "$1/rego/tofu" "${a[@]}" "$_E19_PLAN" 2>&1)" || rc=$?
-  ((rc != 0)) && grep -q 'FAIL' <<<"$sortie"
+  ctx="$(m29_etat E19)/contexte.json"
+  jq -n --arg e "$_E19_ETAT" '{contexte: {etat: $e, etiquettes_mr: []}}' >"$ctx" || return 1
+  [[ -d "$1/rego/donnees" ]] && donnees=(--data "$1/rego/donnees")
+  sortie="$(conftest test --no-color -p "$1/rego/tofu" "${a[@]}" "${donnees[@]}" --data "$ctx" "$_E19_PLAN" 2>&1)" || rc=$?
+  ((rc != 0)) && grep -q 'FAIL' <<<"$sortie" && ! grep -q 'contexte absent' <<<"$sortie"
 }
 
-# _e19_opa_ok DOSSIER — opa test vert sur DOSSIER/rego (ou aucun test).
-_e19_opa_ok() { opa test "$1/rego" >/dev/null 2>&1; }
+# _e19_opa_ok DOSSIER — opa test vert sur les racines explicites (rego/tofu et rego/donnees, comme le
+# composant validation : « opa test rego » chargerait aussi les plans d'exemple JSON de rego/exemples/
+# comme des données et échouerait sur un conflit de fusion).
+_e19_opa_ok() {
+  local -a r=("$1/rego/tofu")
+  [[ -d "$1/rego/donnees" ]] && r+=("$1/rego/donnees")
+  opa test "${r[@]}" >/dev/null 2>&1
+}
 
 _e19_sain() {
   local d
@@ -144,27 +158,24 @@ Mocks des tests mis à jour, opa test vert. -- Lucas"
       while IFS= read -r fic; do
         modifies+=("$fic")
         m29_git_fichier E19 "${fic#"$apres"/}" "$fic"
-      done < <(diff -rq "$avant" "$apres" | sed -nE 's/^Files .* and (.*) differ$/\1/p')
+      done < <(LC_ALL=C diff -rq "$avant" "$apres" | sed -nE 's/^Files .* and (.*) differ$/\1/p')
       ((${#modifies[@]} > 0)) || return 10
       m29_git_valider E19 "$(m29_lire E19 message)" || return $?
       ;;
     3)
-      local gci job tmp
+      local gci job=.plan tmp
       gci="$(m29_git_lire "$_E19_INFRA" .gitlab-ci.yml 2>/dev/null)" || return 10
-      job="$(m29_git_lire "$_E19_CI" "$_E19_COMPOSANT" 2>/dev/null |
-        yq -r 'select(document_index == 1) | to_entries[] | select(.key | test("^[^.]")) |
-               select((.key | test("conftest|politique")) or ((.value.script // []) | tostring | test("conftest"))) | .key' 2>/dev/null |
-        grep -v '\$\[\[' | head -n 1)" || job=""
-      [[ -n "$job" ]] || return 10
+      # Le modèle .plan doit exister ET appeler la vérification des plans (sinon rien ne refuse le plan).
+      JOB="$job" yq -e '.[strenv(JOB)] | tostring | test("conftest")' <<<"$gci" >/dev/null 2>&1 || return 10
       [[ "$(JOB="$job" yq -r '.[strenv(JOB)].allow_failure // ""' <<<"$gci" 2>/dev/null)" == true ]] && return 10
       tmp="$d/gitlab-ci.yml"
       JOB="$job" yq '.[strenv(JOB)].allow_failure = true' <<<"$gci" >"$tmp" || return 10
       m29_poser E19 job "$job"
       m29_git_debut E19 "$_E19_INFRA"
       m29_git_fichier E19 .gitlab-ci.yml "$tmp"
-      m29_git_valider E19 "ci: ne plus bloquer les MR sur conftest le temps de corriger les faux positifs (M29-E19)
+      m29_git_valider E19 "ci: ne plus bloquer les MR sur les refus de conftest le temps de corriger les faux positifs (M29-E19)
 
-Le job reste visible en orange. -- Lucas" || return $?
+Les jobs de plan restent visibles en orange. -- Lucas" || return $?
       ;;
   esac
   m29_journal E19 "variante $n posée"

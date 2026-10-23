@@ -26,7 +26,7 @@
 #   - l'auto-synchronisation d'Argo CD n'est jamais désactivée : rafraîchissement ou opération de
 #     synchronisation seulement.
 #
-# Variables facultatives de lab/lab.env (voir corrige/.lab-env-B.txt) :
+# Variables facultatives de lab/lab.env (voir corrige/.lab-env.txt) :
 #   WB_M27_IMAGE_AGENDA         image du témoin de trafic (défaut : celle de MédiAgenda en recette)
 #   WB_M27_TRAFIC_URL           URL publiée de MédiAgenda recette
 #   WB_M27_APP_AGENDA           Application Argo CD de MédiAgenda recette (défaut mediagenda-recette)
@@ -511,7 +511,9 @@ def cycle_creation():
     debut = datetime(jour.year, jour.month, jour.day, random.choice([8, 9, 10, 11, 14, 15, 16, 17]),
                      random.choice([0, 30]), tzinfo=PARIS)
     corps = {"patient": "Patient Témoin", "praticien": f"dr-temoin-{random.randint(1, 5)}",
-             "debut": debut.isoformat(), "duree_minutes": 30, "motif": "contrôle"}
+             "debut": debut.isoformat(), "duree_minutes": 30, "motif": "contrôle",
+             # rappel factice (M27-E06) : sans canal, MédiAgenda ne publie rien (M27-E08)
+             "rappel": {"canal": "sms", "contact": "+33600000000"}}
     statut, rep = requete("POST", "/api/v1/rendez-vous", corps)
     if statut == 201:
         STATS["crees"] += 1

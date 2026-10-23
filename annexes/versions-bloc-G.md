@@ -40,7 +40,7 @@
 
 | Outil | Ce qui change pour toi |
 |---|---|
-| k6 1.8.2 / xk6 1.4.15 | Versions du 12 et du 22/10/2026 ; k6 suit le versionnement sémantique depuis 1.0. Nom exact de la sortie d'écriture distante Prometheus à relire dans `k6 run --help` de la 1.8 (historiquement `experimental-prometheus-rw`). |
+| k6 1.8.2 / xk6 1.4.15 | Versions du 12 et du 22/10/2026 ; k6 suit le versionnement sémantique depuis 1.0. La sortie d'écriture distante Prometheus s'appelle toujours `experimental-prometheus-rw` en 1.8 (vérifié dans le code ; `k6 run --help` ne liste pas les noms des sorties). |
 | k6-operator 1.7.0 (chart `grafana/k6-operator` 4.7.0) | Versionnement sémantique depuis 1.0 (09/2025), une mineure toutes les huit semaines. CRD `TestRun` et `PrivateLoadZone`. |
 | Chaos Mesh 2.8.6 (chart 2.8.6) | Chart du 21/10/2026. Réglages du runtime containerd (`chaosDaemon.runtime`, `chaosDaemon.socketPath`) à vérifier dans les valeurs de la 2.8 ; compatibilité Kubernetes 1.36 *non vérifiée* (contrôle en exercice). |
 | LitmusChaos 3.33 (images) / chart 3.30 | Le chart est en retard sur les images ; ChaosCenter exige MongoDB (sous-chart Bitnami) : **fiche seulement**. |

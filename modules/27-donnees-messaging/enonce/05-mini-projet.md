@@ -19,13 +19,13 @@
 - **Sécurité** : chaque application a ses propres identités (base, AMQP, Valkey) dans OpenBao, lues par ESO, avec le moindre privilège (MédiAgenda ne fait que publier, MédiNotif ne fait que consommer) ; TLS partout dans le cluster ; le compte par défaut de RabbitMQ est un bris de glace documenté, inutilisé au quotidien ; aucune image ni aucun chart Bitnami.
 - **Exploitation** : supervision collectée et alertes chargées pour PostgreSQL, le *pooler*, RabbitMQ, Valkey et le réplica de secours, **aucune alerte de ces familles active** au moment de la livraison ; tableau `m27-donnees` à jour ; export nocturne des définitions RabbitMQ réussi ; réplica de secours à jour.
 - **Essais retirés** : rien ne reste de Kafka (`kafka-essai`), de Patroni (VMs 2271-2273) ni des bancs et grappes jetables de `wb-essais` ; aucune panne du module n'est encore active.
-- **Documentation** dans `docs/donnees/` de `plateforme/medisphere` : un `README.md` d'architecture (schéma, composants et versions, flux, identités, où vit chaque définition, qui fait quoi), l'ADR-0270, les comparatifs (messagerie, Patroni/CNPG), le dimensionnement, la décision RabbitMQ 4.4, les runbooks RB-270 à RB-279 indexés depuis le README, et une **démonstration** datée (`demonstration.md`) : un rendez-vous de production de test créé puis annulé, sa notification suivie de la publication à l'envoi (horodatages, identifiants), avec ce que tu as fait pour que ce rendez-vous de test ne gêne personne.
+- **Documentation** dans `docs/donnees/` de `plateforme/medisphere` : un `README.md` d'architecture (schéma, composants et versions, flux, identités, où vit chaque définition, qui fait quoi), l'ADR-0270, les comparatifs (messagerie, Patroni/CNPG), le dimensionnement, la décision RabbitMQ 4.4, les runbooks RB-270 et RB-274 à RB-279 (et RB-271 si tu l'as écrit) indexés depuis le README, et une **démonstration** datée (`demonstration.md`) : un rendez-vous de production de test créé puis annulé, sa notification suivie de la publication à l'envoi (horodatages, identifiants), avec ce que tu as fait pour que ce rendez-vous de test ne gêne personne.
 - Les nouveaux flux réseau sont dans `group_vars/role_routeur/pare_feu.yml` et les matrices de flux ; ceux de l'essai Patroni en sont retirés.
 
 **Livrables**
 1. Les MR fusionnées dans `plateforme/donnees`, `plateforme/k8s`, `plateforme/gitops`, `plateforme/observabilite`, `mediagenda/deploiement`, `medinotif/deploiement` et `plateforme/infra`.
 2. La documentation de `docs/donnees/` et l'étiquette **`donnees-v1`** sur `plateforme/medisphere`.
-3. Une note de passation (une page, dans `docs/donnees/README.md` ou à part) pour le module suivant : la métrique de file que KEDA lira, l'utilisateur et la permission qu'il lui faudra (lecture de la file, étiquette `monitoring`), et ce qu'il ne faut pas faire (mettre MédiNotif de production à zéro).
+3. Une note de passation (une page, dans `docs/donnees/README.md` ou à part) pour le module suivant : la métrique de file que KEDA lira, l'utilisateur qu'il lui faudra (lecture de la profondeur de la file par l'API de gestion, étiquette `monitoring`, sans droit de lire les messages), et ce qu'il ne faut pas faire (mettre MédiNotif de production à zéro).
 
 **Critères de réussite**
 - [ ] Le contrôle global passe : `lab/bin/check 27 25`.
@@ -45,5 +45,3 @@ Pour la démonstration en production, pense à ce que le rendez-vous de test lai
 </details>
 
 **Pour aller plus loin** : prépare l'*outbox* de l'ADR-0270 sous forme de proposition chiffrée (table, relais, tests, effort) à présenter à Julien : c'est la prochaine marche de fiabilité des notifications.
-</content>
-</invoke>

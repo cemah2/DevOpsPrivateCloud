@@ -172,7 +172,7 @@ Trois chiffres disent presque tout : `consumers`, `messages_ready` et `messages_
 **Prérequis** : M27-E07, M27-E14 ; `lab/bin/check 27 22` vert avant l'injection.
 **Durée indicative** : 45 min (temps cible).
 
-**Injection** : `lab/bin/break 27 22` (3 variantes). Certaines variantes demandent le compte d'administration de Valkey (variables `WB_M27_VALKEY_ADMIN_*` de `lab/lab.env`) ; sans lui, le script choisit une autre variante.
+**Injection** : `lab/bin/break 27 22` (3 variantes). Certaines variantes utilisent le compte d'administration de Valkey de M27-E07 (utilisateur `admin`, Secret `valkey-admin`, clé `mot_de_passe` ; variables `WB_M27_VALKEY_ADMIN_*` de `lab/lab.env` si tes noms diffèrent) ; sans lui, le script choisit une autre variante.
 
 **Travail demandé**
 1. Constate : taux de succès du cache (`mediagenda_cache_total`), latence des créneaux, réponses de `/pret` et son corps, journaux de l'API (message exact de l'erreur Valkey).
@@ -286,5 +286,3 @@ Les données de RabbitMQ sont sous le répertoire du nœud (`rabbitmq-diagnostic
 </details>
 
 **Pour aller plus loin** : lis la section « Data Durability » de la documentation de CNPG et la page « Reliability Guide » de RabbitMQ, puis écris en dix lignes la différence entre « validé sur deux nœuds » et « écrit sur disque sur deux nœuds » pour chacun des deux systèmes.
-</content>
-</invoke>

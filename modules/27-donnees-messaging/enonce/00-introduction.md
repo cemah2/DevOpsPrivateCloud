@@ -151,18 +151,20 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 
 ### Variables de `lab/lab.env`
 
-Le bloc G a ajouté `WB_RABBITMQ_URL` et `WB_RABBITMQ_CHECKS_FILE` (lues par `rabbitmq_api`). Le module ajoute ses variables, toutes facultatives (les valeurs ci-dessous sont les défauts) :
+Le bloc G a ajouté `WB_RABBITMQ_URL` et `WB_RABBITMQ_CHECKS_FILE` (lues par `rabbitmq_api`). Le module ajoute ses variables (section « module 27 » de `lab/lab.env.example`), toutes facultatives : les défauts conviennent au lab de référence. Les principales :
 
 ```
 #WB_M27_TRAVAIL="$HOME/m27"                             # brouillons et mesures des exercices
 #WB_M27_ENV_RECETTE=recette WB_M27_ENV_PROD=prod       # suffixes des espaces et des vhosts
 #WB_M27_DOC_DONNEES="docs/donnees"                     # dossier de documentation dans plateforme/medisphere
-#WB_M27_VERSION_RABBITMQ="4.3"                         # mineure attendue de la grappe (4.4 après M27-E15)
+#WB_M27_VERSION_RABBITMQ=                              # vide : 4.3 ou 4.4 acceptées ; « 4.4 » pour l'exiger après M27-E15
 #WB_M27_VALKEY_VERSION="9.1"                           # mineure attendue de Valkey (E07)
 #WB_M27_PROJET_DONNEES="plateforme/donnees"            # projet GitLab de la plateforme de données
 #WB_M27_PROJET_MEDINOTIF_DEPLOIEMENT="medinotif/deploiement"
 #WB_M27_PROJET_API="mediagenda/api"
 ```
+
+Les pannes du palier 4 ont aussi les leurs (`WB_M27_TRAFIC_URL`, `WB_M27_VALKEY_ADMIN_*`…) : voir `lab/lab.env.example`.
 
 Fichiers de `~/.config/workbook/` utilisés : `k8s-checks.kubeconfig` (M14), `gitlab-checks.token` (M01), `grafana-checks.token` (M21, pour les requêtes Prometheus), `openbao-checks.env` (M25), et **`rabbitmq-checks.env`** (E03, 600 : `RABBITMQ_USER=wb-checks`, `RABBITMQ_PASSWORD=…`).
 
@@ -258,7 +260,7 @@ Palier 5 :  E25 (mini-projet)
 6. **E11** et **E12** pour finir le palier.
 7. Paliers 3 à 5 : voir leurs fichiers.
 
-Durée indicative : palier 1, 8 à 10 heures ; palier 2, 12 à 15 heures ; palier 3, 10 à 12 heures ; palier 4, 6 à 8 heures ; mini-projet, 4 à 6 heures.
+Durée indicative : palier 1, 11 à 13 heures ; palier 2, 15 à 17 heures ; palier 3, 10 à 12 heures ; palier 4, 6 à 8 heures ; mini-projet, 4 à 6 heures.
 
 ## Pour aller plus loin
 

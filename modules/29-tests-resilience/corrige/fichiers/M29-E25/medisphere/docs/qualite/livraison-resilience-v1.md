@@ -17,7 +17,7 @@
 | Modules OpenTofu | Terratest (`vm-debian/test/`), nettoyeur (`outils/nettoyer-terratest.sh`) | `plateforme/tofu-modules` | Terratest à la demande ; nettoyeur chaque nuit (simulation) |
 | Charge | k6 1.8, k6-operator 1.7 (espace `k6`), référence `charge/references/`, tableau `m29-charge-k6` | `plateforme/resilience` | non-régression chaque nuit sur la recette |
 | Chaos | Chaos Mesh 2.8 (filtre d'espaces : `mediagenda-recette`, `medinotif-recette`, `wb-essais`), bibliothèque `chaos/`, journées de jeu `journees-de-jeu/` | `plateforme/resilience`, `plateforme/gitops` | à la main, annoncé (exception ADR-0290) |
-| Documentation | `strategie-tests.md`, ADR-0290, RB-290 à RB-298, rapport des données, post-mortem INC-5623, `sous-le-capot-chaos-mesh.md`, journées de jeu | `docs/qualite/` | — |
+| Documentation | `strategie-tests.md`, ADR-0290, RB-290 à RB-297, rapport des données, post-mortem INC-5623, `sous-le-capot-chaos-mesh.md`, journées de jeu | `docs/qualite/` | — |
 
 ## 2. Ce que les finaux trouvent
 

@@ -28,7 +28,7 @@ Prérequis : paliers 1 et 2 terminés (`lab/bin/check 28 02` à `28 10` verts, `
 | Métriques utiles | MédiAgenda : `mediagenda_notifications_total` (M27-E08) ; MédiNotif : métriques du port 9100 ; KEDA : `keda_*` (opérateur, port 8080) ; kube-state-metrics : `kube_*` |
 | Comptes | identité OIDC personnelle (contexte `k8s-par1`) ; `admin.conf` = bris de glace ; essais d'isolation par un compte d'essai nominatif (E15) |
 | Documentation | `docs/plateforme-dev/` : `autoscaling.md` (E13), `capacite.md` (E14), `essais-isolation.md` (E15), `portail-exploitation.md` (E16), `adr/ADR-0280-*.md` (E17), `runbooks/RB-284-*.md` (E16) |
-| Variables de `lab/lab.env` | voir `corrige/.lab-env-B.txt` (toutes facultatives : `WB_M28_*`) |
+| Variables de `lab/lab.env` | celles de l'introduction (toutes facultatives) ; ce palier utilise `WB_M28_IMAGE_BB` (image busybox du cache Harbor, essais de préemption de E14) |
 
 ---
 
@@ -55,7 +55,7 @@ Prérequis : paliers 1 et 2 terminés (`lab/bin/check 28 02` à `28 10` verts, `
 **Travail demandé**
 1. **Mesure d'abord.** En recette, publie 2 000 messages (`campagne.sh 2000`) et mesure : délai avant le premier pod supplémentaire, nombre maximal de pods, temps pour vider la file, débit d'un pod (messages/s). Relève dans l'HPA `keda-hpa-medinotif` les métriques qu'il voit (`kubectl describe hpa`) et dans KEDA la valeur brute (`kubectl get --raw` sur `external.metrics.k8s.io`, voir l'indice 2). Ces mesures fixent tes seuils.
 2. **Mise à zéro en recette.** Dans l'overlay `recette` de `medinotif/deploiement` : MédiNotif descend à **zéro** quand la file est vide et repart au premier message ; fixe explicitement `cooldownPeriod`, `pollingInterval` et le seuil d'activation, et décide si `idleReplicaCount` t'est utile (écris pourquoi dans la MR). Mesure le **démarrage à froid** : délai entre la publication d'un message sur une file vide et son traitement.
-3. **Production.** Étends KEDA à `medinotif-prod` sur le modèle de la recette : compte `keda-prod` (topologie de `medinotif-prod`, secret `kv/medinotif/prod/keda`), ExternalSecret, `TriggerAuthentication`, `ScaledObject`, `spec.replicas` retiré du Deployment ; synchronisation à la main, après relecture du diff.
+3. **Production.** Étends KEDA à `medinotif-prod` sur le modèle de la recette (`overlays/prod/keda/`) : compte `keda-prod` (topologie de `medinotif-prod`, secret `kv/medinotif/prod/keda`, lecture ouverte à ESO comme en E03), ExternalSecret, `TriggerAuthentication`, `ScaledObject`, `spec.replicas` retiré du Deployment (l'ApplicationSet ignore déjà ce champ pour tous les environnements depuis E03) ; synchronisation à la main, après relecture du diff.
 4. **Campagnes.** Ajoute un déclencheur `cron` qui monte MédiNotif **avant** la campagne (prod : jours ouvrés, 7 h 50 → 9 h 30, heure de Paris ; recette : 13 h 50 → 14 h 30) au nombre de réplicas que ta mesure justifie.
 5. **Anticipation.** Ajoute un déclencheur `prometheus` sur le **débit de publication** de MédiAgenda (`mediagenda_notifications_total`) de l'environnement. Choisis la source (Thanos Query ou Prometheus du cluster), **justifie** ce choix dans la MR et ouvre le flux réseau nécessaire (CiliumNetworkPolicy des deux côtés, matrice des flux).
 6. **Robustesse.** Ajoute un `fallback` (combien de réplicas si un déclencheur échoue trois fois de suite, et avec quel `behavior`) et un comportement d'HPA : montée rapide, descente lente et progressive. En prod, garantis au moins un pod (deux si ta mesure et le PDB de M28-E14 le demandent).

@@ -3,7 +3,7 @@
 # shellcheck disable=SC2016  # filtres jq entre apostrophes
 # check-E24.sh — M29-E24 « Sous le capot : comment Chaos Mesh injecte une panne » : document publié avec
 # les mécanismes et des sorties réelles, politique réseau du port gRPC du chaos-daemon, ménage de
-# wb-essais. Lecture seule.
+# wb-essais (pods) et de chaos-experiences (expériences *-e24). Lecture seule.
 
 # shellcheck source=_m29-expert.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m29-expert.sh"
@@ -26,8 +26,11 @@ if _m29p_api_repond; then
   check_cmd "chaos-mesh : une politique réseau limite le port gRPC 31767 du daemon au contrôleur" _m29_e24_cnp
   check_cmd "wb-essais : plus aucun pod *-e24" _m29p_kq '[.items[] | select(.metadata.name | test("-e24"))] | length == 0' -n wb-essais pods
   if _m29p_lit_chaos; then
-    check_cmd "wb-essais : plus aucune expérience *-e24" \
-      bash -c '[[ "$(jq "[.[] | select(.metadata.namespace == \"wb-essais\" and (.metadata.name | test(\"e24\")))] | length" <<<"$1")" == 0 ]]' _ "$(_m29p_chaos_tous)"
+    # Les expériences d'E24 vivent dans chaos-experiences (VAP medisphere-chaos-espaces) et visent wb-essais.
+    check_cmd "plus aucune expérience *-e24 (ni aucune expérience visant wb-essais encore active)" \
+      bash -c '[[ "$(jq "[.[] | select((.metadata.name | test(\"e24\")) or (((.spec.selector.namespaces // []) | index(\"wb-essais\")) != null and (.status.experiment.desiredPhase // \"\") == \"Run\"))] | length" <<<"$1")" == 0 ]]' _ "$(_m29p_chaos_tous)"
+  else
+    skip "expériences *-e24" "le compte des checks ne lit pas chaos-mesh.org (ClusterRole wb-checks-services-m29, M29-E09)"
   fi
 else
   skip "politique réseau et ménage" "l'API ne répond pas au compte des checks"

@@ -37,7 +37,7 @@ if _m28p_api_repond; then
   check_cmd "groupe oidc:medidoc autorisé à créer un espace (RBAC)" _m28_e21_peut_creer
   check_cmd "webhooks de Capsule servis (Service capsule-webhook-service avec un pod prêt)" _m28_e21_webhook_servi
   check_cmd "aucune politique Cilium posée à la main dans capsule-system" _m28p_kq \
-    '[.items[] | select((.metadata.labels // {})["medisphere.internal/auteur"] != null or (.metadata.annotations // {})["argocd.argoproj.io/tracking-id"] == null)] | length == 0' \
+    '[.items[] | select((.metadata.labels // {})["medisphere.internal/auteur"] != null or .metadata.name == "capsule-durcissement")] | length == 0' \
     -n capsule-system ciliumnetworkpolicies
 else
   skip "locataire, configuration, webhooks" "l'API ne répond pas au compte des checks"

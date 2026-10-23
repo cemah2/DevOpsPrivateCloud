@@ -105,11 +105,12 @@ check_cmd "dimensionnement et décision RabbitMQ 4.4 publiés" _m27p_doc "$_m27p
 _m27_e25_runbooks() {
   local n liste
   liste="$(_m27p_arbre plateforme/medisphere "$_m27p_runbooks")" || return 1
-  for n in 0 1 2 3 4 5 6 7 8 9; do
+  # RB-271 (RabbitMQ, M27-E12) est facultatif ; RB-272 et RB-273 sont réservés au palier 2 (non écrits).
+  for n in 0 4 5 6 7 8 9; do
     grep -q "RB-27$n" <<<"$liste" || return 1
   done
 }
-check_cmd "runbooks RB-270 à RB-279 présents dans docs/donnees/runbooks/" _m27_e25_runbooks
+check_cmd "runbooks RB-270 et RB-274 à RB-279 présents dans docs/donnees/runbooks/" _m27_e25_runbooks
 check_cmd "demonstration.md : rendez-vous de test suivi en production, daté, identifiants à l'appui" \
   _m27p_doc "$_m27p_docs" demonstration '20[0-9]{2}-[01][0-9]-[0-3][0-9]' '[0-9]{2}:[0-9]{2}' 'medinotif|MédiNotif' 'notifications' 'annul'
 

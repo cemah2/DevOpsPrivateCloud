@@ -59,7 +59,7 @@ if [[ -n "${_M29_MINI_PROJET:-}" ]]; then
 elif ! _m29p_api_repond; then
   skip "objets de chaos dans le cluster" "l'API ne répond pas au compte des checks"
 elif ! _m29p_lit_chaos; then
-  skip "objets de chaos dans le cluster" "le compte des checks ne lit pas chaos-mesh.org (ClusterRole wb-checks-services, M29-E09)"
+  skip "objets de chaos dans le cluster" "le compte des checks ne lit pas chaos-mesh.org (ClusterRole wb-checks-services-m29, M29-E09)"
 else
   check_cmd "$_m29p_chaos_ns : le Schedule de la série est en pause" _m29p_kq \
     'any(.items[]; .metadata.annotations["experiment.chaos-mesh.org/pause"] == "true")' -n "$_m29p_chaos_ns" schedules.chaos-mesh.org

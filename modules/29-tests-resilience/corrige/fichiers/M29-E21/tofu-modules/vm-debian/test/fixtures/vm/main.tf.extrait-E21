@@ -1,0 +1,12 @@
+# vm-debian/test/fixtures/vm/main.tf — EXTRAIT M29-E21 (INC-5621) : lignes ajoutées ou vérifiées dans
+# l'appel du module (fichier complet : corrige/fichiers/M29-E08/tofu-modules/vm-debian/test/fixtures/vm/main.tf).
+# La fixture IMPOSE ce dont le nettoyeur et RB-293 dépendent : un test ne doit pas pouvoir les oublier.
+module "vm" {
+  source = "../../.."
+
+  # … nom, vmid, noeud, vnet, adresse NetBox, taille : inchangés (M29-E08) …
+  pool           = "lab/terratest"          # seul chemin où wb-terratest peut écrire
+  etiquettes     = ["env-m29", "terratest"] # en dur : le nettoyeur les contrôle
+  demarrage_auto = false                    # une orpheline ne redémarre pas avec pve01
+  protection     = false                    # AJOUT E21 : une VM protégée refuse « tofu destroy »
+}

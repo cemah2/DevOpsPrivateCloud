@@ -2,8 +2,10 @@
 # Extension, pour le module 28, des droits de LECTURE du compte des vérifications (wb-checks, M14-E06).
 # Fichier distinct de rbac/wb-checks-services.yaml (M27) : même famille, agrégée de la même façon
 # (étiquette workbook.medisphere.internal/checks: "true" → ClusterRole agrégée wb-checks).
-# Jamais les Secrets. Les objets standard (HPA, Deployments, Namespaces, ResourceQuotas…) sont déjà
-# lisibles par wb-checks-base.
+# Jamais les Secrets. Déjà lisibles ailleurs, donc absents d'ici (checks E03 à E25) : objets standard
+# (HPA, Deployments, Namespaces, ResourceQuotas, LimitRanges, events), APIService (apiregistration.k8s.io),
+# PriorityClasses, EndpointSlices, politiques Cilium → wb-checks-base (M14-E06) ; politiques Kyverno CEL
+# (validatingpolicies…) → wb-checks-securite (M26-E07) ; objets CNPG (backups) → wb-checks-stockage (M16).
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

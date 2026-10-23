@@ -49,7 +49,7 @@ admin@adm01:~$ kubectl -n mediagenda-<ENV> get certificate -o wide
 admin@adm01:~$ kubectl -n mediagenda-<ENV> get certificate <CERT> -o jsonpath='{.spec.issuerRef}{"\n"}'
 admin@adm01:~$ kubectl -n mediagenda-<ENV> get secret <SECRET-TLS> -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -issuer -subject -ext subjectAltName -enddate
 ```
-Le certificat servi doit être signé par l'autorité qu'attend MédiAgenda (racine MédiSphère, émetteur de M27-E07) et porter le nom utilisé dans `MEDIAGENDA_VALKEY_URL`. Corriger le `Certificate` là où il est déclaré, attendre la réémission (`kubectl get certificate` → `Ready`), puis **redémarrer `valkey-0`** : Valkey ne recharge pas seul ses fichiers de certificat.
+Le certificat servi doit être signé par l'autorité qu'attend MédiAgenda (racine MédiSphère, émetteur de M27-E07) et porter le nom utilisé dans `MEDIAGENDA_VALKEY_URL`. Corriger le `Certificate` là où il est déclaré, attendre la réémission (`kubectl get certificate` → `Ready`), puis **redémarrer `valkey-0`** : Valkey ne relit ses fichiers TLS que toutes les `tls-auto-reload-interval` secondes (3600, M27-E07).
 
 ## 5. Après
 

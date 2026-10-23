@@ -137,9 +137,12 @@ Facultatives ; les valeurs par défaut conviennent :
 WB_M28_RABBITMQ_SVC=rabbitmq.messagerie.svc.cluster.local      # Service de la grappe RabbitMQ (M27)
 WB_M28_S3_TECHDOCS="$HOME/.config/workbook/s3-techdocs.env"    # identité de LECTURE du compartiment portail-techdocs (E10)
 WB_M28_PORTAIL_URL=https://portail.apps.par1.medisphere.internal
+WB_M28_APP_MEDINOTIF_RECETTE=medinotif-recette                  # Application Argo CD de MédiNotif en recette (ApplicationSet du M27)
+WB_M28_IMAGE_BB=registry.par1.medisphere.internal/dockerhub/library/busybox:1.37   # essais (E14) et pannes (E23)
+WB_M28_E21_WEBHOOK=                                              # « oui » autorise la variante 4 de la panne E21 (voir palier 4) : laisse vide
 ```
 
-Les checks lisent aussi le cluster (compte `wb-checks` ; la ClusterRole agrégée `wb-checks-services-m28` que tu poses en E03 couvre KEDA, VPA et Capsule), Argo CD par ses objets, Prometheus (`WB_PROM_URL`), GitLab (jeton `read_api`), l'API de gestion de RabbitMQ (`rabbitmq-checks.env`, M27), l'API du catalogue de Backstage (`backstage-checks.token`, créé en E06) et `s3-01` (`WB_S3_ENDPOINT`).
+Les checks lisent aussi le cluster (compte `wb-checks` ; la ClusterRole agrégée `wb-checks-services-m28` que tu poses en E03 couvre KEDA, VPA et Capsule ; le reste — `APIService`, événements, PriorityClasses, politiques Kyverno, objets CNPG — est lisible depuis M14, M16 et M26), Argo CD par ses objets, Prometheus (`WB_PROM_URL`), GitLab (jeton `read_api`), l'API de gestion de RabbitMQ (`rabbitmq-checks.env`, M27), l'API du catalogue de Backstage (`backstage-checks.token`, créé en E06) et `s3-01` (`WB_S3_ENDPOINT`).
 
 Fichiers créés dans `~/.config/workbook/` (700, fichiers en 600) : `backstage-checks.token` (E06), `s3-techdocs.env` (E10, identité de lecture).
 
@@ -190,7 +193,7 @@ admin@adm01:~$ ssh root@pve01 'free -g | head -2'
 
 - Les vérifications se lancent depuis `adm01` : `lab/bin/check 28 <XX>`. Elles sont en lecture seule et ne lisent jamais un Secret.
 - Celles d'E02 et E03 regardent l'historique des métriques (Prometheus) : lance les essais de charge **avant** de vérifier.
-- Le corrigé (`corrige/`) donne une solution, le *pourquoi*, les alternatives, les pièges et la vision production. Les fichiers complets sont dans `corrige/fichiers/M28-EXX/` : `gitops/` reproduit `plateforme/gitops`, `k8s/` `plateforme/k8s`, `charts-miroir/`, `donnees/`, `identite/`, `deploiement-mediagenda/`, `deploiement-medinotif/`, `deploiement-medidoc/`, `portail/`, `portail-modeles/`, `medisphere/` la documentation.
+- Le corrigé (`corrige/`) donne une solution, le *pourquoi*, les alternatives, les pièges et la vision production. Les fichiers complets sont dans `corrige/fichiers/M28-EXX/` : `gitops/` reproduit `plateforme/gitops`, `k8s/` `plateforme/k8s`, `charts-miroir/`, `donnees/`, `identite/`, `mediagenda-deploiement/`, `medinotif-deploiement/`, `medidoc-deploiement/`, `portail/`, `portail-modeles/`, `medisphere/` la documentation.
 
 ## Ordre conseillé
 

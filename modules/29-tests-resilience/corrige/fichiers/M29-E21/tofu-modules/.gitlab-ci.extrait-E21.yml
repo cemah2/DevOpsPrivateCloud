@@ -1,33 +1,40 @@
 # plateforme/tofu-modules — .gitlab-ci.yml (EXTRAIT M29-E21, INC-5621).
-# 1. Terratest (manuel, M29-E08) : délai EXPLICITE de go test, supérieur au pire cas mesuré (création +
-#    démarrage + cloud-init + destruction ≈ 9 min) et inférieur au délai du job : sans -timeout, go test
-#    panique à 10 min et AUCUN defer ne s'exécute (les VMs restent).
-# 2. Nettoyeur planifié (pipeline planifié « nettoyage-terratest », chaque nuit à 3 h, NETTOYAGE=1) :
-#    simulation par défaut ; il échoue (code 3) s'il trouve des orphelines, ce qui prévient la plateforme.
-#    Destruction : relance manuelle du job avec NETTOYAGE_APPLIQUER=1, après lecture du journal.
+# 1. Terratest (job manuel terratest:vm-debian de M29-E08) : rien à changer s'il a gardé ses délais
+#    emboîtés (attentes du test < go test -timeout 35m < timeout du job 40m) et interruptible: false.
+#    Sans -timeout, go test panique à 10 min et ni t.Cleanup ni defer ne s'exécutent (les VMs restent).
+# 2. Nettoyeur planifié (pipeline planifié « nettoyage-terratest », chaque nuit à 3 h, variable
+#    NETTOYAGE=1) : simulation par défaut ; il échoue (code 3) s'il trouve des orphelines, ce qui
+#    prévient la plateforme (courriel du pipeline planifié). Destruction : relance manuelle du job avec
+#    NETTOYAGE_APPLIQUER=1, après lecture du journal (RB-293).
+#    Sur runner01 (exécuteur shell, M05) : il joint pve01:8006 (flux ouvert, ancre TLS de pve01 dans le
+#    magasin système, M03-E15) ; jeton wb-terratest (variables PROTÉGÉES et masquées du projet, M29-E08).
 
-terratest-vm-debian:
-  stage: test
-  image: registry.par1.medisphere.internal/dockerhub/library/golang:1.26-trixie
-  tags: [k8s]
+terratest:vm-debian:
+  # … inchangé (M29-E08) : stage, tags [shell], resource_group terratest, timeout 40m,
+  #   interruptible false, script « go test -tags integration -run TestVmDebian -timeout 35m … »,
+  #   rules manuelles (MR qui touchent vm-debian, main), et :
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never                      # le pipeline planifié ne lance QUE le nettoyeur
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - vm-debian/**/*
       when: manual
-  resource_group: terratest            # jamais deux Terratest en même temps (plage de 10 VMID)
-  timeout: 25m
-  script:
-    - cd vm-debian/test
-    - go test -v -count=1 -timeout 20m ./...
+      allow_failure: true
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      allow_failure: true
 
 nettoyage-terratest:
   stage: test
-  image: registry.par1.medisphere.internal/dockerhub/alpine/k8s:1.36.5   # curl, jq, bash
-  tags: [k8s]
+  tags: [shell]
+  resource_group: terratest            # jamais pendant un Terratest (plage de 10 VMID)
+  timeout: 15m
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule" && $NETTOYAGE == "1"'
-    - if: '$CI_PIPELINE_SOURCE == "web" && $NETTOYAGE == "1"'
-  resource_group: terratest
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $NETTOYAGE == "1"
+    - if: $CI_PIPELINE_SOURCE == "web" && $NETTOYAGE == "1"
   script:
+    - test -n "$PROXMOX_VE_API_TOKEN" || { echo "Variables protégées absentes (branche non protégée ?)"; exit 1; }
     - |
       if [ "${NETTOYAGE_APPLIQUER:-0}" = 1 ]; then
         outils/nettoyer-terratest.sh --appliquer

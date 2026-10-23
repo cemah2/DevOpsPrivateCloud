@@ -33,6 +33,9 @@ for _m29o_e10_p in plateforme/k8s plateforme/gitops plateforme/infra plateforme/
 done
 check_cmd "plateforme/infra : les politiques des plans s'exécutent dans le job de plan" \
   _m29d_contient plateforme/infra .gitlab-ci.yml 'validation:conftest-plan'
+# Le job de plan tourne sur runner01 (exécuteur shell) : conftest doit y être installé (rôle gitlab_runner).
+_m29o_e10_runner() { remote runner01 'conftest --version' </dev/null 2>/dev/null | grep -Eq '^Conftest: 0\.71\.'; }
+check_cmd "runner01 : conftest 0.71 installé (le job de plan de plateforme/infra l'appelle en shell)" _m29o_e10_runner
 check_cmd "plateforme/k8s : dernier pipeline de main réussi, avec un job validation" _m29o_pipeline_main_ok plateforme/k8s '^validation'
 check_cmd "plateforme/gitops : dernier pipeline de main réussi, avec un job validation" _m29o_pipeline_main_ok plateforme/gitops '^validation'
 check_cmd "plateforme/infra : dernier pipeline de main réussi" _m29o_pipeline_main_ok plateforme/infra

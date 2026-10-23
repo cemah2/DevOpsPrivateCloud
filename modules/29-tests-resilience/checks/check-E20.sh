@@ -15,12 +15,16 @@ require_cmd kubectl jq curl ssh
 if ! _m29p_api_repond; then
   skip "Chaos Mesh" "l'API ne répond pas au compte des checks"
 elif ! _m29p_lit_chaos; then
-  skip "Chaos Mesh" "le compte des checks ne lit pas chaos-mesh.org (ClusterRole wb-checks-services, M29-E09)"
+  skip "Chaos Mesh" "le compte des checks ne lit pas chaos-mesh.org (ClusterRole wb-checks-services-m29, M29-E09)"
 else
   _m29_e20_tous="$(_m29p_chaos_tous)" || _m29_e20_tous="[]"
-  check_cmd "aucune expérience de chaos hors de $_m29p_chaos_ns et wb-essais" \
-    bash -c '[[ "$(jq --arg c "$1" "[.[] | select(.metadata.namespace != \$c and .metadata.namespace != \"wb-essais\")] | length" <<<"$2")" == 0 ]]' \
+  check_cmd "aucun objet de chaos hors de $_m29p_chaos_ns (VAP medisphere-chaos-espaces, M29-E09)" \
+    bash -c '[[ "$(jq --arg c "$1" "[.[] | select(.metadata.namespace != \$c)] | length" <<<"$2")" == 0 ]]' \
     _ "$_m29p_chaos_ns" "$_m29_e20_tous"
+  check_cmd "aucune expérience « en pause » par une annotation mal écrite (annotation *pause* sans experiment.chaos-mesh.org/pause=true)" \
+    bash -c '[[ "$(jq "[.[] | (.metadata.annotations // {}) as \$a | select(any(\$a | keys[]; test(\"pause\")))
+              | select((\$a[\"experiment.chaos-mesh.org/pause\"] // \"\") != \"true\")] | length" <<<"$1")" == 0 ]]' \
+    _ "$_m29_e20_tous"
   check_cmd "aucun Schedule hors pause n'embarque une expérience sans durée" \
     bash -c '[[ "$(jq "[.[] | select(.kind == \"Schedule\") | select((.metadata.annotations[\"experiment.chaos-mesh.org/pause\"] // \"\") != \"true\")
               | select(.spec.type != \"Workflow\") | select([.spec | to_entries[] | select(.key | test(\"Chaos$\")) | .value.duration // \"\"] | all(. == \"\"))] | length" <<<"$1")" == 0 ]]' \

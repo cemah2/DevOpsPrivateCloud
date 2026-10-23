@@ -10,13 +10,13 @@
 | Rédaction | <MOI>, relu par Karim Benali et Nadia Roussel |
 
 ## Résumé
-Un traitement par lots de MédiDoc, lancé dans `medidoc-dev` sans `requests` et avec des garde-fous retirés la veille (LimitRange supprimé, quota de l'espace relevé), a consommé le CPU d'un travailleur ; ses pods ont été tués par manque de mémoire en boucle et la recette des autres équipes a ralenti.
+Un traitement par lots de MédiDoc (`medidoc-indexation`), lancé à la main dans `medidoc-dev` avec des `requests` **à zéro**, après que les garde-fous de l'espace eurent été desserrés la veille (LimitRange supprimée, quota relevé), a occupé le CPU d'un travailleur que l'ordonnanceur croyait libre ; ses conteneurs ont été tués par manque de mémoire en boucle et la recette des autres équipes a ralenti.
 
 ## Chronologie
 | Heure | Événement |
 |---|---|
 | <J-1 17:40> | commit dans le dépôt du locataire : LimitRange de `medidoc-dev` retiré, quota relevé (« pour l'indexation ») |
-| <09:05> | déploiement du lot `medidoc-indexation` |
+| <09:05> | lot `medidoc-indexation` créé à la main (`kubectl apply`), requests `0`, classe `medisphere-lot` |
 | <09:20> | alerte de capacité ; plaintes de lenteur en recette |
 | <09:32> | charge identifiée (tableau de capacité, `kubectl top`) |
 | <09:38> | endiguement : `scale --replicas=0` après accord de l'équipe |
@@ -30,8 +30,8 @@ Par les plaintes avant l'alerte : l'alerte de capacité a un seuil trop tardif.
 
 ## Causes
 1. Garde-fous de l'espace (LimitRange, quota) modifiables sans revue de la Plateforme.
-2. Rien n'exige des `requests` dans les espaces des locataires.
-3. Pas d'alerte « pods sans requests » ni « CPU d'un nœud volé par un seul locataire ».
+2. Les `requests` sont exigées (Kyverno `exiger-limites`, M26) mais seulement **présentes** : une valeur nulle passe ; la LimitRange d'origine n'avait pas de minimum (ses valeurs par défaut ne s'appliquent qu'aux requests absentes).
+3. Pas d'alerte « pods aux requests absentes ou nulles » ni « CPU d'un nœud volé par un seul locataire ».
 
 ## Ce qui a bien marché
 Tableau de capacité, journal d'incident tenu, endiguement réversible.
@@ -40,6 +40,6 @@ Tableau de capacité, journal d'incident tenu, endiguement réversible.
 | Action | Propriétaire | Échéance |
 |---|---|---|
 | `CODEOWNERS` : `espaces/` et `locataires/` relus par la Plateforme | Karim Benali | <date> |
-| ValidatingPolicy Kyverno : `requests` obligatoires dans les espaces des locataires | <MOI> | <date> |
-| Alerte « pods sans requests » et « part CPU d'un locataire sur un nœud > 60 % » | <MOI> | <date> |
+| `exiger-limites` : requests strictement positives ; `min` dans les LimitRange des espaces des locataires | <MOI> | <date> |
+| Alerte « pods aux requests absentes ou nulles » et « part CPU d'un locataire sur un nœud > 60 % » | <MOI> | <date> |
 | Guide d'accueil : traitements par lots en `medisphere-lot` | Julien Petit | <date> |

@@ -18,7 +18,7 @@ Le module a mis des tests à chaque étage de la plateforme, de la syntaxe des m
 **Durée indicative** : 4 à 6 h, plus 30 min de revue.
 
 **Contexte technique**
-- Le contrôle global `lab/bin/check 29 25` rejoue les vérifications clés des exercices E13, E14, E19, E20, E21 et E22 (et celles des paliers 1 et 2 qui existent dans ce dépôt), puis vérifie la livraison : composant `validation` consommé, pipelines nocturnes verts, Chaos Mesh et son filtre d'espaces, aucune expérience active, aucune VM de test, pannes closes, documentation, étiquette. Il prend 3 à 5 minutes ; chaque partie a son titre.
+- Le contrôle global `lab/bin/check 29 25` rejoue les vérifications des exercices E02 à E10, E13, E14 et E19 à E22 (en sautant ce qui n'avait de sens que pendant l'exercice : traces de charge des 7 derniers jours, sondes Goss si l'essai a été retiré par décision écrite, objets de chaos supprimés depuis), puis vérifie la livraison : composant `validation` consommé, pipelines nocturnes verts, Chaos Mesh et son filtre d'espaces, aucune expérience active, aucune VM de test, pannes closes, documentation, étiquette. Il prend 3 à 5 minutes ; chaque partie a son titre.
 - Les tickets d'actions de la journée de jeu (E16) sont des issues de `plateforme/resilience` étiquetées `journee-de-jeu`.
 
 **État livré `resilience-v1`** — ce que les workbooks finaux trouveront. Rien ne doit manquer, rien ne doit porter un autre nom.
@@ -32,7 +32,7 @@ Le module a mis des tests à chaque étage de la plateforme, de la syntaxe des m
 | Charge | k6-operator 1.7 (Application `k6-operator`, espace `k6`), tableau `m29-charge-k6`, écriture distante restreinte aux exécuteurs de `k6` |
 | Chaos | Chaos Mesh 2.8 (Application `chaos-mesh`, filtre d'espaces actif) ; espaces annotés : `mediagenda-recette`, `medinotif-recette`, `wb-essais` **seulement** ; aucune expérience active, aucun `Schedule` hors pause ; bibliothèque `plateforme/resilience/chaos/` ; politique réseau du port gRPC du daemon |
 | Journée de jeu | au moins un rapport dans `docs/qualite/journees-de-jeu/` ; **toutes** ses actions closes (issues fermées avec la preuve) ou reportées par décision écrite |
-| Documentation | `docs/qualite/` : `strategie-tests.md` (à jour de ce qui a été livré), ADR-0290, runbooks RB-290 à RB-298, rapport `rapports/*-resilience-donnees.md`, post-mortem INC-5623, `sous-le-capot-chaos-mesh.md`, note de livraison `livraison-resilience-v1.md` |
+| Documentation | `docs/qualite/` : `strategie-tests.md` (mise à jour de ce qui a été livré depuis E12), ADR-0290, runbooks RB-290 à RB-297, rapport `rapports/*-resilience-donnees.md`, post-mortem INC-5623, `sous-le-capot-chaos-mesh.md`, note de livraison `livraison-resilience-v1.md` |
 | Livraison | pipelines de `main` verts dans `plateforme/resilience`, `plateforme/politiques`, `plateforme/ci-templates` ; étiquette **`resilience-v1`** sur `plateforme/medisphere` |
 
 **Travail demandé**
@@ -41,7 +41,7 @@ Le module a mis des tests à chaque étage de la plateforme, de la syntaxe des m
 3. **Tests nocturnes verts** depuis au moins deux nuits : Testinfra sur le socle, non-régression de performance, nettoyeur Terratest (en simulation, sans rien trouver).
 4. **Chaos encadré.** Le filtre d'espaces est actif ; aucun espace `*-prod` ni de plateforme n'est annoté ; RB-294 et RB-297 relus ; politique réseau du daemon en place.
 5. **Journée de jeu suivie d'effets.** Chaque action de la journée de jeu est close avec sa preuve (MR, alerte, test) ou reportée par une décision écrite et datée ; au moins une action concerne la faiblesse de `/pret` révélée par les expériences (correctif proposé à l'équipe de Julien, ou décision écrite de l'équipe).
-6. **Documentation et passage de relais.** Tout ce qui est listé dans l'état livré, plus `livraison-resilience-v1.md` : ce que les finaux trouvent (F1 à F7 : où sont les tests, comment lancer une journée de jeu, ce qui n'est jamais fait en prod), ce qui reste à traiter (chaos en production, tests de contrat entre MédiAgenda et MédiDoc, non-régression de MédiDoc).
+6. **Documentation et passage de relais.** Mets à jour `docs/qualite/strategie-tests.md` (M29-E12) avec ce qui a réellement été livré depuis : k6-operator et la non-régression nocturne (E14), les journées de jeu (E16), le test de non-régression des politiques sur le plan de référence (E19), le nettoyeur Terratest planifié (E21), les runbooks RB-290 à RB-297 ; corrige ce qui, dans la version d'E12, ne correspond plus à ce qui tourne. Puis tout ce qui est listé dans l'état livré, plus `livraison-resilience-v1.md` : ce que les finaux trouvent (F1 à F7 : où sont les tests, comment lancer une journée de jeu, ce qui n'est jamais fait en prod), ce qui reste à traiter (chaos en production, tests de contrat entre MédiAgenda et MédiDoc, non-régression de MédiDoc).
 7. **Livraison.** Pipelines verts, étiquette `resilience-v1`.
 8. **La revue.** Répète les quatre démonstrations **avant** la revue et chronomètre-les.
 
@@ -66,7 +66,7 @@ Lance `lab/bin/check 29 25` dès le début : la liste des points rouges est ton 
 
 <details><summary>Indice 2</summary>
 
-Pour la démonstration de Sophie sur la prod, compare ce que fait le *webhook* de Chaos Mesh d'une expérience qui vise un espace non annoté (refus ou sélection vide, selon la version et le mode) : essaie-le **avant** la revue, dans `chaos-experiences`, avec une durée de 10 s, et lis le statut de l'objet.
+Pour la démonstration de Sophie sur la prod, deux barrières se succèdent : la politique d'admission `medisphere-chaos-espaces` (M29-E09) refuse à la création une expérience dont `selector.namespaces` sort de la liste ; si elle laissait passer (liaison en `Warn`, par exemple), le filtre d'espaces de Chaos Mesh ne sélectionnerait aucun pod d'un espace non annoté. Essaie-le **avant** la revue, avec `--dry-run=server` d'abord, puis sache dire ce que tu verrais dans le statut de l'objet si la première barrière tombait.
 </details>
 
 **Pour aller plus loin** (facultatif) : mesure le coût réel de la brique (mémoire de Chaos Mesh et de k6-operator au repos, durée et ressources des pipelines nocturnes, minutes de recette dégradée par mois) et ajoute-le à l'ADR-0290 comme référence pour les finaux.

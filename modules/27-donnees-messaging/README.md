@@ -6,7 +6,7 @@
 | **Niveau** | Secondaire |
 | **Profil de lab** | Socle v5 + `ceph-par1` + `k8s-par1` (≈ 111 Go) ; Kafka `kafka-essai` (≈ 4,5 Gi dans les travailleurs) de E09 à la fin de E10 ; `pg-patroni01..03` (2271-2273, 3 × 1 Go) le temps de E13 |
 | **Prérequis** | Module 26 (`durcissement-v1`) ; module 16 (CloudNativePG, plugin Barman Cloud, `mediagenda-db`) ; module 20 (Argo CD, hooks de migration) ; module 25 (OpenBao, rôles dynamiques PostgreSQL, External Secrets) ; module 12 (image de MédiNotif) ; module 21 (supervision) |
-| **Durée indicative** | 40 à 50 heures (palier 1 : 8-10 h ; palier 2 : 12-15 h ; palier 3 : 10-12 h ; palier 4 : 6-8 h ; mini-projet : 4-6 h) |
+| **Durée indicative** | 45 à 55 heures (palier 1 : 11-13 h ; palier 2 : 15-17 h ; palier 3 : 10-12 h ; palier 4 : 6-8 h ; mini-projet : 4-6 h) |
 
 ## Contexte MédiSphère
 

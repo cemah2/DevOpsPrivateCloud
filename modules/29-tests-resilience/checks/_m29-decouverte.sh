@@ -26,9 +26,14 @@ _M29D_P_DOC="plateforme/medisphere"
 _M29D_P_RESILIENCE="${WB_M29_PROJET_RESILIENCE:-plateforme/resilience}"
 _M29D_RECETTE="${WB_M29_RECETTE_URL:-https://mediagenda-recette.apps.par1.medisphere.internal}"
 
-# Dossier temporaire du check, supprimé à la sortie (copies de fichiers lus dans GitLab).
-_M29D_TMP="$(mktemp -d)"
-trap 'rm -rf "$_M29D_TMP"' EXIT
+# Dossier temporaire du check, supprimé à la sortie (copies de fichiers lus dans GitLab). Créé une
+# seule fois quand le mini-projet (check-E25) source plusieurs checks ; le piège de sortie supprime
+# aussi le dossier des fonctions du palier 4 (_m29x_tmp, _m29-expert.sh) s'il existe.
+if [[ -z "${_M29D_TMP:-}" ]]; then
+  _M29D_TMP="$(mktemp -d)"
+  # shellcheck disable=SC2154  # _m29x_tmp : défini par _m29-expert.sh quand il est chargé (mini-projet)
+  trap 'rm -rf -- "$_M29D_TMP" ${_m29x_tmp:+"$_m29x_tmp"}' EXIT
+fi
 
 # _m29d_k ARGS… — kubectl en lecture par le compte des checks ; sortie vide en cas d'erreur.
 _m29d_k() { kube "$@" 2>/dev/null || true; }

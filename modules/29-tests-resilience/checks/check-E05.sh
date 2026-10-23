@@ -47,9 +47,14 @@ else
 fi
 
 # --- Traces du test dans la recette ---------------------------------------------------------------------
-_m29d_e05_post="$(_m29d_prom_valeur 'sum(increase(mediagenda_http_requests_total{namespace="mediagenda-recette", methode="POST", route="/api/v1/rendez-vous"}[7d]))')"
-check_cmd "la recette a reçu au moins 100 réservations ces 7 derniers jours (test lancé) : ${_m29d_e05_post%%.*}" \
-  _m29d_superieur "$_m29d_e05_post" 99
+# Au mini-projet (check-E25), la fenêtre de 7 jours est passée depuis longtemps : contrôle sauté.
+if [[ -n "${_M29_MINI_PROJET:-}" ]]; then
+  skip "réservations de test dans la recette (7 jours)" "mini-projet : vérifié pendant M29-E05"
+else
+  _m29d_e05_post="$(_m29d_prom_valeur 'sum(increase(mediagenda_http_requests_total{namespace="mediagenda-recette", methode="POST", route="/api/v1/rendez-vous"}[7d]))')"
+  check_cmd "la recette a reçu au moins 100 réservations ces 7 derniers jours (test lancé) : ${_m29d_e05_post%%.*}" \
+    _m29d_superieur "$_m29d_e05_post" 99
+fi
 _m29d_e05_liste="$(curl -sf --max-time "$WB_TIMEOUT" "$_M29D_RECETTE/api/v1/rendez-vous?limite=1000" 2>/dev/null || true)"
 if [[ -n "$_m29d_e05_liste" ]]; then
   check_cmd "aucun rendez-vous factice resté dans la base de recette (praticiens dr-k6-*)" _m29d_json "$_m29d_e05_liste" \

@@ -1,0 +1,50 @@
+// Extrait non compilé (extension .extrait-E21) : à lire à côté du test complet.
+// plateforme/tofu-modules — vm-debian/test/vm_debian_test.go (EXTRAIT M29-E21, INC-5621)
+// Ce que la revue d'INC-5621 vérifie dans le test de M29-E08 (fichier complet :
+// corrige/fichiers/M29-E08/tofu-modules/vm-debian/test/vm_debian_test.go), dans cet ordre :
+//  1. échéance interne plus courte que « go test -timeout » : quand -timeout expire, go test PANIQUE et
+//     n'exécute ni t.Cleanup ni defer ; la marge laisse le temps de détruire ;
+//  2. destruction enregistrée (t.Cleanup) AVANT InitAndApply : si l'application échoue à mi-chemin
+//     (VM créée, cloud-init en erreur), la destruction a quand même lieu ;
+//  3. nom tt-<6>, VMID libre de 2290-2299, étiquettes et sous-pool imposés par la fixture
+//     (test/fixtures/vm/main.tf, qui force aussi protection = false et demarrage_auto = false).
+// Rien de tout cela ne protège d'un job annulé ou d'un runner tué (SIGKILL) : c'est le rôle du
+// nettoyeur planifié (outils/nettoyer-terratest.sh) et de RB-293.
+//
+//go:build integration
+
+package test
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/gruntwork-io/terratest/modules/random"
+	"github.com/gruntwork-io/terratest/modules/terraform"
+	test_structure "github.com/gruntwork-io/terratest/modules/test-structure"
+)
+
+const margeDestruction = 8 * time.Minute
+
+func TestVmDebianExtrait(t *testing.T) {
+	ctx := context.Background()
+	if fin, ok := t.Deadline(); ok { // 1.
+		var annuler context.CancelFunc
+		ctx, annuler = context.WithDeadline(ctx, fin.Add(-margeDestruction))
+		defer annuler()
+	}
+	_ = ctx // passé aux attentes (retry.DoWithRetryContext) dans le test complet
+
+	nom := "tt-" + strings.ToLower(random.UniqueID()) // 3.
+	dossier := test_structure.CopyTerraformFolderToTemp(t, "..", "test/fixtures/vm")
+	options := &terraform.Options{
+		TerraformBinary: "tofu",
+		TerraformDir:    dossier,
+		Vars:            map[string]any{"nom": nom, "vmid": 2290},
+	}
+
+	t.Cleanup(func() { terraform.Destroy(t, options) }) // 2. AVANT InitAndApply
+	terraform.InitAndApply(t, options)
+}

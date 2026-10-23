@@ -62,7 +62,7 @@ La plateforme tient, mais personne ne sait jusqu'où. Les rôles Ansible sont «
 | Politiques Rego | `plateforme/politiques/rego/` | Règles sur les plans et les manifestes | E03 |
 | k6-operator 1.7 | espace `k6` | Tests de charge dans le cluster | E14 |
 | Chaos Mesh 2.8 | espace `chaos-mesh`, expériences dans `chaos-experiences` (projet `plateforme/resilience`) | Ingénierie du chaos, espaces de recette seulement | E09 |
-| VMs de Terratest | 2290-2299, `vsandbox` | Créées et détruites par les tests | E08 |
+| VMs de Terratest | 2290-2299, sous-pool Proxmox `lab/terratest`, `vsandbox` (adresse allouée par NetBox) | Créées et détruites par les tests | E08 |
 
 Détails figés : [`PLAN.md`](../../PLAN.md) §4.13. Versions : [`annexes/versions-bloc-G.md`](../../annexes/versions-bloc-G.md). Fiche : [`annexes/decouverte/litmuschaos.md`](../../annexes/decouverte/litmuschaos.md).
 

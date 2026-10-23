@@ -23,7 +23,7 @@ if _m29p_api_repond; then
   if kube get testruns.k6.io -n k6 -o name >/dev/null 2>&1; then
     check_cmd "aucun TestRun de k6 en erreur" _m29p_kq '[.items[] | select(.status.stage == "error")] | length == 0' -n k6 testruns.k6.io
   else
-    skip "TestRun dans le cluster" "le compte des checks ne lit pas k6.io (ClusterRole wb-checks-services, E14 étape 1)"
+    skip "TestRun dans le cluster" "le compte des checks ne lit pas k6.io (ClusterRole wb-checks-services-m29, M29-E09)"
   fi
 else
   skip "k6-operator dans le cluster" "l'API ne répond pas au compte des checks"

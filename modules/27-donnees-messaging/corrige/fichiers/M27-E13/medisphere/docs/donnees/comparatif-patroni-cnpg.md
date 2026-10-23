@@ -58,5 +58,3 @@ Ce qu'il faudrait construire autour de Patroni pour atteindre le niveau de servi
 ## Conclusion
 
 CloudNativePG reste notre choix pour les bases des applications du cluster : à niveau de service égal, il évite de construire et d'exploiter le point d'accès, la sauvegarde et le TLS, et nos mesures ne montrent aucun désavantage (bascules plus courtes, même RPO nul). Patroni reste la bonne réponse pour une base **hors** Kubernetes (par exemple si Legacy-RDV migrait vers PostgreSQL sur VM) : le code de l'essai est gardé à cette fin. Décision consignée dans l'ADR-0270.
-</content>
-</invoke>

@@ -8,13 +8,13 @@ Les scripts d'injection sont dans `corrige/pannes/` : `_m29-commun.sh` contient 
 
 > **Remarque sur les traces** : le commit porte l'auteur « Lucas Martin », mais c'est **ton** jeton d'administration qui l'a poussé (le *committer* et le journal d'audit de GitLab le montrent) ; les gestes sur le cluster sont faits avec ton kubeconfig. En production, ce serait l'identité de Lucas : c'est pour cela que chacun a un compte nominatif.
 
-**Validé hors du lab** : logique d'injection d'E19 rejouée sur un jeu de politiques Rego v1 de démonstration avec OPA 1.21.3 et conftest 0.71.1 (variantes 1 et 2 : `opa test` reste vert, le plan n'est plus refusé ; variante 1 sans effet avec `--all-namespaces` ; détection du nom du job conftest dans un composant et surcharge `allow_failure` par yq 4) ; conftest renvoie **0** et « 0 tests » quand l'espace demandé ne contient aucune règle (constaté) ; job de non-régression des plans rejoué localement ; correctif `/pret` de MédiAgenda (pytest : 28 tests réussis, `ruff check`, `ruff format --check`, `git apply --check` sur le code de référence) ; `chaos-daemon` : SIGKILL du `container-kill`, `iptables-legacy`, chaînes `CHAOS-INPUT/OUTPUT` et `TC-TABLES-*` avec `CLASSIFY`, arbre `prio`/`sfq`/`netem` pour une latence ciblée, `stress-ng` lancé par `nsexec` dans l'espace de PID puis rattaché au cgroup du conteneur (code de la 2.8.6) ; manifestes validés par kubeconform `-strict` ; `shellcheck -x` et `bash -n` sur tous les scripts.
+**Validé hors du lab** : logique d'injection d'E19 (variantes 1 et 2) rejouée à l'harmonisation sur les politiques du corrigé de M29-E03 avec OPA 1.21.3 et conftest 0.71.1, contexte `socle` compris (`opa test rego/tofu rego/donnees` reste vert à 19/19, le plan de référence n'est plus refusé ; variante 1 sans effet avec `--all-namespaces`) ; surcharge `allow_failure` de `.plan` (variante 3) et lecture de `!reference` par yq 4.47 ; conftest renvoie **0** et « 0 tests » quand l'espace demandé ne contient aucune règle (constaté) ; job de non-régression des plans rejoué localement ; correctif `/pret` de MédiAgenda (pytest : 28 tests réussis, `ruff check`, `ruff format --check`, `git apply --check` sur le code de référence) ; `chaos-daemon` : SIGKILL du `container-kill`, `iptables-legacy`, chaînes `CHAOS-INPUT/OUTPUT` et `TC-TABLES-*` avec `CLASSIFY`, arbre `prio`/`sfq`/`netem` pour une latence ciblée, `stress-ng` lancé par `nsexec` dans l'espace de PID puis rattaché au cgroup du conteneur (code de la 2.8.6) ; manifestes validés par kubeconform `-strict` ; `shellcheck -x` et `bash -n` sur tous les scripts.
 
 **Points non testés en conditions réelles** (signale tes retours) :
 - délais entre un commit, la synchronisation d'Argo CD, le canary d'Argo Rollouts sur la recette (E23 attend jusqu'à 15 min) et la mise à l'échelle de l'HPA à une réplique (E23 v2, fenêtre de stabilisation) ;
 - comportement du `chaos-daemon` 2.8 démarré avec un `--runtime-socket-path` inexistant (E20 v2 : plantage au démarrage ou erreurs à chaque appel — dans les deux cas le retrait échoue) et levée du finaliseur après réparation ;
 - commande Testinfra par défaut de E22 (`--hosts=ansible://…` avec l'inventaire de `ansible.cfg`) : règle `WB_M29_TESTINFRA_CMD` si ta suite se lance autrement ;
-- `qm create` sans disque avec `--pool lab` et `--tags "env-m29;terratest"` sur Proxmox VE 9 (E21) ;
+- `qm create` sans disque avec `--pool lab/terratest` (pool imbriqué) et `--tags "env-m29;terratest"` sur Proxmox VE 9 (E21) ; emplacement exact de l'état laissé par `CopyTerraformFolderToTemp` de Terratest 1.0 (supposé `/tmp/TestVmDebian<n>/vm-debian/test/fixtures/vm/`) ;
 - détection des espaces de conftest de ta CI (E19) : si ton composant passe les espaces autrement (variable, fichier), fixe `WB_M29_CONFTEST_ARGS` ;
 - appli `busybox` `time -p` et `httpd` dans les pods d'E24.
 
@@ -34,37 +34,40 @@ Les scripts d'injection sont dans `corrige/pannes/` : `_m29-commun.sh` contient 
 admin@adm01:~/src/infra$ git log -3 --format='%h %an %ar %s' -- .gitlab-ci.yml
 admin@adm01:~/src/politiques$ git log -5 --format='%h %an %ar %s' -- rego/
 admin@adm01:~/src/politiques$ git pull && grep -rh '^package ' rego/tofu/ | sort | uniq -c
-# Les arguments réels de la CI (composant + surcharge locale) :
-admin@adm01:~/src/ci-templates$ grep -n -- '--namespace\|--all-namespaces\|conftest test' templates/validation/template.yml
-admin@adm01:~/src/politiques$ conftest test --no-color -p rego/tofu --namespace tofu.socle \
-    ~/DevOpsPrivateCloud/modules/29-tests-resilience/ressources/E19-plan-dangereux/plan-dangereux.json
+# Les arguments réels du job de plan (.validation:conftest-plan du composant, M29-E10) :
+admin@adm01:~/src/ci-templates$ grep -n -- '--namespace\|--all-namespaces\|--data\|conftest test' templates/validation/template.yml
+admin@adm01:~/src/politiques$ echo '{"contexte": {"etat": "socle", "etiquettes_mr": []}}' > /tmp/contexte-socle.json
+admin@adm01:~/src/politiques$ conftest test --no-color -p rego/tofu --namespace tofu --data rego/donnees \
+    --data /tmp/contexte-socle.json ~/DevOpsPrivateCloud/modules/29-tests-resilience/ressources/E19-plan-dangereux/plan-dangereux.json
 0 tests, 0 passed, 0 warnings, 0 failures, 0 exceptions          ← variante 1 : rien n'est évalué
-admin@adm01:~/src/politiques$ conftest test --no-color -p rego/tofu --all-namespaces <plan>
-2 tests, 0 passed, 0 warnings, 0 failures, 0 exceptions          ← variante 2 : évalué, rien ne se déclenche
-admin@adm01:~/src/politiques$ opa eval -d rego/tofu -i <plan> 'data' --format pretty | head -30
+13 tests, 13 passed, 0 warnings, 0 failures, 0 exceptions        ← variante 2 : évalué, rien ne se déclenche
+admin@adm01:~/src/politiques$ conftest test --no-color -p rego/tofu --all-namespaces --data rego/donnees --data /tmp/contexte-socle.json <plan>
+admin@adm01:~/src/politiques$ opa eval -d rego/tofu -d rego/donnees -d /tmp/contexte-socle.json -i <plan> 'data' --format pretty | head -30
 admin@adm01:~/src/politiques$ jq 'keys' <plan>                     # "resource_changes" … pas "resource_change"
 ```
 
-Variante 3 : dans GitLab, le dernier pipeline de la MR de démonstration de `plateforme/infra` est « passed » avec un job orange (« allowed to fail ») ; `conftest` en local refuse bien le plan.
+(Le nombre de « tests » dépend de tes règles ; ceux-ci sont ceux du corrigé de M29-E03. Sans `--data` du contexte, la règle « contexte absent » refuse le plan **à elle seule** : on croit le filet intact alors qu'aucune autre règle ne se déclenche.)
+
+Variante 3 : dans GitLab, le dernier pipeline de la MR de démonstration de `plateforme/infra` est « passed » avec des jobs `plan:*` orange (« allowed to fail ») dont le journal dit « Plan REFUSÉ par les politiques… » ; `conftest` en local refuse bien le plan.
 
 *Cause racine, par variante*
 
 | Variante | Cause | Preuve |
 |---|---|---|
-| 1 | Commit de Lucas dans `plateforme/politiques` : les paquets des règles `rego/tofu/` renommés `brouillon.<paquet>` (règles **et** tests, références `data.…` comprises). `opa test` reste vert ; la CI de `plateforme/infra` lance `conftest test --namespace <paquet>` : aucune règle dans cet espace, conftest réussit en silence (« 0 tests ») | `git log -p rego/`, `grep '^package'`, sortie « 0 tests » |
+| 1 | Commit de Lucas dans `plateforme/politiques` : le paquet des règles `rego/tofu/` renommé `brouillon.tofu` (règles **et** tests, `import data.tofu` compris). `opa test` reste vert ; le job de plan lance `conftest test --namespace tofu` : aucune règle dans cet espace, conftest réussit en silence (« 0 tests ») | `git log -p rego/`, `grep '^package'`, sortie « 0 tests » |
 | 2 | Commit de Lucas : `resource_changes` → `resource_change` dans les règles **et dans les entrées simulées des tests**. Les tests passent (ils fabriquent leur propre entrée) ; sur un vrai plan, `input.resource_change` n'existe pas : `some rc in input.resource_change` ne produit rien, aucune règle ne se déclenche | `git log -p`, `opa eval … 'data'` (ensembles `deny` vides), `jq 'keys'` |
-| 3 | Commit de Lucas dans `plateforme/infra/.gitlab-ci.yml` : surcharge du job conftest du composant avec `allow_failure: true` (« le temps de corriger les faux positifs ») : le job échoue, le pipeline passe | `git log -p .gitlab-ci.yml`, job orange |
+| 3 | Commit de Lucas dans `plateforme/infra/.gitlab-ci.yml` : `allow_failure: true` ajouté au modèle caché `.plan` (M05), que tous les jobs `plan:*` étendent et qui appelle `!reference [.validation:conftest-plan, script]` (« le temps de corriger les faux positifs ») : le job de plan échoue sur le refus, le pipeline passe | `git log -p .gitlab-ci.yml`, jobs `plan:*` orange |
 
 *Correctif* : revert du commit fautif par MR (`git revert <sha>` dans le bon dépôt), puis vérification : le plan est refusé **avec les arguments de la CI**, `lab/bin/check 29 19`, `lab/bin/break 29 19 --annuler` pour clore.
 
 *Prévention* (fichiers dans [`fichiers/M29-E19/politiques/`](fichiers/M29-E19/politiques/)) :
 - plans de référence versionnés ([`tests/plans/`](fichiers/M29-E19/politiques/tests/plans/)) : un plan qui **doit** être refusé, un qui doit passer ;
-- job [`non-regression-plans`](fichiers/M29-E19/politiques/.gitlab-ci.extrait-E19.yml) : conftest avec **les mêmes espaces** que le composant ; échec si le plan dangereux n'est pas refusé (code 1 **et** au moins un `FAIL` : un code 2 d'erreur d'analyse ou un 127 « commande introuvable » ne sont pas des refus) ; échec si un paquet de règles n'est pas dans les espaces évalués (rend la variante 1 impossible) ; la variante 2 est attrapée parce que le plan est **réel** ;
+- job [`non-regression-plans`](fichiers/M29-E19/politiques/.gitlab-ci.extrait-E19.yml) : conftest avec **les mêmes arguments** que `.validation:conftest-plan` (`--namespace tofu`, `--data rego/donnees`, contexte `socle` versionné dans `tests/plans/contexte-socle.json`) ; échec si le plan dangereux n'est pas refusé (code 1 **et** au moins un `FAIL` : un code 2 d'erreur d'analyse ou un 127 « commande introuvable » ne sont pas des refus) ; échec si un paquet de règles n'est pas dans les espaces évalués (rend la variante 1 impossible) ; la variante 2 est attrapée parce que le plan est **réel** ;
 - [`CODEOWNERS`](fichiers/M29-E19/politiques/CODEOWNERS) sur `rego/tofu/`, `tests/plans/`, `.gitlab-ci.yml` — en GitLab Free, l'approbation obligatoire des propriétaires est Premium : le garde-fou réel reste « fusion réservée aux Maintainers » + ce job ;
-- dans `plateforme/infra` : aucune surcharge `allow_failure` d'un job de validation (le check le vérifie) ; une exception temporaire se fait par une règle `rules:` datée dans le composant, revue, pas par une surcharge silencieuse.
+- dans `plateforme/infra` : aucune surcharge `allow_failure` d'un job de validation ni de `.plan`/`plan:*` (le check le vérifie) ; une exception temporaire se fait par une règle `rules:` datée dans le composant, revue, pas par une surcharge silencieuse.
 
 **Pièges classiques**
-- Tester « avec sa commande habituelle » (`--all-namespaces`, ou depuis un autre dossier) : on ne reproduit pas la CI.
+- Tester « avec sa commande habituelle » (`--all-namespaces`, sans le contexte, ou depuis un autre dossier) : on ne reproduit pas la CI.
 - Conclure « les tests passent, donc les règles marchent » : les tests unitaires ne voient que leur entrée.
 - Corriger en ajoutant `--all-namespaces` dans le composant sans comprendre : c'est un choix valable (un dossier qui ne contient que des règles actives), mais il change ce qui est évalué pour **tous** les projets ; décision écrite.
 - Laisser le job en `allow_failure` « temporairement » : une permission qui n'expire pas.
@@ -77,7 +80,7 @@ Variante 3 : dans GitLab, le dernier pipeline de la MR de démonstration de `pla
 
 *Symptômes* : recette lente (≈ +300 ms sur toutes les requêtes) alors que l'expérience est « supprimée » (v1), « en suppression » (v2) ou « en pause » (v3).
 
-*Hypothèses* : (a) quelque chose **recrée** l'expérience ; (b) quelque chose **empêche** son retrait ; (c) une autre expérience que celle qu'on regarde ; (d) la lenteur ne vient pas du chaos.
+*Hypothèses* : (a) quelque chose **recrée** l'expérience ; (b) quelque chose **empêche** son retrait ; (c) l'expérience n'est pas dans l'état qu'on croit (pause mal posée) ; (d) la lenteur ne vient pas du chaos.
 
 *Commandes, dans l'ordre*
 
@@ -85,8 +88,10 @@ Variante 3 : dans GitLab, le dernier pipeline de la MR de démonstration de `pla
 admin@adm01:~$ for t in $(kubectl api-resources --api-group=chaos-mesh.org -o name); do kubectl get "$t" -A --no-headers 2>/dev/null | sed "s|^|$t |"; done
 networkchaos.chaos-mesh.org chaos-experiences controle-latence-x7k2q …         ← v1 : un enfant
 schedules.chaos-mesh.org chaos-experiences controle-latence …                   ← v1 : son parent
-networkchaos.chaos-mesh.org mediagenda-recette diagnostic-reseau …              ← v3 : dans l'espace VISÉ
-networkchaos.chaos-mesh.org chaos-experiences diagnostic-reseau … (en pause)    ← v3 : le leurre
+networkchaos.chaos-mesh.org chaos-experiences diagnostic-reseau …              ← v3 : « en pause » d'après Lucas
+admin@adm01:~$ kubectl -n chaos-experiences get networkchaos diagnostic-reseau -o jsonpath='{.metadata.annotations}{"\n"}{.status.experiment.desiredPhase}{"\n"}'
+{"chaos-mesh.org/pause":"true", …}                                                ← v3 : mauvaise clé
+Run                                                                               ← v3 : le contrôleur ne la voit pas en pause
 admin@adm01:~$ kubectl -n mediagenda-recette get podnetworkchaos -o yaml | yq '.items[] | [.metadata.name, .spec.tcs[].source]'
 admin@adm01:~$ kubectl -n chaos-experiences get networkchaos diagnostic-latence -o jsonpath='{.metadata.deletionTimestamp} {.metadata.finalizers}{"\n"}'
 2026-11-04T09:12:31Z ["chaos-mesh/records"]                                        ← v2
@@ -105,16 +110,17 @@ qdisc netem 1: root refcnt 2 limit 1000 delay 300ms  20ms
 |---|---|---|---|
 | 1 | `Schedule` `controle-latence` (`*/5`, `Forbid`) qui embarque une latence de 90 min ; Lucas a supprimé l'**enfant**, le `Schedule` en a recréé un au tick suivant (`Forbid` n'empêche que le chevauchement) | `ownerReferences` et étiquette `managed-by: controle-latence` de l'enfant ; événements `Spawned` du Schedule | pause puis suppression du **Schedule** (ses enfants partent avec lui) |
 | 2 | Commit de Lucas dans `plateforme/gitops` (`valeurs/chaos-mesh/values.yaml`) : `chaosDaemon.socketPath: /run/containerd/containerd-ancien.sock` → le chart monte `/run/containerd` et passe `--runtime-socket-path /host-run/containerd-ancien.sock` : les daemons ne joignent plus containerd ; le retrait de l'expérience échoue, le finaliseur reste, le `netem` reste | arguments du DaemonSet, journaux du daemon, `git log -p valeurs/chaos-mesh/` | revert par MR, attendre les daemons prêts : le contrôleur réessaie, retire, lève le finaliseur — **sans** forçage |
-| 3 | La vraie expérience `diagnostic-reseau` est dans `mediagenda-recette` (hors de l'espace des expériences) ; Lucas a mis en pause une **copie homonyme** dans `chaos-experiences` | `-A`, `metadata.namespace`, `PodNetworkChaos` : `source: mediagenda-recette/diagnostic-reseau` | pause/suppression de la bonne ; suppression du leurre |
+| 3 | Lucas a « mis en pause » `diagnostic-reseau` avec l'annotation `chaos-mesh.org/pause: "true"` (le préfixe de l'annotation des **espaces**, `chaos-mesh.org/inject`) au lieu de `experiment.chaos-mesh.org/pause` : le contrôleur l'ignore, la phase désirée reste `Run` | annotations de l'objet, `status.experiment.desiredPhase: Run`, condition `Paused` à `False` | vraie pause (`experiment.chaos-mesh.org/pause=true`) puis suppression ; retirer la fausse annotation |
 
 *Correctif commun* : vérifier ensuite **sur le nœud** que chaque pod de l'API n'a plus de `netem`, puis la mesure (p95 < 250 ms). Si un `netem` reste sans aucune expérience vivante : retrait manuel (`nsenter … tc qdisc del dev eth0 root`, ou redémarrage du pod), et explication écrite.
 
-*Prévention* : [`RB-297`](fichiers/M29-E20/medisphere/docs/qualite/runbooks/RB-297-experience-qui-ne-s-arrete-pas.md) ; règle « jamais d'expérience hors de `chaos-experiences` » rendue technique (Kyverno : refuser les types `chaos-mesh.org` dans tout autre espace — en CEL `ValidatingPolicy` sur les ressources `*.chaos-mesh.org`) ; revue des MR des valeurs de Chaos Mesh ; alerte « expérience active > 30 min » ; `Schedule` toujours en pause hors observation.
+*Prévention* : [`RB-297`](fichiers/M29-E20/medisphere/docs/qualite/runbooks/RB-297-experience-qui-ne-s-arrete-pas.md) ; règle « jamais d'expérience hors de `chaos-experiences` » déjà technique (VAP `medisphere-chaos-espaces`, M29-E09) ; contrôle de la pause par l'état et non par l'annotation (`chaos-arret.sh` affiche `desiredPhase`) ; revue des MR des valeurs de Chaos Mesh ; alerte « expérience active > 30 min » ; `Schedule` toujours en pause hors observation.
 
 **Pièges classiques**
 - Forcer le finaliseur d'emblée (v2) : l'objet disparaît, la latence reste, et on a perdu la trace de ce qu'il fallait retirer.
 - Redémarrer les daemons sans corriger les valeurs : Argo CD remet la mauvaise configuration.
-- Chercher seulement dans `chaos-experiences` (v3).
+- Croire une annotation sur parole (v3) : c'est l'état (`desiredPhase`, condition `Paused`) qui dit si l'expérience est en pause, pas la présence d'un mot « pause ».
+- Chercher une expérience « cachée » dans un autre espace : la VAP `medisphere-chaos-espaces` (M29-E09) l'interdit ; vérifie plutôt ce que contiennent les `PodNetworkChaos` des pods visés.
 - Supprimer les enfants en boucle (v1) : le parent gagne toujours.
 
 ---
@@ -130,36 +136,42 @@ qdisc netem 1: root refcnt 2 limit 1000 delay 300ms  20ms
 ```
 root@pve01:~# pvesh get /cluster/resources --type vm --output-format json \
     | jq -r '.[] | select(.vmid >= 2290 and .vmid <= 2299) | [.vmid, .name, .status, .pool, .tags] | @tsv'
-2298	tt-3fa21c	stopped	lab	env-m29;terratest
-2299	tt-9b07e4	stopped	lab	env-m29;terratest
-root@pve01:~# qm config 2298 | grep -E '^(name|tags|meta|onboot|protection)'
+2298	tt-3fa21c	stopped	lab/terratest	env-m29;terratest
+2299	tt-9b07e4	stopped	lab/terratest	env-m29;terratest
+root@pve01:~# qm config 2298 | grep -E '^(name|tags|meta|onboot|protection|description)'
+description: Terratest M29-E08 (poste) : VM jetable, détruite par le test. Orpheline ? RB-293.
 meta: creation-qemu=…,ctime=1761811234
 onboot: 1                                                   ← v1
 protection: 1                                               ← v3
 admin@adm01:~$ find /tmp -maxdepth 6 -name terraform.tfstate -path '*vm-debian*'
-/tmp/TestVmDebian184467044/vm-debian/terraform.tfstate
-admin@adm01:~$ jq -r '.resources[].instances[].attributes | [.vm_id, .name] | @tsv' /tmp/TestVmDebian184467044/vm-debian/terraform.tfstate
+/tmp/TestVmDebian184467044/vm-debian/test/fixtures/vm/terraform.tfstate
+/tmp/TestVmDebian093517201/vm-debian/test/fixtures/vm/terraform.tfstate
+admin@adm01:~$ jq -r '.resources[].instances[].attributes | [.vm_id, .name, .pool_id] | @tsv' /tmp/TestVmDebian*/vm-debian/test/fixtures/vm/terraform.tfstate
 ```
 
-Puis le journal du dernier pipeline Terratest (et `go test` sans `-timeout` dans `.gitlab-ci.yml`), et le test (`defer` placé après `InitAndApply` ?).
+Puis l'historique des jobs `terratest:vm-debian` (annulés ? arrêtés au délai ?), la CI (`go test -timeout`, `timeout` du job, `interruptible`), le test (destruction enregistrée avant `InitAndApply` ?) et la fixture (étiquettes, `protection`). NetBox : ici, rien (la panne n'y écrit pas) ; un vrai test interrompu y laisserait l'adresse allouée (RB-293 §3).
 
 *Cause racine, par variante*
 
 | Variante | Ce qui a laissé les VMs | Particularité |
 |---|---|---|
-| 1 | test interrompu par le délai par défaut de `go test` (10 min) : panique, aucun `defer` | une VM en `onboot: 1` : elle démarrera au prochain démarrage de `pve01` et prendra 1 Go au budget du profil |
-| 2 | même cause | étiquette `terratest` **absente** (seulement `env-m29`) : un nettoyage par étiquette seule ne les voit pas ; elles restent identifiables par plage, pool et préfixe de nom |
-| 3 | destruction refusée : `protection: 1` sur les VMs (défaut du module changé, le test ne le forçait pas) | `qm destroy` échoue tant que la protection est là |
+| 1 | test tué avant sa destruction : job annulé, runner redémarré, ou `go test` arrivé à son délai (panique : ni `t.Cleanup` ni `defer`) | une VM en `onboot: 1` : elle démarrera au prochain démarrage de `pve01` et prendra 1 Go au budget du profil |
+| 2 | même cause | étiquette `terratest` **absente** (seulement `env-m29`) : un nettoyage par étiquette seule ne les voit pas ; elles restent identifiables par plage, sous-pool et préfixe de nom |
+| 3 | destruction refusée : `protection: 1` sur les VMs (la fixture ne forçait pas `protection = false`) | `tofu destroy` et `qm destroy` échouent tant que la protection est là |
 
-*Correctif* : nettoyage par l'état si cohérent (`tofu destroy` dans le répertoire temporaire, identifiants du test dans l'environnement), sinon VM par VM après les avoir montrées (`qm set --protection 0`, `qm destroy --purge 1 --destroy-unreferenced-disks 1`), puis suppression du répertoire temporaire. Clore : `lab/bin/break 29 21 --annuler` (il ne détruit que des VMs portant encore le nom **et** la date de création notés à l'injection).
+Le lab ne garde pas le journal d'un « vrai » job pour cette panne : la cause se déduit des indices (VMs arrêtées sans disque, états restés dans `/tmp`, `onboot`, étiquettes, protection) ; dis dans ton journal ce qui la confirmerait sur un vrai pipeline (statut `canceled`, `panic: test timed out`).
 
-*Prévention* : test ([extrait](fichiers/M29-E21/tofu-modules/vm-debian/test/vm_debian_test.extrait.go)) — nom et étiquettes obligatoires, `protection = false`, `defer terraform.Destroy` **avant** `InitAndApply` ; job ([extrait](fichiers/M29-E21/tofu-modules/.gitlab-ci.extrait-E21.yml)) — `go test -timeout 20m`, `timeout: 25m`, `resource_group: terratest` ; nettoyeur [`outils/nettoyer-terratest.sh`](fichiers/M29-E21/tofu-modules/outils/nettoyer-terratest.sh) — API de Proxmox, plage **et** pool **et** préfixe **et** âge, étiquette contrôlée et signalée, simulation par défaut, code 3 s'il trouve des orphelines (le pipeline planifié échoue et prévient) ; [`RB-298`](fichiers/M29-E21/medisphere/docs/qualite/runbooks/RB-298-ressources-de-test-orphelines.md).
+*Correctif* : nettoyage par l'état si cohérent (`tofu destroy` dans le dossier de la fixture de la copie temporaire, identifiants du test dans l'environnement), sinon VM par VM avec le jeton `wb-terratest` après les avoir montrées (protection levée, arrêt, destruction avec purge), puis suppression des dossiers temporaires. Clore : `lab/bin/break 29 21 --annuler` (il ne détruit que des VMs portant encore le nom **et** la date de création notés à l'injection).
+
+*Prévention* : test ([extrait](fichiers/M29-E21/tofu-modules/vm-debian/test/vm_debian_test.go.extrait-E21)) — celui d'E08 enregistre déjà sa destruction par `t.Cleanup` **avant** `InitAndApply` et borne ses attentes par une échéance plus courte que `go test -timeout` ; fixture ([extrait](fichiers/M29-E21/tofu-modules/vm-debian/test/fixtures/vm/main.tf.extrait-E21)) — sous-pool, étiquettes, `demarrage_auto = false` et **`protection = false`** imposés ; CI ([extrait](fichiers/M29-E21/tofu-modules/.gitlab-ci.extrait-E21.yml)) — délais emboîtés d'E08 (`go test -timeout 35m`, `timeout: 40m`, `interruptible: false`, `resource_group: terratest`) et job planifié `nettoyage-terratest` sur `runner01` ; nettoyeur [`outils/nettoyer-terratest.sh`](fichiers/M29-E21/tofu-modules/outils/nettoyer-terratest.sh) — API de Proxmox avec le jeton `wb-terratest`, plage **et** sous-pool **et** préfixe **et** âge, étiquette contrôlée et signalée, simulation par défaut, code 3 s'il trouve des orphelines (le pipeline planifié échoue et prévient) ; [`RB-293`](fichiers/M29-E21/medisphere/docs/qualite/runbooks/RB-293-vms-de-test-orphelines.md) complété (causes, nettoyeur, NetBox) — une seule fiche pour les VMs de test, écrite en E08 et complétée ici.
 
 **Pièges classiques**
 - Détruire « tout ce qui s'appelle tt- » sans vérifier qu'aucun test ne tourne.
 - Nettoyer par étiquette seule (v2) ou par nom seul (une VM légitime pourrait commencer par `tt`) : combiner les critères.
+- Détruire en root sur `pve01` alors que le jeton `wb-terratest` aurait refusé une erreur de VMID.
 - Supprimer l'état orphelin **avant** de s'en servir pour détruire.
-- `defer` après `InitAndApply` : rassurant à la lecture, inutile si l'application échoue.
+- Oublier NetBox : une adresse allouée et jamais rendue finit par épuiser la plage SANDBOX.
+- Destruction enregistrée après `InitAndApply` : rassurant à la lecture, inutile si l'application échoue.
 
 ---
 

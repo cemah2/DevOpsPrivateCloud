@@ -57,5 +57,3 @@ Aujourd'hui, MédiAgenda valide la transaction du rendez-vous **puis** publie la
 - **Outbox** : obligatoire avant d'ouvrir les rappels à des centres hors recette élargie, ou dès un deuxième incident de notifications perdues.
 - **Liquibase / Atlas** : seulement si leur licence redevient libre et qu'un besoin (multi-bases, *diff* déclaratif) apparaît.
 - **RabbitMQ** : fin du support communautaire de la 4.3 (01/2027) — montée en 4.4 décidée dans `montee-rabbitmq-4.4.md`.
-</content>
-</invoke>
