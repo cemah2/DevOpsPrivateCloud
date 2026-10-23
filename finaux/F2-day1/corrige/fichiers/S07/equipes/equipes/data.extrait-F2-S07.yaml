@@ -1,0 +1,13 @@
+# plateforme/equipes — equipes/data.yaml : EXTRAIT, changement de F2-S07 (DEV-3207).
+# L'environnement « traitements » porte une base que joint OpenBao (moteur db-data) : le rendu autorise
+# UN Service LoadBalancer dans le quota de l'espace (au lieu de 0). Le Service lui-même, sa politique
+# réseau et les générateurs restent à la plateforme (plateforme/k8s, espaces/data-traitements/).
+spec:
+  kubernetes:
+    environnements:
+      traitements:
+        quota: {requests.cpu: 1500m, requests.memory: 3Gi, limits.memory: 5Gi, pods: "20", persistentvolumeclaims: "6", requests.storage: 40Gi}
+        signature_exigee: true
+        synchronisation: automatique
+        alertes: true
+        base_openbao: true          # F2-S07 : une base jointe par OpenBao (Service LB réservé)

@@ -1,0 +1,26 @@
+# outils/revue-acces/modele.yml — EXTRAIT (F2-S10, SEC-3210) : groupes des équipes accueillies en F2 et
+# périmètre ATTENDU des prestataires. La revue signale tout droit d'un groupe ext-* hors de ce périmètre
+# (écarts « droit-hors-modele », « liaison-hors-oidc ») et toute personne d'un groupe ext-* sans date
+# d'expiration ou dont la date est passée sans désactivation (« prestataire-expire-actif »).
+groupes_personnes: [plateforme-admins, plateforme, mediagenda, medidoc, securite, support, direction,
+                    medivisio, data, ext-axiomdev]
+
+prestataires:
+  ext-axiomdev:
+    responsable_interne: julien.petit
+    contrat: SEC-3210
+    fin: "<DATE-FIN-CONTRAT>"
+    gitlab:
+      groupes: [ext-axiomdev]          # son groupe PROPRE (vide de projets MédiSphère) et AUCUN autre :
+                                       # l'héritage ouvrirait tous les projets d'un groupe
+      projets: {mediagenda/api: developer}
+      externe: true
+      expiration_obligatoire: true
+    kubernetes:
+      liaisons_permises:               # seule liaison admise pour oidc:ext-axiomdev
+        - {espace: mediagenda-axiomdev, role: prestataire-developpeur}
+    grafana_dossier: AxiomDev          # rendu par l'équipe en code (vide) : toléré
+    argocd: aucun
+    openbao: aucun
+    hbac: aucun                        # aucune règle : SSH refusé partout
+    otp: obligatoire

@@ -1,0 +1,32 @@
+# mediagenda/deploiement — overlays/prod/day0-recuperation.yaml (F1-S11, PLAT-3111, CHG-3107)
+# Correctif JSON6902 du Cluster « mediagenda-db » de PRODUCTION rendu par components/dependances
+# (qui sert aussi à dev : la récupération ne vit QUE dans l'overlay de prod).
+#   - bootstrap : initdb retiré, recovery ajouté (base et propriétaire « mediagenda », sinon l'opérateur
+#     crée une base « app » vide et le Secret -app la vise) ;
+#   - externalClusters : l'archive de l'ANCIENNE production, en lecture (serverName mediagenda-db-prod) ;
+#   - l'archivage de la NOUVELLE production change de serverName dans base-openbao.yaml (voir
+#     kustomization.extrait-F1.yaml) : écrire sous mediagenda-db-prod ferait échouer la vérification
+#     « Expected empty archive » du plugin, et surtout écraserait l'historique de l'ancienne.
+# Une JSON6902 et non une fusion : « remove » échoue bruyamment si initdb n'est plus là (rendu inattendu),
+# là où une fusion stratégique d'une ressource personnalisée laisserait les deux méthodes d'amorçage.
+# bootstrap n'est lu qu'à la CRÉATION du Cluster : ce correctif reste en place ensuite (il décrit
+# l'origine réelle de la base) ; le retirer ne changerait rien au Cluster existant.
+- op: remove
+  path: /spec/bootstrap/initdb
+- op: add
+  path: /spec/bootstrap/recovery
+  value:
+    source: mediagenda-db-prod-avant-day0
+    database: mediagenda
+    owner: mediagenda
+    # Pas de recoveryTarget : rejeu jusqu'au dernier WAL archivé, c'est-à-dire le segment forcé au gel
+    # (pg_switch_wal, 10-gel.sh) après la dernière écriture.
+- op: add
+  path: /spec/externalClusters
+  value:
+    - name: mediagenda-db-prod-avant-day0
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: cnpg-s3
+          serverName: mediagenda-db-prod

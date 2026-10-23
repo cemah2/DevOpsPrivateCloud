@@ -1,0 +1,56 @@
+# data/deploiement — base/initialisation.yaml (F2-S07, DEV-3207)
+# SQL joué UNE fois par CloudNativePG à la création de statistiques-db (postInitApplicationSQLRefs),
+# en superutilisateur, dans la base « statistiques ». Le modifier après coup ne rejoue rien : une
+# évolution du schéma passe par le traitement qui la porte (CREATE … IF NOT EXISTS) ou par un outil de
+# migration (Flyway, comme MédiAgenda) si l'équipe en adopte un.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: statistiques-db-initialisation
+data:
+  initialisation.sql: |
+    -- Rôles de GROUPE (sans connexion) : les comptes dynamiques d'OpenBao en héritent.
+    CREATE ROLE stats_lecture NOLOGIN;
+    CREATE ROLE stats_ecriture NOLOGIN;
+    -- Rôle d'OpenBao : il DONNE l'appartenance aux groupes (ADMIN) sans en recevoir les droits
+    -- (INHERIT FALSE) ni pouvoir les endosser (SET FALSE). PostgreSQL ≥ 16 exige l'option ADMIN.
+    CREATE ROLE openbao LOGIN CREATEROLE NOINHERIT CONNECTION LIMIT 10;
+    GRANT stats_lecture TO openbao WITH ADMIN TRUE, INHERIT FALSE, SET FALSE;
+    GRANT stats_ecriture TO openbao WITH ADMIN TRUE, INHERIT FALSE, SET FALSE;
+
+    REVOKE ALL ON SCHEMA public FROM PUBLIC;
+    CREATE SCHEMA stats AUTHORIZATION stats_ecriture;
+    COMMENT ON SCHEMA stats IS 'Statistiques d''activité (données pseudonymisées, ADR-0327)';
+    GRANT USAGE ON SCHEMA stats TO stats_lecture;
+    GRANT CONNECT ON DATABASE statistiques TO stats_lecture, stats_ecriture;
+
+    SET ROLE stats_ecriture;
+    -- Rendez-vous pseudonymisés : rechargés en entier chaque nuit (chargement/cronjob.yaml).
+    CREATE TABLE stats.rendez_vous (
+        rdv_pseudo              text PRIMARY KEY,
+        patient_pseudo          text NOT NULL,
+        praticien_pseudo        text NOT NULL,
+        jour                    date NOT NULL,
+        heure                   smallint NOT NULL CHECK (heure BETWEEN 0 AND 23),
+        jour_semaine            smallint NOT NULL CHECK (jour_semaine BETWEEN 1 AND 7),
+        duree_minutes           integer NOT NULL,
+        canal_rappel            text NOT NULL,
+        delai_reservation_jours integer NOT NULL
+    );
+    CREATE INDEX rendez_vous_jour_idx ON stats.rendez_vous (jour);
+    -- Journal des chargements : la SEULE table que lisent les métriques (aucune donnée de personne).
+    CREATE TABLE stats.chargements (
+        id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        fichier    text NOT NULL,
+        jour       date NOT NULL,
+        lignes     integer NOT NULL,
+        sha256     text NOT NULL,
+        charge_le  timestamptz NOT NULL DEFAULT now()
+    );
+    -- Ce que stats_ecriture créera plus tard (agrégats de S08) sera lisible par stats_lecture.
+    ALTER DEFAULT PRIVILEGES FOR ROLE stats_ecriture IN SCHEMA stats GRANT SELECT ON TABLES TO stats_lecture;
+    RESET ROLE;
+    GRANT SELECT ON ALL TABLES IN SCHEMA stats TO stats_lecture;
+    -- Métriques (cnpg_stats_extraction_*) : le collecteur lit le journal des chargements, rien d'autre.
+    GRANT USAGE ON SCHEMA stats TO pg_monitor;
+    GRANT SELECT ON stats.chargements TO pg_monitor;

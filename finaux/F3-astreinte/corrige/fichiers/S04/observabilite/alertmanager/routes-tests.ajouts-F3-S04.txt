@@ -1,0 +1,8 @@
+# alertmanager/routes-tests.txt — LIGNES À AJOUTER (F3-S04, INC-5904, PLAT-3304)
+# Garde-fous : MédiAgenda production, chaque gravité, avec et sans étiquette d'espace. Si un jour une
+# route coupe ces alertes, la CI échoue. Toute MR qui modifie CES lignes demande l'approbation de
+# l'astreinte (CODEOWNERS : alertmanager/routes-tests.txt @plateforme/astreinte).
+astreinte-mail,mediagenda-mail | alertname=MediagendaTauxErreurEleve gravite=critique equipe=mediagenda environnement=prod namespace=mediagenda-prod
+astreinte-mail,mediagenda-mail | alertname=MediagendaIndisponible gravite=critique equipe=mediagenda environnement=prod
+mediagenda-mail                | alertname=MediagendaLatenceElevee gravite=avertissement equipe=mediagenda environnement=prod namespace=mediagenda-prod
+astreinte-mail,plateforme-mail | alertname=PostgresqlVerrouProlonge gravite=critique equipe=plateforme namespace=mediagenda-prod

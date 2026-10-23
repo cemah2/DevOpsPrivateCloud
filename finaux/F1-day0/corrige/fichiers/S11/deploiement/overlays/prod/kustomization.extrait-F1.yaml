@@ -1,0 +1,20 @@
+# mediagenda/deploiement — overlays/prod/kustomization.yaml, EXTRAIT (F1-S11, PLAT-3111).
+# 1. Ajouter le correctif de récupération (cible : le Cluster de la base, rendu par components/dependances) :
+patches:
+  # … correctifs existants (base-openbao.yaml, reseau-openbao.yaml, prod-archivage si séparé…) …
+  - path: day0-recuperation.yaml
+    target:
+      group: postgresql.cnpg.io
+      version: v1
+      kind: Cluster
+      name: mediagenda-db
+# 2. Dans le correctif qui porte .spec.plugins de la prod (base-openbao.yaml ou prod-archivage, M27-E15),
+#    le NOUVEAU nom d'archivage :
+#      plugins:
+#        - name: barman-cloud.cloudnative-pg.io
+#          isWALArchiver: true
+#          parameters:
+#            barmanObjectName: cnpg-s3
+#            serverName: mediagenda-db-prod-day0      # était mediagenda-db-prod
+# 3. Vérification avant la MR (rendu hors ligne) :
+#      kustomize build overlays/prod | yq 'select(.kind == "Cluster") | .spec.bootstrap, .spec.externalClusters, .spec.plugins'

@@ -1,0 +1,6 @@
+site_name: MédiVisio — consultation
+nav:
+  - Présentation: index.md
+  - Runbook: runbook.md
+plugins:
+  - techdocs-core

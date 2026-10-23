@@ -1,0 +1,7 @@
+# host_vars/adm01/outils_k8s.yml — EXTRAIT F4-S04 (issue « go ») : kubectl de adm01 aligné sur la cible
+# (±1 mineure de l'API ; on le monte AVEC le cluster). Variables du rôle outils_k8s (M14, défauts
+# relus au M25). Les binaires de outils_k8s_binaires (kubelogin, etcdctl/etcdutl…) suivent la même
+# règle : etcdctl/etcdutl à la version de l'etcd déployé par kubeadm 1.37 (M14-E25), empreintes
+# SHA-256 officielles relevées le jour J.
+outils_k8s_kubectl_mineure: "1.37"
+outils_k8s_kubectl_version: "1.37.<CORRECTIF>-<REVISION>"   # « apt-cache madison kubectl » après changement de dépôt

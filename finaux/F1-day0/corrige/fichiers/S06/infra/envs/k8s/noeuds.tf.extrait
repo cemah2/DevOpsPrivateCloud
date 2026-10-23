@@ -1,0 +1,15 @@
+# envs/k8s/noeuds.tf (plateforme/infra) — EXTRAIT F1-S06 : un nœud de l'usine n'est plus cloné.
+# Seul le for_each du module change ; local.noeuds (VMID, suffixe, gabarits) reste LA table des nœuds,
+# lue aussi par usine.tf. Même chose pour dns.tf (module dns_noeud : for_each = module.noeud, déjà
+# limité par ce filtre) : usine.tf publie le nom des nœuds de l'usine (module dns_usine).
+
+module "noeud" {
+  source = "git::https://git01.par1.medisphere.internal/plateforme/tofu-modules.git//vm-noeud?ref=<VERSION-TOFU-MODULES>"
+  # Avant : for_each = local.noeuds
+  for_each = { for nom, n in local.noeuds : nom => n if !contains(keys(var.noeuds_usine), nom) }
+
+  # … tout le reste inchangé (M14, M16, M19) …
+}
+
+# Plan attendu après la fusion de la MR de F1-S06 (noeuds_usine vide) : « No changes ».
+# Un plan qui touche à module.noeud["k8s-w03"] à ce stade est une ERREUR : le cluster est en service.

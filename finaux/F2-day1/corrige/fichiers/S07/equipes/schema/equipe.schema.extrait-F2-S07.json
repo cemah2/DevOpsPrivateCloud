@@ -1,0 +1,8 @@
+{
+  "$comment": "plateforme/equipes — schema/equipe.schema.json : EXTRAIT (F2-S07, DEV-3207). Propriété ajoutée aux réglages d'un environnement (spec.kubernetes.environnements.<env>.properties), à côté de quota, signature_exigee, synchronisation, alertes. Facultative : absente = false.",
+  "base_openbao": {
+    "description": "F2-S07 — l'environnement porte une base PostgreSQL jointe par OpenBao (moteur database) : un Service LoadBalancer permis dans le quota.",
+    "type": "boolean",
+    "default": false
+  }
+}

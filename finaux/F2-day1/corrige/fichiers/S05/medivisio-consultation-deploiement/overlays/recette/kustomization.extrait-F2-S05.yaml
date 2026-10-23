@@ -1,0 +1,5 @@
+# medivisio/consultation-deploiement — overlays/recette/kustomization.yaml : AJOUT de F2-S05.
+resources:
+  - ../../base
+  - secret.yaml
+  - slo.yaml          # ← ajouté

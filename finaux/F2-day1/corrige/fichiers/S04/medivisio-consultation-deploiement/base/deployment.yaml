@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consultation
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: consultation
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: consultation
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        runAsGroup: 10000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: service
+          # Posée par overlay (images, par empreinte) : la promotion de la CI pour dev, une MR pour la suite.
+          image: registry.par1.medisphere.internal/medisphere/medivisio-consultation
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: CONSULTATION_ENVIRONNEMENT
+              value: "<POSÉ-PAR-L-OVERLAY>"
+            # Clé HMAC des liens de salle : Secret « consultation », créé par l'ExternalSecret de l'overlay.
+            - name: CONSULTATION_CLE_SALLES
+              valueFrom:
+                secretKeyRef:
+                  name: consultation
+                  key: cle_salles
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 128Mi}
+          startupProbe:
+            httpGet: {path: /sante, port: http}
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet: {path: /sante, port: http}
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /pret, port: http}
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

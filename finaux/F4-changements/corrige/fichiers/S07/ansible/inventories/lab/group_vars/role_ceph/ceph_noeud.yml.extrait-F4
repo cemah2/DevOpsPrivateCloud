@@ -1,0 +1,4 @@
+# group_vars/role_ceph/ceph_noeud.yml — EXTRAIT F4-S07 (CHG-3407), variante « ceph-orch » :
+# paquets cephadm et ceph-common des hôtes (dépôt download.ceph.com/rpm-<version>/el10), après la
+# mise à jour des démons.
+ceph_noeud_version: "20.2.<CORRECTIVE>"

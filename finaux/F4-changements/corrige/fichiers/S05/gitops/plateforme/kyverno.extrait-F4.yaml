@@ -1,0 +1,18 @@
+# plateforme/gitops — plateforme/kyverno.yaml (EXTRAIT F4-S05, CHG-3405) : seule la version du chart
+# change (les valeurs de valeurs/kyverno/values.yaml sont relues contre « helm show values » de la
+# nouvelle version : clés renommées ou retirées dans les notes de version).
+# Ordre dans la synchronisation : Argo CD applique les CRD avant les ressources qui les utilisent
+# (ordre par type) ; les CRD de Kyverno sont dans le sous-chart du chart principal.
+# ServerSideApply=true est déjà posé (M26-E07) : les CRD dépassent la taille de last-applied.
+spec:
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: kyverno
+      targetRevision: <VERSION-DU-CHART-POUR-KYVERNO-1.20>
+      helm:
+        releaseName: kyverno
+        valueFiles:
+          - $values/valeurs/kyverno/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values

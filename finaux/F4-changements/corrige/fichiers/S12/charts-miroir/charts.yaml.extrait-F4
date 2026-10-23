@@ -1,0 +1,15 @@
+# plateforme/charts-miroir — charts.yaml : EXTRAIT à ajouter (F4-S12, CHG-3412).
+# mariadb-operator 26.6 : charts OCI officiels (l'ancien dépôt Helm https://… est DÉPRÉCIÉ depuis 26.6).
+# Deux charts : les CRD (à installer AVANT), puis l'opérateur (crds.enabled: false dans ses valeurs).
+# Empreintes relevées à la main (« helm pull oci://… --version 26.6.0 » puis sha256sum de l'archive),
+# relues en MR ; le pipeline refuse une archive dont l'empreinte diffère.
+  - nom: mariadb-operator-crds
+    depot: oci://ghcr.io/mariadb-operator/charts/mariadb-operator-crds
+    version: 26.6.0
+    empreinte: sha256:<EMPREINTE-RELEVEE-MARIADB-OPERATOR-CRDS-26.6.0>
+    usage: "CRD k8s.mariadb.com de mariadb-operator (F4-S12), Application plateforme/gitops plateforme/mariadb-operator-crds.yaml"
+  - nom: mariadb-operator
+    depot: oci://ghcr.io/mariadb-operator/charts/mariadb-operator
+    version: 26.6.0
+    empreinte: sha256:<EMPREINTE-RELEVEE-MARIADB-OPERATOR-26.6.0>
+    usage: "mariadb-operator 26.6.0 (F4-S12), Application plateforme/gitops plateforme/mariadb-operator.yaml"

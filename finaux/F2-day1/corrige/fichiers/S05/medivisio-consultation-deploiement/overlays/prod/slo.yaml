@@ -1,0 +1,37 @@
+# SLO de disponibilité de la consultation en production (F2-S05, DEV-3205), même construction que
+# mediagenda-disponibilite (M21-E26/E27). Pyrra écrit la PrometheusRule du même nom dans CET espace
+# (medivisio-prod porte medisphere.internal/supervision-regles=oui : Prometheus la lit ; l'opérateur
+# impose namespace="medivisio-prod" aux sélecteurs). « pyrra.dev/equipe » devient l'étiquette equipe des
+# alertes : route medivisio@ (AlertmanagerConfig alertes-medivisio de l'espace), et astreinte pour les
+# critiques (configuration globale).
+# SLI : requêtes d'utilisateurs (hors sondes et /metrics) servies sans 5xx. Objectif 99,5 % sur 28 jours
+# (aligné sur MédiAgenda : la téléconsultation suit le même contrat). Budget ≈ 3 h 22 min / 28 j.
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: medivisio-consultation-disponibilite
+  labels:
+    pyrra.dev/equipe: medivisio
+  annotations:
+    pyrra.dev/resume: "MédiVisio consultation (prod) consomme son budget d'erreurs trop vite"
+    pyrra.dev/description: "Taux de 5xx au-dessus de ce que permet l'objectif de 99,5 % sur 28 jours."
+    pyrra.dev/runbook_url: https://git01.par1.medisphere.internal/medivisio/consultation/-/blob/main/docs/runbook.md
+spec:
+  description: "MédiVisio consultation (production) : requêtes servies sans erreur 5xx"
+  target: "99.5"
+  window: 28d
+  indicator:
+    ratio:
+      errors:
+        metric: consultation_http_requests_total{namespace="medivisio-prod", route!~"/sante|/pret|/metrics", code=~"5.."}
+      total:
+        metric: consultation_http_requests_total{namespace="medivisio-prod", route!~"/sante|/pret|/metrics"}
+  alerting:
+    burnrates: true
+    absent: true
+    severities:
+      fastBurn: critique
+      mediumBurn: critique
+      slowBurn: avertissement
+      longTermBurn: avertissement
+      absent: critique

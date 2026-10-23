@@ -1,0 +1,9 @@
+# plateforme/ansible — group_vars/role_coffre/openbao-postgresql.yml : EXTRAIT (F2-S07). vault01-03.
+# CA de la base Data, relevée comme celles de MédiAgenda (M25-E14) :
+#   admin@adm01:~$ kubectl -n data-traitements get secret statistiques-db-ca -o jsonpath='{.data.ca\.crt}' \
+#       | base64 -d > ~/src/ansible/files/openbao/postgresql/statistiques-data-ca.crt
+# Même contrainte de renouvellement (CA de CloudNativePG : 90 jours) : alerte du M25-E27 étendue.
+openbao_bases_postgresql:
+  - mediagenda-recette
+  - mediagenda-prod
+  - statistiques-data

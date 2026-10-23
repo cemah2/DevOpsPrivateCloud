@@ -1,0 +1,78 @@
+# legacy/deploiement — base/schema.yaml (F4-S12, CHG-3412)
+# v1 : table rendez_vous VIDE (même définition que schema.sql d'InfoGér, sans le jeu d'exemple) : la
+#      production démarre prête (pret.php compte 0) avant la bascule ; le vidage de la VM la REMPLACE
+#      (DROP TABLE + CREATE du vidage), la définition de production fait donc foi.
+# v2 : table « sessions » (sql/V2__sessions.sql du projet legacy/legacy-rdv).
+# Un SqlJob ne s'exécute qu'une fois (sans « schedule ») ; rejouables (IF NOT EXISTS).
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: SqlJob
+metadata:
+  name: legacy-rdv-schema-v1
+spec:
+  mariaDbRef: {name: legacy-rdv-db}
+  username: legacy_rdv_migrateur
+  passwordSecretKeyRef: {name: legacy-rdv-mariadb, key: migrateur}
+  database: legacy_rdv
+  sql: |
+    CREATE TABLE IF NOT EXISTS rendez_vous (
+        id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        patient       VARCHAR(200) NOT NULL,
+        praticien     VARCHAR(100) NOT NULL,
+        date_rdv      DATETIME     NOT NULL,
+        motif         VARCHAR(500) NULL,
+        piece_jointe  VARCHAR(255) NULL,
+        cree_le       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY rendez_vous_praticien_date (praticien, date_rdv),
+        KEY rendez_vous_date (date_rdv)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  backoffLimit: 10
+  restartPolicy: OnFailure
+  resources:
+    requests: {cpu: 10m, memory: 32Mi}
+    limits: {memory: 128Mi}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+---
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: SqlJob
+metadata:
+  name: legacy-rdv-schema-v2
+spec:
+  mariaDbRef: {name: legacy-rdv-db}
+  username: legacy_rdv_migrateur
+  passwordSecretKeyRef: {name: legacy-rdv-mariadb, key: migrateur}
+  database: legacy_rdv
+  dependsOn:
+    - name: legacy-rdv-schema-v1
+  sql: |
+    CREATE TABLE IF NOT EXISTS sessions (
+        id         VARCHAR(128)  NOT NULL,
+        donnees    MEDIUMBLOB    NOT NULL,
+        expire_le  INT UNSIGNED  NOT NULL,
+        PRIMARY KEY (id),
+        KEY sessions_expire_le (expire_le)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  backoffLimit: 10
+  restartPolicy: OnFailure
+  resources:
+    requests: {cpu: 10m, memory: 32Mi}
+    limits: {memory: 128Mi}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]

@@ -1,0 +1,97 @@
+# GÉNÉRÉ par plateforme/equipes (outils/rendre.py) depuis equipes/data.yaml — NE PAS MODIFIER ICI :
+# toute modification passe par une MR sur plateforme/equipes (DEV-3207).
+#
+# ⚠️ Les espaces rattachés portent une référence de propriétaire vers ce Tenant : le supprimer
+# supprimerait ces espaces. D'où preventDeletion ET les options d'Argo CD (jamais élagué, jamais supprimé
+# avec l'Application) : retirer une équipe se fait par le runbook RB-320 (§ Départ), jamais par la CI.
+apiVersion: capsule.clastix.io/v1beta2
+kind: Tenant
+metadata:
+  name: data
+  labels:
+    # Sélectionné par la GlobalTenantResource « limites-par-defaut » (plancher de LimitRange, M28-E05).
+    app.kubernetes.io/part-of: plateforme-k8s
+    medisphere.internal/equipe: data
+    medisphere.internal/origine: plateforme-equipes
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-1"
+    medisphere.internal/ticket: "DEV-3207"
+spec:
+  preventDeletion: true
+  forceTenantPrefix: true
+  owners:
+    # Lecture seule dans TOUS les espaces du locataire (environnements compris) ; « admin » seulement
+    # dans le libre-service (règle plus bas). Les environnements sont livrés par Argo CD.
+    - kind: Group
+      name: "oidc:data"
+      clusterRoles:
+        - view
+  namespaceOptions:
+    # Environnements (1) + espaces de libre-service (1).
+    quota: 2
+    forbiddenLabels:
+      deniedRegex: '^(medisphere\.internal|pod-security\.kubernetes\.io)/.*'
+    additionalMetadataList:
+      - namespaceSelector:
+          matchExpressions:
+            - key: medisphere.internal/environnement
+              operator: DoesNotExist
+        labels:
+          pod-security.kubernetes.io/enforce: restricted
+          pod-security.kubernetes.io/enforce-version: latest
+          pod-security.kubernetes.io/warn: restricted
+          medisphere.internal/libre-service: "oui"
+          medisphere.internal/proprietaire: data
+  priorityClasses:
+    allowed: [medisphere-standard, medisphere-lot]
+    default: medisphere-standard
+  storageClasses:
+    allowed:
+      - ceph-rbd
+    default: ceph-rbd
+  rules:
+    # Libre-service : l'équipe y est administratrice et peut supprimer ses espaces ; budget partagé.
+    - namespaceSelector:
+        matchExpressions:
+          - key: medisphere.internal/environnement
+            operator: DoesNotExist
+      permissions:
+        bindings:
+          - clusterRoleName: admin
+            subjects:
+              - apiGroup: rbac.authorization.k8s.io
+                kind: Group
+                name: "oidc:data"
+          - clusterRoleName: capsule-namespace-deleter
+            subjects:
+              - apiGroup: rbac.authorization.k8s.io
+                kind: Group
+                name: "oidc:data"
+      quota:
+        - name: libre-service
+          hard:
+            requests.cpu: "250m"
+            requests.memory: "512Mi"
+            limits.memory: "1Gi"
+            pods: "5"
+            persistentvolumeclaims: "1"
+            requests.storage: "5Gi"
+            services.loadbalancers: "0"
+            services.nodeports: "0"
+    # Budget GLOBAL du locataire (tous ses espaces) : c'est lui que compte le bilan de capacité.
+    - quota:
+        - name: budget
+          hard:
+            requests.cpu: "2"
+            requests.memory: "3584Mi"
+            limits.memory: "6Gi"
+            pods: "30"
+    # Aucune exposition hors de la Gateway de la plateforme (SEC-2915, M28-E15).
+    - enforce:
+        action: deny
+        services:
+          types:
+            - LoadBalancer
+            - NodePort
+            - ExternalName

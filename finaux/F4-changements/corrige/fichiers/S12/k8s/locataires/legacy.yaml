@@ -1,0 +1,52 @@
+# plateforme/k8s — locataires/legacy.yaml (F4-S12, CHG-3412) — Application Argo CD « locataires ».
+# Locataire Capsule « legacy » : Legacy-RDV n'a pas d'équipe de développement, l'équipe plateforme le
+# porte (propriétaire : oidc:plateforme, lecture seule sur les environnements). Pas de libre-service.
+# Si le mécanisme « équipe en code » de F2 est en place, c'est lui qui génère ce fichier (même contenu).
+# ⚠️ preventDeletion + Prune=false/Delete=false : supprimer ce Tenant supprimerait ses espaces.
+apiVersion: capsule.clastix.io/v1beta2
+kind: Tenant
+metadata:
+  name: legacy
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    medisphere.internal/equipe: plateforme
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    medisphere.internal/ticket: "CHG-3412"
+spec:
+  preventDeletion: true
+  forceTenantPrefix: true
+  owners:
+    - kind: Group
+      name: "oidc:plateforme"
+      clusterRoles:
+        - view
+  namespaceOptions:
+    # recette + prod, aucun espace de libre-service.
+    quota: 2
+    forbiddenLabels:
+      deniedRegex: '^(medisphere\.internal|pod-security\.kubernetes\.io)/.*'
+  priorityClasses:
+    allowed: [medisphere-critique, medisphere-standard, medisphere-lot]
+    default: medisphere-standard
+  # ceph-rbd : base MariaDB ; cephfs : pièces jointes partagées par les réplicas (ReadWriteMany).
+  storageClasses:
+    allowed:
+      - ceph-rbd
+      - cephfs
+    default: ceph-rbd
+  rules:
+    - quota:
+        - name: budget
+          hard:
+            requests.cpu: "3"
+            requests.memory: 5Gi
+            limits.memory: 10Gi
+            pods: "30"
+    - enforce:
+        action: deny
+        services:
+          types:
+            - LoadBalancer
+            - NodePort
+            - ExternalName

@@ -1,0 +1,4 @@
+# /etc/cron.d/infoger-sauvegarde — vidage nocturne de la base (en plus de Veeam), 7 jours gardés.
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+15 1 * * * root /usr/local/sbin/infoger-sauvegarde-base

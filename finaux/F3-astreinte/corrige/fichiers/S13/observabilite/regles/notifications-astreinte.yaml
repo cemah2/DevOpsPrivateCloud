@@ -1,0 +1,62 @@
+# plateforme/observabilite — regles/notifications-astreinte.yaml (F3-S13, INC-5913, action PLAT-3313)
+# Ce qui manquait pendant INC-5913 : RabbitmqFileQuiGrossit (M27, avertissement, 15 min + pente) et
+# KedaScalerEnErreur (M28, avertissement, 10 min) ont fini par sonner, mais aux heures ouvrées, chez la
+# plateforme, et sans dire que la PRODUCTION n'envoyait plus de rappels. Trois règles de symptôme :
+#   - MedinotifAuPlafondEnRetard : l'autoscaling est au maximum (ou bridé) ET la file de prod grossit :
+#     le client attend ; quelle que soit la cause (repli de KEDA, plafond abaissé, consommateurs lents) ;
+#   - MedinotifRedemarreEnBoucle : des consommateurs de prod redémarrent en série (message empoisonné,
+#     M27-E20 ; mauvaise configuration) ;
+#   - ArgoCDProductionDerive : une Application de production reste désynchronisée (modification en
+#     direct d'un objet, comme le ScaledObject d'INC-5913) au-delà d'une fenêtre de changement.
+# Métriques : kube-state-metrics 2.20 (HPA, redémarrages), exportateur RabbitMQ /metrics/detailed (M27),
+# Argo CD (argocd_app_info). L'HPA de KEDA s'appelle keda-hpa-<ScaledObject>.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: notifications-astreinte
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision-regles: "oui"
+spec:
+  groups:
+    - name: notifications.astreinte
+      rules:
+        - alert: MedinotifAuPlafondEnRetard
+          expr: |
+            (
+              max(kube_horizontalpodautoscaler_status_current_replicas{namespace="medinotif-prod", horizontalpodautoscaler="keda-hpa-medinotif"})
+                >= max(kube_horizontalpodautoscaler_spec_max_replicas{namespace="medinotif-prod", horizontalpodautoscaler="keda-hpa-medinotif"})
+              or
+              max(kube_horizontalpodautoscaler_status_desired_replicas{namespace="medinotif-prod", horizontalpodautoscaler="keda-hpa-medinotif"})
+                > max(kube_horizontalpodautoscaler_status_current_replicas{namespace="medinotif-prod", horizontalpodautoscaler="keda-hpa-medinotif"})
+            )
+            and on ()
+            sum(rabbitmq_detailed_queue_messages_ready{vhost="medinotif-prod", queue="notifications"}) > 500
+          for: 10m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "MédiNotif (prod) au plafond et la file notifications dépasse 500 messages"
+            description: "Depuis 10 min, MédiNotif ne peut plus monter (maximum atteint ou pods demandés non créés) et la file notifications de medinotif-prod dépasse 500 messages : les rappels partent en retard. Vérifier le repli de KEDA, le maximum du ScaledObject (comparé au dépôt) et les consommateurs. RB-338."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/exploitation/runbooks/RB-338-notifications-en-retard.md
+        - alert: MedinotifRedemarreEnBoucle
+          expr: sum(increase(kube_pod_container_status_restarts_total{namespace="medinotif-prod", pod=~"medinotif-.*"}[15m])) > 3
+          for: 5m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "Les consommateurs MédiNotif de prod redémarrent en boucle"
+            description: "Plus de 3 redémarrages de conteneurs MédiNotif en 15 min dans medinotif-prod : message empoisonné probable (RB-277), ou configuration cassée. Ne PAS purger la file. RB-338."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/exploitation/runbooks/RB-338-notifications-en-retard.md
+        - alert: ArgoCDProductionDerive
+          expr: max by (name, dest_namespace) (argocd_app_info{dest_namespace=~".*-prod", sync_status="OutOfSync"}) == 1
+          for: 2h
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Application {{ $labels.name }} ({{ $labels.dest_namespace }}) désynchronisée depuis plus de 2 h"
+            description: "La production ne correspond plus au dépôt depuis 2 h : modification en direct d'un objet, ou MR fusionnée jamais synchronisée. Regarder le différentiel dans Argo CD avant toute synchronisation."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/exploitation/runbooks/RB-338-notifications-en-retard.md

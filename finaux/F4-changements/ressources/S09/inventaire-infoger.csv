@@ -1,0 +1,4 @@
+nom;systeme;vcpu;memoire_mo;disque_go;adresse;reseau;role;applications;dependances;compte_admin;mot_de_passe;sauvegarde;remarques
+legacy-rdv01;Debian 12;2;2048;8;192.168.50.21;PG-RDV-PROD-50;Prise de RDV cabinets;Apache 2.4 + PHP + MariaDB 10.11 (Legacy-RDV 2.3.1);aucune;infoger;voir coffre InfoGér;Veeam quotidien + dump SQL local;40 cabinets actifs. Ne pas redémarrer en journée.
+ftp-part01;Debian 12;1;1024;8;192.168.50.30;PG-RDV-PROD-50;Dépôt partenaires;vsftpd;;infoger;voir coffre InfoGér;Veeam quotidien;Comptes partenaires : laboratoire et radiologie. Mots de passe transmis aux partenaires.
+stats01;Debian 12;1;1024;8;;PG-RDV-PROD-50;Statistiques;scripts maison;;infoger;;?;Envoie les stats à la direction (?)

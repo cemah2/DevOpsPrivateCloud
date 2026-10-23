@@ -1,0 +1,33 @@
+# plateforme/gitops — plateforme/mariadb-operator-crds.yaml (F4-S12, CHG-3412)
+# CRD de mariadb-operator 26.6 (k8s.mariadb.com/v1alpha1), chart séparé recopié dans Harbor.
+# Vague -1 de l'application racine : les CRD existent AVANT que l'opérateur (vague 0) et les objets
+# MariaDB des applications ne soient synchronisés. Jamais élaguées automatiquement : supprimer une CRD
+# supprime TOUTES les bases qu'elle décrit.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mariadb-operator-crds
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    medisphere.internal/ticket: "CHG-3412"
+spec:
+  project: plateforme
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mariadb-system
+  source:
+    repoURL: registry.par1.medisphere.internal/charts
+    chart: mariadb-operator-crds
+    targetRevision: 26.6.0
+    helm:
+      releaseName: mariadb-operator-crds
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

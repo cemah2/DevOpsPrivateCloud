@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://git01.par1.medisphere.internal/plateforme/equipes/schema/equipe.schema.json",
+  "title": "Équipe de MédiSphère (plateforme/equipes, F2-S02)",
+  "description": "Un fichier equipes/<nom>.yaml par équipe. Les champs marqués « S10 » servent aux prestataires (F2-S10).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {"const": "equipes.medisphere.internal/v1"},
+    "kind": {"const": "Equipe"},
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nom", "ticket"],
+      "properties": {
+        "nom": {
+          "description": "Nom court : groupe de l'annuaire et de GitLab, locataire, préfixe d'espace. Interdit : un préfixe d'espace déjà pris (mediagenda, medidoc, medinotif, plateforme, kube, wb…), vérifié par outils/rendre.py.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,18}[a-z0-9]$"
+        },
+        "ticket": {"type": "string", "pattern": "^(DEV|PLAT|SEC)-[0-9]{4}$"}
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "type", "etat", "responsable", "contact", "personnes", "identite", "gitlab"],
+      "properties": {
+        "description": {"type": "string", "minLength": 5, "maxLength": 120},
+        "type": {"enum": ["interne", "prestataire"]},
+        "etat": {
+          "description": "active ; retiree = personnes désactivées, appartenances vidées, droits retirés ; les espaces et le locataire ne sont JAMAIS supprimés par la CI (Prune=false) : retrait explicite (RB-320, § Départ).",
+          "enum": ["active", "retiree"]
+        },
+        "responsable": {"type": "string", "pattern": "^[a-z]+(\\.[a-z]+)+$"},
+        "contact": {"type": "string", "format": "email", "pattern": "@medisphere\\.internal$"},
+        "expiration": {
+          "description": "S10 — date de fin des accès (AAAA-MM-JJ), obligatoire pour un prestataire ; reportée sur chaque personne (expiration du principal Kerberos).",
+          "type": "string",
+          "pattern": "^20[0-9]{2}-[01][0-9]-[0-3][0-9]$"
+        },
+        "personnes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["identifiant", "prenom", "nom", "courriel", "role"],
+            "properties": {
+              "identifiant": {"type": "string", "pattern": "^[a-z]+(\\.[a-z]+)+$"},
+              "prenom": {"type": "string", "minLength": 1},
+              "nom": {"type": "string", "minLength": 1},
+              "courriel": {"type": "string", "format": "email"},
+              "titre": {"type": "string"},
+              "role": {"enum": ["responsable", "developpeur", "lecteur"]},
+              "etat": {"enum": ["present", "disabled"], "default": "present"},
+              "expiration": {"type": "string", "pattern": "^20[0-9]{2}-[01][0-9]-[0-3][0-9]$"}
+            }
+          }
+        },
+        "identite": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["otp_obligatoire"],
+          "properties": {
+            "otp_obligatoire": {"type": "boolean"}
+          }
+        },
+        "gitlab": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["groupe"],
+          "properties": {
+            "groupe": {"type": "string", "pattern": "^[a-z][a-z0-9-]+$"},
+            "externe": {"description": "S10 — comptes GitLab « externes » (pas d'accès aux projets internes).", "type": "boolean", "default": false}
+          }
+        },
+        "kubernetes": {
+          "description": "Absent : pas de locataire (ex. prestataire hébergé dans le locataire d'une autre équipe, S10).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["environnements", "budget", "classes_priorite", "classes_stockage"],
+          "properties": {
+            "environnements": {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": {"pattern": "^[a-z][a-z0-9]{1,14}$"},
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["quota", "signature_exigee", "synchronisation", "alertes"],
+                "properties": {
+                  "quota": {"$ref": "#/$defs/quota"},
+                  "signature_exigee": {"type": "boolean"},
+                  "synchronisation": {"enum": ["automatique", "manuelle"]},
+                  "alertes": {"type": "boolean"}
+                }
+              }
+            },
+            "libre_service": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["espaces", "quota"],
+              "properties": {
+                "espaces": {"type": "integer", "minimum": 0, "maximum": 5},
+                "quota": {"$ref": "#/$defs/quota"}
+              }
+            },
+            "budget": {"$ref": "#/$defs/quota"},
+            "classes_priorite": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["autorisees", "defaut"],
+              "properties": {
+                "autorisees": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {"enum": ["medisphere-critique", "medisphere-standard", "medisphere-lot"]}
+                },
+                "defaut": {"enum": ["medisphere-standard", "medisphere-lot"]}
+              }
+            },
+            "classes_stockage": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"enum": ["ceph-rbd", "ceph-rbd-retain", "ceph-rbd-chiffre"]}
+            }
+          }
+        },
+        "secrets": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ecriture"],
+          "properties": {
+            "ecriture": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+          }
+        },
+        "services": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9-]{1,28}[a-z0-9]$"}
+        },
+        "observabilite": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "grafana": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["titre_dossier"],
+              "properties": {"titre_dossier": {"type": "string", "minLength": 2}}
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"type": {"const": "prestataire"}}},
+          "then": {
+            "required": ["expiration"],
+            "properties": {
+              "identite": {"properties": {"otp_obligatoire": {"const": true}}},
+              "gitlab": {"properties": {"externe": {"const": true}}, "required": ["externe"]}
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "quantite": {"type": ["string", "integer"], "pattern": "^[0-9]+(\\.[0-9]+)?(m|Ki|Mi|Gi|Ti)?$"},
+    "quota": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requests.cpu", "requests.memory", "limits.memory", "pods"],
+      "properties": {
+        "requests.cpu": {"$ref": "#/$defs/quantite"},
+        "requests.memory": {"$ref": "#/$defs/quantite"},
+        "limits.memory": {"$ref": "#/$defs/quantite"},
+        "pods": {"$ref": "#/$defs/quantite"},
+        "persistentvolumeclaims": {"$ref": "#/$defs/quantite"},
+        "requests.storage": {"$ref": "#/$defs/quantite"}
+      }
+    }
+  }
+}

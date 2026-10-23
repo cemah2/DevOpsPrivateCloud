@@ -1,0 +1,106 @@
+# plateforme/portail-modeles — modeles/nouvelle-equipe/template.yaml (F2-S02, PLAT-3202)
+# Modèle « Nouvelle équipe » : l'INTERFACE du mécanisme « équipe en code » (ADR-0320). Il ne crée rien
+# lui-même : il écrit equipes/<nom>.yaml à partir du formulaire et ouvre la MR sur plateforme/equipes, que
+# la Plateforme relit (capacité, quotas, personnes). La CI de plateforme/equipes fait tout le reste.
+# Réservé aux membres de la Plateforme dans les faits : la MR est ouverte au nom de svc-portail, et seule
+# la Plateforme fusionne dans plateforme/equipes. Une équipe peut aussi écrire le fichier à la main.
+# Actions de la 1.56 : fetch:template (cœur), publish:gitlab:merge-request (module GitLab du scaffolder).
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: nouvelle-equipe
+  title: Nouvelle équipe
+  description: Décrit une équipe (personnes, environnements, quotas) et ouvre la MR sur plateforme/equipes.
+  tags: [plateforme, equipe]
+spec:
+  owner: group:default/plateforme
+  type: equipe
+
+  parameters:
+    - title: L'équipe
+      required: [nom, description, ticket, responsable, contact]
+      properties:
+        nom:
+          title: Nom court
+          type: string
+          pattern: '^[a-z][a-z0-9-]{1,18}[a-z0-9]$'
+          ui:help: "minuscules, chiffres, tirets ; devient le groupe, le locataire et le préfixe des espaces"
+        description:
+          title: Description (une phrase)
+          type: string
+          maxLength: 120
+        ticket:
+          title: Ticket de la demande
+          type: string
+          pattern: '^(DEV|PLAT|SEC)-[0-9]{4}$'
+        responsable:
+          title: Identifiant du responsable (prenom.nom)
+          type: string
+          pattern: '^[a-z]+(\.[a-z]+)+$'
+        contact:
+          title: Adresse de l'équipe (alertes)
+          type: string
+          pattern: '^[a-z0-9.-]+@medisphere\.internal$'
+    - title: Les personnes
+      required: [personnes]
+      properties:
+        personnes:
+          title: Personnes
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [identifiant, prenom, nom, role]
+            properties:
+              identifiant: {title: Identifiant, type: string, pattern: '^[a-z]+(\.[a-z]+)+$'}
+              prenom: {title: Prénom, type: string}
+              nom: {title: Nom, type: string}
+              titre: {title: Fonction, type: string}
+              role: {title: Rôle, type: string, enum: [responsable, developpeur, lecteur]}
+    - title: Les environnements
+      required: [profil]
+      properties:
+        profil:
+          title: Profil
+          type: string
+          enum: [produit, traitements]
+          enumNames:
+            - "Équipe produit : dev, recette, prod (quotas de départ de medivisio)"
+            - "Équipe sans production : un espace de traitements (quotas de départ de data)"
+
+  steps:
+    - id: fichier
+      name: Fichier de l'équipe
+      action: fetch:template
+      input:
+        url: ./squelette
+        targetPath: ./equipes-repo
+        values:
+          nom: ${{ parameters.nom }}
+          description: ${{ parameters.description }}
+          ticket: ${{ parameters.ticket }}
+          responsable: ${{ parameters.responsable }}
+          contact: ${{ parameters.contact }}
+          personnes: ${{ parameters.personnes }}
+          profil: ${{ parameters.profil }}
+
+    - id: mr
+      name: MR sur plateforme/equipes
+      action: publish:gitlab:merge-request
+      input:
+        repoUrl: git01.par1.medisphere.internal?owner=plateforme&repo=equipes
+        branchName: portail/equipe-${{ parameters.nom }}
+        title: "feat(equipes): ${{ parameters.nom }} (${{ parameters.ticket }})"
+        description: "Demandé par ${{ user.entity.metadata.name }} depuis le portail (modèle nouvelle-equipe). À relire : personnes, quotas, bilan de capacité (job capacite)."
+        sourcePath: ./equipes-repo
+        # « create » : la MR échoue si equipes/<nom>.yaml existe déjà (pas d'écrasement d'une équipe).
+        commitAction: create
+        removeSourceBranch: true
+        assignee: karim.benali
+
+  output:
+    links:
+      - title: MR de l'équipe
+        url: ${{ steps['mr'].output.mergeRequestUrl }}
+      - title: Procédure (RB-320)
+        url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/accueil/runbooks/RB-320-accueillir-une-equipe.md

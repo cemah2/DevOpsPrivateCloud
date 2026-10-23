@@ -1,0 +1,32 @@
+# legacy/legacy-rdv — pipeline standard MédiSphère (F4-S12, CHG-3412) : enfin conforme à M19-E32
+# (le ticket « conformite-ci » ouvert sur ce projet au M19 est fermé par cette MR).
+#   MR             : commitlint, lint (dont php -l), construction (rien n'est publié)
+#   main           : + publication main-<sha>, signature, vérification, semantic-release (vX.Y.Z)
+#   étiquette vX.Y.Z : construction, analyse, publication vX.Y.Z, signature (clé transit/cosign-medisphere)
+# Version des composants : celle des autres projets à la fin du bloc G (M29-E10).
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+  auto_cancel:
+    on_new_commit: interruptible
+
+stages: [lint, test, construction, analyse, publication, signature, release]
+
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@v2.11.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/construction-image@v2.11.0
+    inputs:
+      image_nom: medisphere/legacy-rdv
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/securite@v2.11.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/release@v2.11.0
+
+php-lint:
+  stage: lint
+  image: registry.par1.medisphere.internal/dockerhub/library/php:8.4-cli-trixie
+  tags: [k8s]
+  script:
+    - for f in $(find . -name '*.php' -not -path './vendor/*'); do php -l "$f" || exit 1; done

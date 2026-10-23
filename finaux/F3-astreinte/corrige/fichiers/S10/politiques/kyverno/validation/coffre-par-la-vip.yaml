@@ -1,0 +1,50 @@
+# plateforme/politiques — kyverno/validation/coffre-par-la-vip.yaml (F3-S10, INC-5910, action PLAT-3310)
+# Les clients d'OpenBao dans le cluster (magasins d'ESO et générateurs d'identifiants dynamiques)
+# passent TOUJOURS par la VIP du coffre : un client épinglé sur un nœud (vault01…:8200) perd le coffre
+# dès que ce nœud s'arrête, alors que la grappe, elle, a gardé son quorum (INC-5910, variante « épinglage »).
+# Mode : Deny, failurePolicy Ignore (Kyverno indisponible ne bloque pas l'API) ; analyse en arrière-plan
+# active : les objets existants qui dérogent apparaissent dans les rapports de politique.
+# Exception : aucune aujourd'hui. Un essai sur un nœud précis se fait dans wb-essais avec une
+# PolicyException datée (espace kyverno-exceptions, M26).
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: coffre-par-la-vip
+  annotations:
+    policies.kyverno.io/title: Clients du coffre par la VIP
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      Les SecretStore, ClusterSecretStore et VaultDynamicSecret qui visent OpenBao utilisent
+      https://openbao.par1.medisphere.internal:8200, jamais l'adresse d'un nœud.
+    medisphere.internal/ticket: PLAT-3310
+spec:
+  validationActions: [Deny]
+  failurePolicy: Ignore
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [external-secrets.io]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [secretstores, clustersecretstores]
+      - apiGroups: [generators.external-secrets.io]
+        apiVersions: [v1alpha1]
+        operations: [CREATE, UPDATE]
+        resources: [vaultdynamicsecrets]
+  variables:
+    - name: vip
+      expression: "'https://openbao.par1.medisphere.internal:8200'"
+    # Adresse du coffre selon le type : provider.vault.server (magasins), provider.server (générateur).
+    - name: serveur
+      expression: >-
+        object.kind == 'VaultDynamicSecret'
+          ? object.spec.?provider.?server.orValue('')
+          : object.spec.?provider.?vault.?server.orValue('')
+  validations:
+    - expression: variables.serveur == '' || variables.serveur == variables.vip
+      messageExpression: >-
+        object.kind + ' ' + object.metadata.name + ' vise ' + variables.serveur
+        + " : les clients du coffre passent par la VIP " + variables.vip + " (INC-5910, RB-336)"
+      reason: Forbidden

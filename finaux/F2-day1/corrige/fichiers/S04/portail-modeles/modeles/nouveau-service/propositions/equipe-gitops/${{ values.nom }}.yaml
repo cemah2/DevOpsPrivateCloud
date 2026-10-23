@@ -1,0 +1,3 @@
+# <équipe>/gitops — services/${{ values.nom }}.yaml (MR ouverte par le modèle « Nouveau service » v2)
+# L'ApplicationSet de l'équipe (rendu de plateforme/equipes) en tire une Application par environnement.
+service: ${{ values.nom }}

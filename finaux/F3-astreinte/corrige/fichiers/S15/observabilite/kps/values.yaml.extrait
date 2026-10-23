@@ -1,0 +1,75 @@
+# plateforme/observabilite — kps/values.yaml, EXTRAIT (F3-S15, PLAT-3315) : ce que la MR de réduction
+# du bruit change. Le reste du fichier (global, time_intervals, receivers, templateFiles…) est inchangé.
+# Rappel (M21-E16) : Helm FUSIONNE les dictionnaires mais REMPLACE les listes : « inhibit_rules » est
+# donc donnée ici EN ENTIER (les cinq règles du M21 + les nouvelles), et la route de la plateforme en entier.
+# Vérification locale avant la MR (comme la CI) :
+#   yq '.alertmanager.config' kps/values.yaml > /tmp/am/alertmanager.yaml
+#   yq '.alertmanager.templateFiles["medisphere.tmpl"]' kps/values.yaml > /tmp/am/medisphere.tmpl
+#   yq -i '.templates = ["medisphere.tmpl"]' /tmp/am/alertmanager.yaml
+#   (cd /tmp/am && amtool check-config alertmanager.yaml)
+#   sh outils/tester-routes.sh /tmp/am/alertmanager.yaml alertmanager/routes-tests.txt
+#   sh outils/extraire-regles.sh && promtool check rules build/regles/*.yml && promtool test rules tests/*.test.yaml
+
+# 1. Règles du chart désactivées : chacune est REMPLACÉE par une règle à nous, testée, qui garde la
+#    couverture (aucune désactivation sans remplaçant, politique d'alerte du M21-E32).
+defaultRules:
+  disabled:
+    # → CapaciteCpuSansMargeDeNoeud / CapaciteMemoireSansMargeDeNoeud (regles/capacite-astreinte.yaml)
+    KubeCPUOvercommit: true
+    KubeMemoryOvercommit: true
+    # → MedinotifAuPlafondEnRetard (regles/notifications-astreinte.yaml, INC-5913) : être au maximum
+    #   pendant une campagne est normal ; être au maximum ET en retard ne l'est pas.
+    KubeHpaMaxedOut: true
+
+alertmanager:
+  config:
+    route:
+      routes:
+        # … (Watchdog, InfoInhibitor, info, critiques vers l'astreinte, mediagenda, medidoc : inchangés)
+        - receiver: plateforme-mail
+          matchers: ['equipe = "plateforme"']
+          routes:
+            # NOUVEAU : une panne du coffre ou d'ESO met en erreur des dizaines d'ExternalSecret à la fois
+            # (INC-5910 : 23 courriels en 20 min, un par espace). Un seul groupe par alerte, tous espaces
+            # confondus ; le corps du courriel liste les objets. Avertissements toujours aux heures ouvrées.
+            - matchers: ['alertname =~ "ExternalSecretEnErreur|MagasinSecretsEnErreur"']
+              group_by: [alertname]
+              group_interval: 15m
+              routes:
+                - matchers: ['gravite = "avertissement"']
+                  active_time_intervals: [heures-ouvrees]
+            - matchers: ['gravite = "avertissement"']
+              active_time_intervals: [heures-ouvrees]
+        # … (règles du chart sans « equipe » : inchangées)
+
+    inhibit_rules:
+      # --- M21-E06 / E16 (inchangées) ---
+      - source_matchers: ['gravite = "critique"']
+        target_matchers: ['gravite =~ "avertissement|info"']
+        equal: [namespace, alertname]
+      - source_matchers: ['severity = "critical"']
+        target_matchers: ['severity =~ "warning|info"']
+        equal: [namespace, alertname]
+      - source_matchers: ['alertname = "InfoInhibitor"']
+        target_matchers: ['severity = "info"']
+        equal: [namespace]
+      - source_matchers: ['alertname = "CibleInjoignable"']
+        target_matchers: ['alertname != "CibleInjoignable"']
+        equal: [instance]
+      - source_matchers: ['alertname =~ "KubeNodeNotReady|KubeNodeUnreachable"']
+        target_matchers: ['alertname = "MediagendaPodsNonPrets"']
+        equal: [node]
+      # --- NOUVEAU (F3-S15, PLAT-3315) : la cause fait taire ses conséquences ---
+      # Coffre scellé ou sans leader : les erreurs d'ESO en sont la conséquence directe (INC-5910).
+      - source_matchers: ['alertname =~ "OpenBaoScelle|OpenBaoSansLeader|MagasinsSecretsTousEnErreur"']
+        target_matchers: ['alertname =~ "ExternalSecretEnErreur|MagasinSecretsEnErreur"']
+      # Plus aucun consommateur : « la file grossit » n'apprend rien de plus (même vhost, même file).
+      - source_matchers: ['alertname = "RabbitmqFileSansConsommateur"']
+        target_matchers: ['alertname = "RabbitmqFileQuiGrossit"']
+        equal: [vhost, queue]
+      # MédiNotif au plafond et en retard (prod) : symptôme client déjà notifié à l'astreinte.
+      - source_matchers: ['alertname = "MedinotifAuPlafondEnRetard"']
+        target_matchers: ['alertname = "RabbitmqFileQuiGrossit"', 'vhost = "medinotif-prod"']
+      # KEDA absent : ses scalers sont forcément en erreur.
+      - source_matchers: ['alertname = "KedaAbsent"']
+        target_matchers: ['alertname = "KedaScalerEnErreur"']

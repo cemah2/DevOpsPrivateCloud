@@ -1,0 +1,61 @@
+# data/deploiement — base/supervision.yaml (F2-S07, DEV-3207)
+# Collecte de la base Data par le Prometheus de la plateforme (sélecteur medisphere.internal/supervision,
+# M21) et requêtes PERSONNALISÉES de CloudNativePG qui décrivent l'extraction sans en lire le contenu :
+#   cnpg_stats_extraction_lignes               lignes du dernier chargement (journal stats.chargements)
+#   cnpg_stats_extraction_age_secondes         âge du dernier chargement
+#   cnpg_stats_extraction_colonnes_presente    une série par colonne de stats.rendez_vous (catalogue)
+# Nom d'une métrique : cnpg_<nom de la requête>_<colonne> (documentation de CloudNativePG,
+# « Monitoring » → « User defined metrics »). L'étiquette cnpg.io/reload fait relire la ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: statistiques-db-metriques
+  labels:
+    cnpg.io/reload: ""
+data:
+  requetes.yaml: |
+    stats_extraction:
+      query: |
+        SELECT coalesce((SELECT lignes FROM stats.chargements ORDER BY charge_le DESC LIMIT 1), 0) AS lignes,
+               coalesce(extract(epoch FROM now() - (SELECT max(charge_le) FROM stats.chargements)), 999999999) AS age_secondes
+      target_databases: ["statistiques"]
+      metrics:
+        - lignes:
+            usage: "GAUGE"
+            description: "Lignes chargées par le dernier chargement de l'extraction pseudonymisée"
+        - age_secondes:
+            usage: "GAUGE"
+            description: "Secondes écoulées depuis le dernier chargement de l'extraction"
+    stats_extraction_colonnes:
+      # Catalogue seulement (pg_attribute est lisible par tous) : aucune ligne de données n'est lue.
+      query: |
+        SELECT a.attname AS colonne, 1 AS presente
+          FROM pg_attribute a
+          JOIN pg_class c ON c.oid = a.attrelid
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'stats' AND c.relname = 'rendez_vous' AND a.attnum > 0 AND NOT a.attisdropped
+      target_databases: ["statistiques"]
+      metrics:
+        - colonne:
+            usage: "LABEL"
+            description: "Nom de la colonne"
+        - presente:
+            usage: "GAUGE"
+            description: "1 pour chaque colonne de stats.rendez_vous"
+---
+# PodMonitor écrit à la main : spec.monitoring.enablePodMonitor est déprécié (CloudNativePG 1.30).
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: statistiques-db
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  jobLabel: cnpg.io/cluster
+  selector:
+    matchLabels:
+      cnpg.io/cluster: statistiques-db
+      cnpg.io/podRole: instance
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 60s

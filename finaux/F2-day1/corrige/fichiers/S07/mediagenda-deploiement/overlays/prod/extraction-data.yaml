@@ -1,0 +1,32 @@
+# mediagenda/deploiement — overlays/prod/extraction-data.yaml (F2-S07, DEV-3207) : à ajouter aux
+# « resources » de l'overlay de prod.
+# Mot de passe du rôle géré extraction_data (format basic-auth attendu par CloudNativePG pour
+# passwordSecret). Valeur dans OpenBao, kv/mediagenda/prod/extraction-data (clé « password »), posée
+# une fois par la plateforme sans qu'aucun humain ne la choisisse ni ne la lise :
+#   admin@adm01:~$ openssl rand -base64 33 | tr -d '\n' | bao kv put kv/mediagenda/prod/extraction-data password=-
+# Le SecretStore « openbao » de mediagenda-prod (rôle eso-mediagenda-prod) lit déjà kv/mediagenda/prod/*.
+# Vague -2 : prêt avant que le Cluster ne réconcilie ses rôles.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: extraction-data
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  refreshInterval: 1h
+  secretStoreRef: {kind: SecretStore, name: openbao}
+  target:
+    name: extraction-data
+    creationPolicy: Owner
+    deletionPolicy: Retain
+    template:
+      type: kubernetes.io/basic-auth
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      data:
+        username: extraction_data
+        password: "{{ .password }}"
+  data:
+    - secretKey: password
+      remoteRef: {key: mediagenda/prod/extraction-data, property: password}

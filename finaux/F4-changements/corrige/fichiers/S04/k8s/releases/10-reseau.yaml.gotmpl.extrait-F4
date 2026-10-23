@@ -1,0 +1,23 @@
+# plateforme/k8s — releases/10-reseau.yaml.gotmpl (EXTRAIT F4-S04, CHG-3404) : release « cilium ».
+# Cilium d'abord, Kubernetes ensuite (annexe des versions des finaux) :
+#   - issue no-go : dernière corrective 1.20 (aucun changement de valeurs attendu dans une même mineure ;
+#     lire quand même les notes de version de chaque corrective sautée) ;
+#   - issue go : 1.21.x, mineure suivante, AVANT de toucher au plan de contrôle (elle accepte encore
+#     1.36). Une montée de MINEURE de Cilium suit le guide « Upgrade Guide » de Cilium : contrôle
+#     préalable (« preflight », DaemonSet qui tire les images et vérifie les politiques), lecture de la
+#     section « Upgrade Notes » de la 1.21 (valeurs renommées ou retirées), « upgradeCompatibility » réglé
+#     sur la mineure d'origine si le guide le demande, puis helmfile apply.
+# Les agents sont mis à jour en roulement par le DaemonSet (maxUnavailable du chart) : chaque nœud perd
+# son agent quelques secondes ; les connexions établies survivent (datapath eBPF en place), les
+# nouvelles attendent l'agent. C'est ce que la sonde mesure.
+releases:
+  - name: cilium
+    namespace: kube-system
+    chart: cilium/cilium
+    # no-go : 1.20.<DERNIÈRE-CORRECTIVE>   ·   go : 1.21.<CORRECTIVE> (après preflight)
+    version: 1.20.<DERNIÈRE-CORRECTIVE>
+    labels:
+      groupe: reseau
+      composant: cilium
+    values:
+      - ../composants/cilium/values.yaml

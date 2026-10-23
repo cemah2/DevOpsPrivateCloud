@@ -1,0 +1,7 @@
+# group_vars/role_lb/certificats.yml (plateforme/ansible) — EXTRAIT à ajouter à la liste
+# certificats_acme_certificats (F4-S10). Un certificat par nom publié (M07-E13).
+  - id: rdv
+    noms: [rdv.par1.medisphere.internal]
+    certificat: /etc/haproxy/certs/rdv.crt
+    cle: /etc/haproxy/certs/rdv.key
+    <<: *commun

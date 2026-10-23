@@ -1,0 +1,8 @@
+# .dockerignore de Legacy-RDV — liste blanche (M12-E19, F4-S12 : + sql/).
+*
+!*.php
+!inc/
+!cron/
+!sql/
+!conteneur/
+!uploads/LISEZMOI.txt

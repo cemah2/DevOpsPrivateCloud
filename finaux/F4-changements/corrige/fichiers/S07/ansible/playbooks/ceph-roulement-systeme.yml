@@ -1,0 +1,96 @@
+---
+# playbooks/ceph-roulement-systeme.yml — F4-S07 (CHG-3407, RB-343), variante « systeme » : mise à jour
+# en roulement du système Rocky Linux 10 des hôtes de ceph-par1, UN hôte à la fois, sous charge.
+#
+# Pour chaque hôte : HEALTH_OK exigé → si l'hôte porte le mgr actif, bascule (« ceph mgr fail ») →
+# « ceph orch host maintenance enter » (cephadm vérifie que l'arrêt est sans danger, pose noout sur
+# l'hôte et arrête ses démons) → mise à jour des paquets (SAUF cephadm et ceph-common, épinglés par le
+# rôle ceph_noeud) → redémarrage → « maintenance exit » → attente du retour à HEALTH_OK.
+# Les commandes ceph sont lancées depuis un AUTRE hôte du cluster (délégation) : celui qu'on met en
+# maintenance n'a plus ses démons.
+#
+# Lancement (depuis adm01, ~/src/ansible, sonde de continuité active, RB-340) :
+#   uv run ansible-playbook playbooks/ceph-roulement-systeme.yml --diff
+#   (un hôte seulement : --limit ceph02 ; reprise après un échec : relancer, un hôte à jour est sauté)
+# ⚠️ À vérifier sur ta version de cephadm : refus de « maintenance enter » sur l'hôte du mgr actif
+# (d'où la bascule), et message exact des contrôles ok-to-stop.
+
+- name: Mise à jour en roulement des hôtes Ceph
+  hosts: role_ceph
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    roulement_admin: "{{ groups['role_ceph'] | difference([inventory_hostname]) | first }}"
+    roulement_ceph: "cephadm shell -- ceph"
+  tasks:
+    - name: Mises à jour en attente sur {{ inventory_hostname }}
+      ansible.builtin.command: dnf -q check-update --exclude=cephadm --exclude=ceph-common
+      register: roulement_maj
+      changed_when: false
+      failed_when: roulement_maj.rc not in [0, 100]
+
+    - name: Rien à faire sur {{ inventory_hostname }}
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} est à jour : sauté."
+      when: roulement_maj.rc == 0
+
+    - name: Mise à jour de {{ inventory_hostname }}
+      when: roulement_maj.rc == 100
+      block:
+        - name: Le cluster est en HEALTH_OK
+          ansible.builtin.command: "{{ roulement_ceph }} health --format json"
+          delegate_to: "{{ roulement_admin }}"
+          register: roulement_sante
+          changed_when: false
+          failed_when: (roulement_sante.stdout | from_json).status != 'HEALTH_OK'
+
+        - name: Mgr actif
+          ansible.builtin.command: "{{ roulement_ceph }} mgr stat --format json"
+          delegate_to: "{{ roulement_admin }}"
+          register: roulement_mgr
+          changed_when: false
+
+        - name: Bascule du mgr actif s'il est sur {{ inventory_hostname }}
+          ansible.builtin.command: "{{ roulement_ceph }} mgr fail"
+          delegate_to: "{{ roulement_admin }}"
+          when: (roulement_mgr.stdout | from_json).active_name is match(inventory_hostname ~ '(\\.|$)')
+          changed_when: true
+
+        - name: Entrée en maintenance (ok-to-stop, noout de l'hôte, arrêt des démons)
+          ansible.builtin.command: "{{ roulement_ceph }} orch host maintenance enter {{ inventory_hostname }}"
+          delegate_to: "{{ roulement_admin }}"
+          changed_when: true
+
+        - name: Mise à jour des paquets (cephadm et ceph-common restent épinglés)
+          ansible.builtin.dnf:
+            name: "*"
+            state: latest
+            exclude: [cephadm, ceph-common]
+            update_cache: true
+
+        - name: Redémarrage
+          ansible.builtin.reboot:
+            reboot_timeout: 900
+            msg: "CHG-3407 : redémarrage après mise à jour du système"
+
+        - name: Sortie de maintenance
+          ansible.builtin.command: "{{ roulement_ceph }} orch host maintenance exit {{ inventory_hostname }}"
+          delegate_to: "{{ roulement_admin }}"
+          changed_when: true
+
+        - name: Retour à HEALTH_OK (PG actifs et propres)
+          ansible.builtin.command: "{{ roulement_ceph }} health --format json"
+          delegate_to: "{{ roulement_admin }}"
+          register: roulement_retour
+          until: (roulement_retour.stdout | from_json).status == 'HEALTH_OK'
+          retries: 60
+          delay: 20
+          changed_when: false
+
+      rescue:
+        - name: Échec — on s'arrête, l'hôte peut rester en maintenance
+          ansible.builtin.fail:
+            msg: >-
+              Le roulement s'est arrêté sur {{ inventory_hostname }}. NE passe PAS à l'hôte suivant.
+              « ceph orch host ls » (état maintenance), « ceph health detail » ; RB-343 §5.

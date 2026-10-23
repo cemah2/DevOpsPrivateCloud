@@ -1,0 +1,25 @@
+# socle/repartiteurs.tf (plateforme/infra) — EXTRAIT F1-S05 (CHG-3105) : reconstruction de lb02 en
+# DEUX MR, sans toucher au pipeline ni aux garde-fous.
+#
+# MR 1 « fix(socle): retrait temporaire de lb02 (CHG-3105) » — étiquette de MR « destruction-autorisee »
+# posée par un Maintainer APRÈS lecture du plan (règle destruction.rego de plateforme/politiques, M29) :
+#   le plan détruit module.repartiteur["lb02"] (VM 1011, VM NetBox, interface, adresse 10.10.70.11) et
+#   module.dns_repartiteur["lb02"] (A et PTR). Rien d'autre : ni lb01, ni la VIP, ni son nom.
+#   Si le job de plan porte encore le contrôle jq de M05-E46 (destruction d'un VMID 1000-1099 = échec),
+#   il refuse aussi : c'est voulu. Soit tu l'as remplacé au M29 par la règle conftest (vérifie), soit tu
+#   ajoutes au job la même dérogation par étiquette de MR — dans une MR séparée et relue, AVANT.
+#
+# MR 2 « feat(socle): lb02 recréée (CHG-3105) » : on remet l'entrée. Le plan crée lb02 à l'identique
+# (VMID, adresse, MAC tirée par Proxmox, nouvelle instance cloud-init donc nouvelles clés d'hôte).
+#
+# Alternative à une seule MR : un job manuel « remplacer » qui lance « tofu plan -replace=ADRESSE » avec
+# une variable de pipeline, garde-fous inchangés (voir le corrigé, « Alternatives »).
+
+locals {
+  repartiteurs = {
+    lb01 = { vmid = 1010, ipv4 = "10.10.70.10" }
+    # MR 1 : ligne commentée — MR 2 : ligne rétablie.
+    # lb02 = { vmid = 1011, ipv4 = "10.10.70.11" }
+  }
+  vip_lb = "10.10.70.200"
+}

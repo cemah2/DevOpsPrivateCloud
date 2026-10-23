@@ -1,0 +1,38 @@
+# plateforme/gitops — projets/legacy.yaml (F4-S12, CHG-3412)
+# Projet de Legacy-RDV : un seul dépôt source (legacy/deploiement), deux espaces, aucun objet de
+# cluster, rien de ce que la plateforme gouverne (quotas, limites, magasin de secrets). Même modèle
+# que « medinotif » (M27-E04). Pas d'équipe de développement : l'équipe plateforme le porte.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: legacy
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Legacy-RDV (porté par l'équipe plateforme) — recette, prod
+  sourceRepos:
+    - https://git01.par1.medisphere.internal/legacy/deploiement.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: legacy-rdv-recette
+    - server: https://kubernetes.default.svc
+      namespace: legacy-rdv-prod
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+    - {group: "", kind: ResourceQuota}
+    - {group: "", kind: LimitRange}
+    - {group: external-secrets.io, kind: SecretStore}
+    - {group: external-secrets.io, kind: PushSecret}
+    - {group: generators.external-secrets.io, kind: "*"}
+    # Jamais de restauration ni d'opération physique déclenchée par Git : gestes humains (RB-346).
+    - {group: k8s.mariadb.com, kind: Restore}
+    - {group: k8s.mariadb.com, kind: PhysicalBackup}
+    - {group: k8s.mariadb.com, kind: PointInTimeRecovery}
+  orphanedResources:
+    warn: true
+    ignore:
+      - {group: external-secrets.io, kind: SecretStore, name: openbao}
+      - {group: "", kind: ServiceAccount, name: eso}
+      - {group: networking.k8s.io, kind: NetworkPolicy, name: refus-par-defaut}
+      - {group: networking.k8s.io, kind: NetworkPolicy, name: sortie-dns}

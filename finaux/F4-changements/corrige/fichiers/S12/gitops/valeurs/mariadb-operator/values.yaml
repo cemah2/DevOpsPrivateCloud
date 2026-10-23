@@ -1,0 +1,81 @@
+# plateforme/gitops — valeurs/mariadb-operator/values.yaml (F4-S12, CHG-3412) — chart 26.6.0.
+# Clés vérifiées dans deploy/charts/mariadb-operator/values.yaml de l'étiquette v26.6.0.
+# Images : ghcr.io (cache Harbor « ghcr » par les hosts.toml de containerd, M14) ; étiquette = appVersion.
+
+# CRD : chart séparé (Application mariadb-operator-crds, vague -1).
+crds:
+  enabled: false
+
+logLevel: INFO
+# Tous les espaces : les bases vivent dans les espaces des applications (legacy-rdv-*).
+currentNamespaceOnly: false
+
+ha:
+  enabled: false
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      medisphere.internal/supervision: "oui"
+pdb:
+  enabled: false
+
+# Sécurité des pods : l'espace mariadb-system est en PSA « restricted ».
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+resources:
+  requests: {cpu: 20m, memory: 64Mi}
+  limits: {memory: 256Mi}
+priorityClassName: medisphere-critique
+
+webhook:
+  enabled: true
+  # Certificat du webhook : cert-controller de l'opérateur (défaut). cert-manager possible
+  # (cert.certManager.enabled) : non retenu, une dépendance de moins au démarrage.
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+  resources:
+    requests: {cpu: 10m, memory: 32Mi}
+    limits: {memory: 128Mi}
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      medisphere.internal/supervision: "oui"
+  priorityClassName: medisphere-critique
+
+certController:
+  enabled: true
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+  resources:
+    requests: {cpu: 10m, memory: 32Mi}
+    limits: {memory: 128Mi}
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      medisphere.internal/supervision: "oui"
+
+# Images par défaut des bases, de l'exportateur : le chart 26.6.0 propose mariadb:11.8.8 et
+# prom/mysqld-exporter v0.15.1 (docker.io, cache Harbor « dockerhub »). Chaque MariaDB fixe son image.

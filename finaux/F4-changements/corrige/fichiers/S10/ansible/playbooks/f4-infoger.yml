@@ -1,0 +1,109 @@
+---
+# playbooks/f4-infoger.yml (plateforme/ansible) — mise aux standards des VMs migrées d'InfoGér
+# (F4-S10, CHG-3410). Joué par le pipeline protégé (ADR-0040), une VM à la fois.
+# Rôles existants : node_exporter (M21), alloy (M22). Le rôle durcissement n'est PAS joué
+# (Debian 12, exception EXC-H-034) : mesures compensatoires ci-dessous.
+- name: VMs migrées d'InfoGér — contrôles et mesures compensatoires
+  hosts: env_f4
+  serial: 1
+  become: true
+  tasks:
+    - name: Debian 12 attendue (sinon ce playbook n'a plus de raison d'être)
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == 'Debian'
+          - ansible_facts['distribution_major_version'] == '12'
+        fail_msg: "{{ inventory_hostname }} n'est plus une Debian 12 : appliquer le rôle durcissement standard."
+
+    - name: Outils VMware absents, agent QEMU présent
+      ansible.builtin.apt:
+        name: open-vm-tools
+        state: absent
+        purge: true
+
+    - name: Agent QEMU installé
+      ansible.builtin.apt:
+        name: [qemu-guest-agent, unattended-upgrades, nftables]
+        state: present
+
+    - name: Agent QEMU actif
+      ansible.builtin.systemd_service:
+        name: qemu-guest-agent
+        state: started
+        enabled: true
+
+    - name: Mises à jour de sécurité automatiques (Debian 12 LTS)
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+        mode: "0644"
+
+    - name: Compte d'InfoGér verrouillé et sans clé
+      ansible.builtin.user:
+        name: infoger
+        password_lock: true
+        expires: 1
+        shell: /usr/sbin/nologin
+
+    - name: Clés d'InfoGér supprimées
+      ansible.builtin.file:
+        path: /home/infoger/.ssh
+        state: absent
+
+    - name: Sudo d'InfoGér supprimé
+      ansible.builtin.file:
+        path: /etc/sudoers.d/90-infoger
+        state: absent
+
+    - name: Pare-feu local (flux inventoriés seulement)
+      ansible.builtin.template:
+        src: ../templates/f4-infoger/nftables.conf.j2
+        dest: /etc/nftables.conf
+        mode: "0644"
+        validate: nft -c -f %s
+      notify: Recharger nftables
+
+    - name: Pare-feu actif
+      ansible.builtin.systemd_service:
+        name: nftables
+        state: started
+        enabled: true
+
+  handlers:
+    - name: Recharger nftables
+      ansible.builtin.systemd_service:
+        name: nftables
+        state: reloaded
+
+- name: VMs migrées d'InfoGér — supervision et journaux
+  hosts: env_f4
+  serial: 1
+  become: true
+  roles:
+    - role: node_exporter
+    - role: alloy
+  post_tasks:
+    - name: Journal de Legacy-RDV (fichier) collecté en plus de journald
+      ansible.builtin.copy:
+        dest: /etc/alloy/conf.d/legacy-rdv.alloy
+        mode: "0644"
+        content: |
+          // F4-S10 : journal applicatif de Legacy-RDV (fichier, rotation logrotate) vers Loki.
+          // « loki.write.plateforme » : nom du composant d écriture déclaré par le rôle alloy (M22) ;
+          // adapte-le au nom réel de ton rôle (grep loki.write roles/alloy/templates).
+          local.file_match "legacy_rdv" {
+            path_targets = [{"__path__" = "/var/log/legacy-rdv/app.log", "service" = "legacy-rdv"}]
+          }
+          loki.source.file "legacy_rdv" {
+            targets    = local.file_match.legacy_rdv.targets
+            forward_to = [loki.write.plateforme.receiver]
+          }
+      when: inventory_hostname == 'legacy-rdv01'
+      notify: Recharger alloy
+  handlers:
+    - name: Recharger alloy
+      ansible.builtin.systemd_service:
+        name: alloy
+        state: reloaded

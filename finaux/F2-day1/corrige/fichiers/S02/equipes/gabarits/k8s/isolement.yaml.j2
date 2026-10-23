@@ -1,0 +1,32 @@
+{#- gabarits/k8s/isolement.yaml.j2 — cloison réseau du locataire (F2-S02), modèle
+    isolement-locataire-medidoc.yaml du M28-E15. Rendu dans equipes/<equipe>/isolement.yaml. -#}
+# GÉNÉRÉ par plateforme/equipes (outils/rendre.py) depuis equipes/{{ e.nom }}.yaml — NE PAS MODIFIER ICI.
+# Cloison du locataire {{ e.nom }} : aucun échange avec les espaces d'un autre locataire, dans les deux
+# sens. Suit l'étiquette posée par Capsule (capsule.clastix.io/tenant) : tout espace présent ou futur du
+# locataire est couvert. Ce sont des REFUS (ils l'emportent sur toute autorisation d'une politique
+# d'espace) ; la Gateway (entité ingress), DNS et la supervision ne sont pas des locataires : non visés.
+# Une exception (un appel légitime entre deux équipes) = MR relue par la Plateforme et Sophie Laurent.
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: isolement-locataire-{{ e.nom }}
+  labels:
+    medisphere.internal/origine: plateforme-equipes
+spec:
+  description: "Cloison du locataire {{ e.nom }} : aucun échange avec les autres locataires ({{ e.ticket }})"
+  endpointSelector:
+    matchLabels:
+      io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant: {{ e.nom }}
+  enableDefaultDeny:
+    ingress: false
+    egress: false
+  ingressDeny:
+    - fromEndpoints:
+        - matchExpressions:
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: Exists}
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: NotIn, values: [{{ e.nom }}]}
+  egressDeny:
+    - toEndpoints:
+        - matchExpressions:
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: Exists}
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: NotIn, values: [{{ e.nom }}]}

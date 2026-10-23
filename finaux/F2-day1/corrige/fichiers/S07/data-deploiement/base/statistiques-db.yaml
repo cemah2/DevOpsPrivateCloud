@@ -1,0 +1,92 @@
+# data/deploiement — base/statistiques-db.yaml (F2-S07, DEV-3207)
+# Base de l'équipe Data, déclarée PAR L'ÉQUIPE dans son dépôt et synchronisée par Argo CD (AppProject
+# « data », destination data-traitements). La plateforme impose, par admission (politique
+# cnpg-sauvegarde-obligatoire) : archivage par le plugin Barman Cloud, classe ceph-rbd, limites,
+# superutilisateur désactivé.
+# Une instance (données reconstructibles depuis l'extraction ; RPO = archivage des WAL, RTO = restauration
+# depuis cnpg-data) : décision écrite dans l'ADR-0327, à revoir si l'équipe y met des données qui ne se
+# reconstruisent pas.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: statistiques-db
+  labels:
+    app.kubernetes.io/part-of: data
+    medisphere.internal/equipe: data
+spec:
+  description: "Base de statistiques de l'équipe Data (données pseudonymisées, DEV-3207)"
+  instances: 1
+  # Même famille d'image que les autres bases (cache Harbor ghcr), par empreinte : à TA valeur.
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie@sha256:<EMPREINTE-POSTGRESQL>
+  priorityClassName: medisphere-standard
+
+  bootstrap:
+    initdb:
+      database: statistiques
+      owner: statistiques
+      encoding: UTF8
+      # Schéma, rôles de groupe et droits, joués UNE fois à la création, en superutilisateur, dans la base
+      # « statistiques » (CloudNativePG ne déclare pas les droits sur les objets).
+      postInitApplicationSQLRefs:
+        configMapRefs:
+          - name: statistiques-db-initialisation
+            key: initialisation.sql
+
+  storage:
+    storageClass: ceph-rbd
+    size: 5Gi
+
+  postgresql:
+    parameters:
+      shared_buffers: 64MB
+      max_connections: "50"
+      timezone: Europe/Paris
+      # Traces des requêtes longues : une analyse ad hoc qui tourne 10 min se voit.
+      log_min_duration_statement: "30s"
+
+  affinity:
+    tolerations:
+      - key: dedie
+        operator: Equal
+        value: bdd
+        effect: NoSchedule
+
+  resources:
+    requests: {cpu: 50m, memory: 256Mi}
+    limits: {cpu: "1", memory: 512Mi}
+
+  enableSuperuserAccess: false
+
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: cnpg-data
+        serverName: statistiques-db
+
+  monitoring:
+    # Métriques de l'extraction (lignes, âge, colonnes) lues par la plateforme et les checks, sans
+    # accès aux données : supervision.yaml (ConfigMap statistiques-db-metriques).
+    customQueriesConfigMap:
+      - name: statistiques-db-metriques
+        key: requetes.yaml
+
+  managed:
+    roles:
+      # Rôle d'OpenBao (moteur db-data) : crée et supprime les comptes dynamiques. Créé par le SQL
+      # d'initialisation avec l'option ADMIN sur les deux groupes ; CloudNativePG en gère les
+      # attributs et le mot de passe initial (retiré après « rotate-root », MR suivante).
+      - name: openbao
+        ensure: present
+        comment: "OpenBao, moteur db-data (identifiants dynamiques) — F2-S07"
+        login: true
+        createrole: true
+        superuser: false
+        createdb: false
+        inherit: false
+        connectionLimit: 10
+        inRoles:
+          - stats_lecture
+          - stats_ecriture
+        passwordSecret:
+          name: openbao-pg-initial

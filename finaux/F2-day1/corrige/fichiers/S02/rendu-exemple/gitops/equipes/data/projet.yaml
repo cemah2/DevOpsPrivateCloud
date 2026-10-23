@@ -1,0 +1,56 @@
+# GÉNÉRÉ par plateforme/equipes (outils/rendre.py) depuis equipes/data.yaml — NE PAS MODIFIER ICI.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: data
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: data
+    medisphere.internal/origine: plateforme-equipes
+  annotations:
+    medisphere.internal/ticket: "DEV-3207"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: "Équipe Data (statistiques d'activité)"
+  # Les dépôts du groupe GitLab de l'équipe, et eux seuls.
+  sourceRepos:
+    - https://git01.par1.medisphere.internal/data/*
+  # Les environnements de l'équipe, nommés un par un (jamais « data-* » : une future équipe
+  # « data-xxx » aurait le même préfixe).
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: data-traitements
+  # Aucun objet de cluster.
+  clusterResourceWhitelist: []
+  # L'enveloppe de l'espace est à la plateforme (plateforme/equipes → plateforme/k8s).
+  namespaceResourceBlacklist:
+    - {group: "", kind: ResourceQuota}
+    - {group: "", kind: LimitRange}
+    - {group: external-secrets.io, kind: SecretStore}
+    - {group: monitoring.coreos.com, kind: AlertmanagerConfig}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+  orphanedResources:
+    warn: true
+    ignore:
+      - {group: "", kind: ServiceAccount, name: eso}
+      - {group: external-secrets.io, kind: SecretStore, name: openbao}
+      - {group: monitoring.coreos.com, kind: AlertmanagerConfig, name: "alertes-*"}
+      - {group: rbac.authorization.k8s.io, kind: RoleBinding, name: "capsule-*"}
+      - {group: rbac.authorization.k8s.io, kind: RoleBinding, name: "supervision-lecture-*"}
+      - {group: "", kind: ResourceQuota, name: quota}
+      - {group: "", kind: ResourceQuota, name: "capsule-*"}
+      - {group: "", kind: LimitRange, name: limites}
+      - {group: "", kind: LimitRange, name: limites-locataire}
+  roles:
+    - name: equipe
+      description: "Équipe data (groupe data de l'annuaire, SSO) : synchronise ses environnements, jamais hors fenêtre"
+      groups:
+        - data
+      policies:
+        - p, proj:data:equipe, applications, get, data/*, allow
+        - p, proj:data:equipe, applications, sync, data/*, allow
+        - p, proj:data:equipe, logs, get, data/*, allow
+        - p, proj:data:equipe, applications, delete, data/*, deny
+        - p, proj:data:equipe, applications, override, data/*, deny
+        - p, proj:data:equipe, exec, create, data/*, deny

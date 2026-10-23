@@ -1,0 +1,23 @@
+#!/usr/sbin/nft -f
+# /etc/nftables.conf — {{ inventory_hostname }} (VM migrée d'InfoGér, F4-S10). Géré par Ansible.
+flush ruleset
+
+table inet filter {
+  chain input {
+    type filter hook input priority 0; policy drop;
+    iif "lo" accept
+    ct state established,related accept
+    ct state invalid drop
+    meta l4proto icmp accept
+{% for f in infoger_flux_entrants[inventory_hostname] %}
+    # {{ f.pourquoi }}
+    ip saddr { {{ f.depuis | join(', ') }} } {{ f.proto }} dport {{ f.port }} accept
+{% endfor %}
+  }
+  chain forward {
+    type filter hook forward priority 0; policy drop;
+  }
+  chain output {
+    type filter hook output priority 0; policy accept;
+  }
+}

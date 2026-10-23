@@ -1,0 +1,12 @@
+# plateforme/k8s — releases/argocd.yaml.gotmpl (EXTRAIT F4-S05, CHG-3405) : Argo CD est sous HELMFILE
+# (couche de base, ADR-0200) : sa montée passe par plateforme/k8s, PAS par plateforme/gitops.
+# Avant la MR : guide de montée « v3.5 to 3.6 » d'Argo CD (operator-manual/upgrading/), notes de
+# version du chart argo/argo-cd, puis :
+#   helmfile -e par1 -l composant=argocd diff     (CRD comprises : le chart les porte dans ses gabarits)
+# Retour arrière : revert de la MR + helmfile apply (les CRD montées NE redescendent PAS : vérifier
+# dans le guide que la version précédente accepte les CRD de la nouvelle).
+releases:
+  - name: argocd
+    namespace: argocd
+    chart: argo/argo-cd
+    version: <VERSION-DU-CHART-POUR-ARGO-CD-3.6>   # 10.10.5 = v3.5.5 avant F4 ; appVersion v3.6.x

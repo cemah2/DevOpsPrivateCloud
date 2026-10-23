@@ -1,0 +1,12 @@
+# GÉNÉRÉ par plateforme/equipes (outils/rendre.py) — NE PAS MODIFIER ICI : MR sur plateforme/equipes.
+annuaire_groupes_equipes:
+- nom: data
+  description: Équipe Data (statistiques d'activité)
+  membres:
+  - hugo.bernard
+  - sarah.colin
+- nom: medivisio
+  description: Équipe produit MédiVisio (téléconsultation)
+  membres:
+  - ines.garnier
+  - leo.fabre

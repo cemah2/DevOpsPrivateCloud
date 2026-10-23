@@ -1,0 +1,38 @@
+# plateforme/observabilite — regles/continuite.yaml (F4-S02, CHG-3402)
+# MESURE D'INTERRUPTION côté cluster : une série 0/1, continuite:en_erreur, qui vaut 1 dès que
+#   - une sonde blackbox de continuité de mon01 échoue (continuite:sondes_en_erreur:max, enregistrée sur
+#     le témoin et fédérée ici par federation-mon01), OU
+#   - la charge k6 de la sonde (testid sonde-continuite-*) reçoit des réponses inattendues (5xx, délais,
+#     connexions refusées ; « expected_response » est l'étiquette posée par k6 selon responseCallback), OU
+#   - MédiAgenda PRODUCTION renvoie des 5xx (compteur de l'application, hors sondes).
+# Secondes d'erreur cumulées sur une fenêtre [DÉBUT, FIN] = avg_over_time(continuite:en_erreur[DURÉE]) ×
+# DURÉE, évaluée à FIN (outils/mesurer-interruption.sh ; checks du final F4, _f4-montees.sh).
+# Résolution : 5 s pour la charge (envoi k6), 30 s pour les sondes et les métriques de l'application ;
+# le taux sur 1 min des 5xx étale une rafale sur une minute au plus : la mesure est PESSIMISTE.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: continuite
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: continuite
+      interval: 15s
+      rules:
+        - record: continuite:charge_requetes:taux30s
+          expr: sum(rate(k6_http_reqs_total{testid=~"sonde-continuite.*"}[30s])) or vector(0)
+        - record: continuite:charge_erreurs:taux30s
+          expr: sum(rate(k6_http_reqs_total{testid=~"sonde-continuite.*", expected_response="false"}[30s])) or vector(0)
+        - record: continuite:prod_5xx:taux1m
+          expr: |
+            sum(rate(mediagenda_http_requests_total{namespace="mediagenda-prod", route!~"/sante|/pret|/metrics", code=~"5.."}[1m]))
+            or vector(0)
+        - record: continuite:en_erreur
+          expr: |
+            clamp_max(
+                (max(continuite:sondes_en_erreur:max) or vector(0))
+              + (continuite:charge_erreurs:taux30s > bool 0)
+              + (continuite:prod_5xx:taux1m > bool 0)
+            , 1)

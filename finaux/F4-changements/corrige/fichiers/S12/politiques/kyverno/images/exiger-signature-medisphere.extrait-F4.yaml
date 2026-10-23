@@ -1,0 +1,13 @@
+# plateforme/politiques — kyverno/images/exiger-signature-medisphere.yaml : EXTRAIT (F4-S12, CHG-3412).
+# Ajoute les deux espaces de Legacy-RDV à la liste des espaces où toute image
+# registry.par1.medisphere.internal/medisphere/* doit être désignée par empreinte, signée et attestée.
+# MR relue par Sophie Laurent (changement de sécurité). En Audit d'abord sur legacy-rdv-recette si
+# l'image n'a pas encore son attestation SBOM (rapports PolicyReport sans échec), puis Deny.
+spec:
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: [mediagenda-recette, mediagenda-prod, medidoc-dev, medidoc-recette, wb-essais,
+                   legacy-rdv-recette, legacy-rdv-prod]

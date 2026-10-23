@@ -1,0 +1,20 @@
+# GÉNÉRÉ par plateforme/equipes (outils/rendre.py) — NE PAS MODIFIER ICI : MR sur plateforme/equipes.
+synchro_gitlab:
+- annuaire: data
+  gitlab: data
+  niveau: reporter
+- personne: hugo.bernard
+  gitlab: data
+  niveau: maintainer
+- personne: sarah.colin
+  gitlab: data
+  niveau: developer
+- annuaire: medivisio
+  gitlab: medivisio
+  niveau: reporter
+- personne: ines.garnier
+  gitlab: medivisio
+  niveau: maintainer
+- personne: leo.fabre
+  gitlab: medivisio
+  niveau: developer

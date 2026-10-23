@@ -1,0 +1,8 @@
+#!/bin/bash
+# Faux ldapsearch des tests de ms-verif-equipe : réponses figées selon le filtre (équipe « data »,
+# dont sarah.colin est désactivée). Aucun annuaire n'est contacté.
+case "$*" in
+  *"cn=data)"*) printf 'dn: cn=data,cn=groups,cn=accounts,dc=x\nmember: uid=hugo.bernard,cn=users,cn=accounts,dc=x\nmember: uid=sarah.colin,cn=users,cn=accounts,dc=x\n';;
+  *"uid=sarah.colin)(nsAccountLock=TRUE)"*) printf 'dn: uid=sarah.colin,cn=users\n';;
+  *) :;;
+esac

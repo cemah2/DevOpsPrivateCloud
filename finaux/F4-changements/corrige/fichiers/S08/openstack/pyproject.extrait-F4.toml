@@ -1,0 +1,11 @@
+# plateforme/openstack — pyproject.toml (EXTRAIT F4-S08, CHG-3408) : dépendances de la série 2026.2.
+# Branche « serie-2026.2 », travaillée dans un ARBRE DE TRAVAIL séparé (~/src/openstack-2026.2, avec son
+# propre .venv) : l'environnement 2026.1 de ~/src/openstack reste intact pour le retour arrière.
+# Plage d'ansible-core : relevée dans « Operating Kolla » 2026.2 (« ansible-core>=2.20,<2.21.99 »,
+# 23/10/2026) — à reconfirmer dans les notes de version 23.x le jour J.
+[project]
+dependencies = [
+    "kolla-ansible==23.<CORRECTIVE>.<N>",     # dernière 23.x STABLE publiée sur PyPI (jamais une rc en production)
+    "ansible-core>=2.20,<2.22",
+    "openstacksdk>=4.0",
+]

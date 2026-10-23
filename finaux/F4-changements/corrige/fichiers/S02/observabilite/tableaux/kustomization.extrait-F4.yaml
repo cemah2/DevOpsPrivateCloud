@@ -1,0 +1,6 @@
+# plateforme/observabilite — tableaux/kustomization.yaml (EXTRAIT F4-S02) : entrée à AJOUTER.
+configMapGenerator:
+  # --- Plateforme ---
+  - name: tableau-plateforme-changement-en-cours
+    files: [plateforme/plateforme-changement-en-cours.json]
+    options: {annotations: {grafana_folder: Plateforme}}

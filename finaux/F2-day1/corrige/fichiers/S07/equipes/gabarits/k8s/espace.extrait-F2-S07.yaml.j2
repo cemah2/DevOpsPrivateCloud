@@ -1,0 +1,5 @@
+{#- gabarits/k8s/espace.yaml.j2 : EXTRAIT (F2-S07, DEV-3207). Dans le ResourceQuota, remplacer la ligne
+    « services.loadbalancers: "0" » par ce qui suit (le reste du gabarit est inchangé). -#}
+    # 1 seulement si l'environnement porte une base jointe par OpenBao (Service posé par la plateforme,
+    # plateforme/k8s/espaces/<espace>/) ; 0 sinon : l'équipe n'expose rien hors de la Gateway.
+    services.loadbalancers: "{{ 1 if c.get('base_openbao', false) else 0 }}"

@@ -1,0 +1,151 @@
+# plateforme/k8s — espaces/data-traitements/60-openbao.yaml (F2-S07, DEV-3207)
+# Ce que la PLATEFORME ajoute, à la main et par MR, dans l'espace de l'équipe Data, À CÔTÉ de ce que
+# rend l'équipe en code (equipes/data/espaces/data-traitements.yaml : Namespace, quota, LimitRange,
+# compte « eso » et SecretStore « openbao », route d'alertes — fichiers possédés par le générateur,
+# jamais modifiés ici). Appliqué comme le reste de espaces/ (exception écrite du M27 : kubectl apply
+# depuis adm01, relu par MR). Objets interdits à l'équipe par son AppProject ou par la sécurité :
+#   - Service statistiques-db-openbao (10.10.41.66) : OpenBao (vault01-03, hors cluster) joint le
+#     PRIMAIRE de la base Data pour créer et supprimer les comptes dynamiques du moteur db-data ;
+#     ⚠️ exige « services.loadbalancers: 1 » dans le quota de l'espace : extension du gabarit de l'équipe
+#     en code (champ base_openbao de l'environnement, equipes/data.extrait-F2-S07.yaml) ;
+#   - CiliumNetworkPolicy : le port 5432 n'est ouvert, depuis l'extérieur du cluster, qu'à vault01-03 ;
+#   - générateurs d'ESO (identifiants dynamiques, mot de passe initial d'OpenBao) ;
+#   - redirection de port vers la base pour les analystes (Role + RoleBinding : RoleBinding interdit à
+#     l'équipe par son AppProject ; les propriétaires du locataire n'ont que « view » sur l'espace).
+# Capsule ne refuse pas le Service LoadBalancer : sa règle « deny » ne vise que ses utilisateurs
+# (groupes oidc:<équipe>), la plateforme l'applique avec son propre compte.
+apiVersion: v1
+kind: Service
+metadata:
+  name: statistiques-db-openbao
+  namespace: data-traitements
+  annotations:
+    lbipam.cilium.io/ips: 10.10.41.66
+    medisphere.internal/ticket: DEV-3207
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    cnpg.io/cluster: statistiques-db
+    cnpg.io/instanceRole: primary
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: statistiques-db-depuis-openbao
+  namespace: data-traitements
+spec:
+  description: "Base Data : entrée 5432 depuis vault01-03 seulement (moteur db-data, DEV-3207)"
+  endpointSelector:
+    matchLabels:
+      cnpg.io/cluster: statistiques-db
+  ingress:
+    - fromCIDR:
+        - 10.10.20.21/32
+        - 10.10.20.22/32
+        - 10.10.20.23/32
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+---
+# Chaque lecture crée un compte PostgreSQL à bail d'une heure (DROP ROLE à l'échéance).
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: VaultDynamicSecret
+metadata:
+  name: data-traitement
+  namespace: data-traitements
+spec:
+  path: db-data/creds/data-traitement
+  method: GET
+  resultType: Data
+  provider:
+    server: https://openbao.par1.medisphere.internal:8200
+    version: v2
+    caBundle: <RACINE-MEDISPHERE-EN-BASE64>
+    auth:
+      kubernetes:
+        mountPath: k8s-par1
+        role: eso-data-traitements
+        serviceAccountRef:
+          name: eso
+          audiences:
+            - openbao.medisphere.internal
+---
+# Mot de passe INITIAL du rôle PostgreSQL « openbao » de la base Data (même méthode qu'au M25-E14) :
+# produit dans le cluster, passé une fois à OpenBao, aussitôt remplacé par rotate-root. Ce bloc et le
+# passwordSecret du rôle géré sont RETIRÉS par la MR suivante.
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: openbao-pg-initial
+  namespace: data-traitements
+spec:
+  length: 32
+  digits: 6
+  symbols: 0
+  noUpper: false
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: openbao-pg-initial
+  namespace: data-traitements
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: openbao-pg-initial
+    creationPolicy: Owner
+    deletionPolicy: Delete
+    template:
+      type: kubernetes.io/basic-auth
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      data:
+        username: openbao
+        password: "{{ .password }}"
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: openbao-pg-initial
+---
+# Analystes (groupe data) : redirection de port vers la base, pour leurs requêtes ad hoc avec les
+# identifiants personnels « bao read db-data/creds/data-analyste » (8 h).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: analystes-redirection
+  namespace: data-traitements
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [pods/portforward]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: analystes-redirection
+  namespace: data-traitements
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: analystes-redirection
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "oidc:data"

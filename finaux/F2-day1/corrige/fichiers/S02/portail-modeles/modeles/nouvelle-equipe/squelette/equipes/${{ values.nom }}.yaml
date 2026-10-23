@@ -1,0 +1,76 @@
+# plateforme/equipes — equipes/${{ values.nom }}.yaml (créé par le modèle « Nouvelle équipe » du portail,
+# ${{ values.ticket }}). Quotas de DÉPART du profil « ${{ values.profil }} » : la Plateforme les ajuste en relisant
+# la MR (job capacite). Format : README.md et schema/equipe.schema.json.
+apiVersion: equipes.medisphere.internal/v1
+kind: Equipe
+metadata:
+  nom: ${{ values.nom }}
+  ticket: ${{ values.ticket }}
+spec:
+  description: ${{ values.description | dump }}
+  type: interne
+  etat: active
+  responsable: ${{ values.responsable }}
+  contact: ${{ values.contact }}
+  personnes:
+{%- for p in values.personnes %}
+    - identifiant: ${{ p.identifiant }}
+      prenom: ${{ p.prenom | dump }}
+      nom: ${{ p.nom | dump }}
+      courriel: ${{ p.identifiant }}@medisphere.internal
+{%- if p.titre %}
+      titre: ${{ p.titre | dump }}
+{%- endif %}
+      role: ${{ p.role }}
+{%- endfor %}
+  identite:
+    otp_obligatoire: false
+  gitlab:
+    groupe: ${{ values.nom }}
+  kubernetes:
+{%- if values.profil == "produit" %}
+    environnements:
+      dev:
+        quota: {requests.cpu: 500m, requests.memory: 768Mi, limits.memory: 1536Mi, pods: "10", persistentvolumeclaims: "2", requests.storage: 5Gi}
+        signature_exigee: false
+        synchronisation: automatique
+        alertes: false
+      recette:
+        quota: {requests.cpu: 500m, requests.memory: 768Mi, limits.memory: 1536Mi, pods: "10", persistentvolumeclaims: "2", requests.storage: 5Gi}
+        signature_exigee: true
+        synchronisation: automatique
+        alertes: true
+      prod:
+        quota: {requests.cpu: "1", requests.memory: 1Gi, limits.memory: 2Gi, pods: "12", persistentvolumeclaims: "2", requests.storage: 10Gi}
+        signature_exigee: true
+        synchronisation: manuelle
+        alertes: true
+    libre_service:
+      espaces: 2
+      quota: {requests.cpu: 500m, requests.memory: 512Mi, limits.memory: 1Gi, pods: "10", persistentvolumeclaims: "2", requests.storage: 5Gi}
+    budget: {requests.cpu: 2500m, requests.memory: 3Gi, limits.memory: 6Gi, pods: "45"}
+    classes_priorite:
+      autorisees: [medisphere-critique, medisphere-standard]
+      defaut: medisphere-standard
+{%- else %}
+    environnements:
+      traitements:
+        quota: {requests.cpu: 1500m, requests.memory: 3Gi, limits.memory: 5Gi, pods: "20", persistentvolumeclaims: "6", requests.storage: 40Gi}
+        signature_exigee: true
+        synchronisation: automatique
+        alertes: true
+    libre_service:
+      espaces: 1
+      quota: {requests.cpu: 250m, requests.memory: 512Mi, limits.memory: 1Gi, pods: "5", persistentvolumeclaims: "1", requests.storage: 5Gi}
+    budget: {requests.cpu: "2", requests.memory: 3584Mi, limits.memory: 6Gi, pods: "30"}
+    classes_priorite:
+      autorisees: [medisphere-standard, medisphere-lot]
+      defaut: medisphere-standard
+{%- endif %}
+    classes_stockage: [ceph-rbd]
+  secrets:
+    ecriture: [{% if values.profil == "produit" %}dev, recette, prod{% else %}traitements{% endif %}]
+  services: []
+  observabilite:
+    grafana:
+      titre_dossier: ${{ values.nom }}

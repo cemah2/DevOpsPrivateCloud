@@ -1,0 +1,20 @@
+# plateforme/provisioning — .gitlab-ci.yml, EXTRAIT F1-S06 : le job « verifier » rend AUSSI les données
+# simulées du profil k8s-noeud (tests/donnees/netbox-k8s.json), et pytest exécute tests/test_profil_k8s.py
+# (job « python », inchangé : il prend tous les tests). Le reste du fichier de M11-E15 est inchangé.
+verifier:
+  stage: verifier
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+  script:
+    - uv sync --group dev
+    - uv run outils/netbox-provision.py rendre --depuis-json tests/donnees/netbox.json
+    - PATH="$CI_PROJECT_DIR/.venv/bin:$PATH" outils/verifier.sh
+    - PATH="$CI_PROJECT_DIR/.venv/bin:$PATH" outils/verifier-rendu.sh rendu/http
+    - uv run outils/netbox-provision.py rendre --depuis-json tests/donnees/netbox-k8s.json
+    - PATH="$CI_PROJECT_DIR/.venv/bin:$PATH" outils/verifier.sh
+    - PATH="$CI_PROJECT_DIR/.venv/bin:$PATH" outils/verifier-rendu.sh rendu/http
+  artifacts:
+    when: on_failure
+    paths: [rendu/]
+    expire_in: 1 week

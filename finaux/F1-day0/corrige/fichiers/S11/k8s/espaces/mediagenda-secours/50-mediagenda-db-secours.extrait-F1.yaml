@@ -1,0 +1,19 @@
+# plateforme/k8s — espaces/mediagenda-secours/50-mediagenda-db-secours.yaml, EXTRAIT (F1-S11, PLAT-3111).
+# Le réplica de secours (M27-E15) suit l'archive de la production. Celle-ci écrit désormais sous
+# mediagenda-db-prod-day0 : le secours doit lire là, sinon il resterait figé au gel (et l'alerte
+# PostgresqlSecoursEnRetard ne sonnerait jamais, l'ancienne archive ne recevant plus rien).
+# Il naît d'une sauvegarde de base de la NOUVELLE production : n'applique ce fichier qu'APRÈS la
+# première sauvegarde « completed » de mediagenda-prod/mediagenda-db (60-donnees.sh l'attend).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db-secours
+  namespace: mediagenda-secours
+spec:
+  externalClusters:
+    - name: mediagenda-db-prod
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: cnpg-s3
+          serverName: mediagenda-db-prod-day0      # était mediagenda-db-prod

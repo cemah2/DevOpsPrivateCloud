@@ -1,0 +1,151 @@
+{#- gabarits/k8s/espace.yaml.j2 — un environnement d'une équipe (F2-S02). Rendu dans plateforme/k8s :
+    equipes/<equipe>/espaces/<equipe>-<env>.yaml. Variables : e (équipe), env (nom), c (réglages de l'env),
+    ns (nom de l'espace), racine (caBundle). Modèle : espaces/mediagenda-dev/ (M14, M21-E29, M25-E13, M28-E05). -#}
+# GÉNÉRÉ par plateforme/equipes (outils/rendre.py) depuis equipes/{{ e.nom }}.yaml — NE PAS MODIFIER ICI.
+# Environnement « {{ env }} » de l'équipe {{ e.nom }} : espace {{ ns }}, rattaché au locataire {{ e.nom }}
+# (référence de propriétaire posée par le CronJob capsule-system/rattacher-locataires, F2-S02).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ ns }}
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    capsule.clastix.io/tenant: {{ e.nom }}
+    medisphere.internal/equipe: {{ e.nom }}
+    medisphere.internal/proprietaire: {{ e.nom }}
+    medisphere.internal/environnement: {{ env }}
+    medisphere.internal/origine: plateforme-equipes
+    # Publication par la Gateway gw-par1 (allowedRoutes, M15-E12).
+    medisphere.internal/exposition: oui
+    # PrometheusRule et SLO de l'équipe lus par Prometheus (ruleNamespaceSelector, M21-E29) ; même
+    # sélecteur pour les AlertmanagerConfig (F2-S02).
+    medisphere.internal/supervision-regles: "oui"
+{%- if c.signature_exigee %}
+    # Images medisphere/* signées et attestées exigées (ImageValidatingPolicy exiger-signature-medisphere).
+    medisphere.internal/signature-exigee: "oui"
+{%- endif %}
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    # Un espace n'est JAMAIS supprimé par une synchronisation (données) : retrait explicite (RB-320).
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    medisphere.internal/ticket: "{{ e.ticket }}"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota
+  namespace: {{ ns }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  hard:
+{%- for k, v in c.quota.items() %}
+    {{ k }}: "{{ v }}"
+{%- endfor %}
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+---
+# Valeurs par défaut et plafond de l'espace ; le PLANCHER (min) est répliqué par Capsule
+# (LimitRange « limites-locataire », GlobalTenantResource limites-par-defaut, M28-E05).
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limites
+  namespace: {{ ns }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  limits:
+    - type: Container
+      defaultRequest: {cpu: 50m, memory: 64Mi}
+      default: {memory: 256Mi}
+      max: {cpu: "1", memory: 1Gi}
+---
+# Entrée de l'espace dans le coffre (modèle M25-E13) : compte « eso » sans jeton monté, SecretStore
+# lié au rôle eso-{{ ns }} (kv/{{ e.nom }}/{{ env }}/* en lecture seulement). L'équipe écrit ses
+# ExternalSecret ; elle ne peut ni créer ni modifier un SecretStore (AppProject).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso
+  namespace: {{ ns }}
+  labels:
+    app.kubernetes.io/part-of: external-secrets
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+automountServiceAccountToken: false
+---
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: openbao
+  namespace: {{ ns }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  provider:
+    vault:
+      server: {{ openbao_url }}
+      path: kv
+      version: v2
+      caBundle: {{ racine }}
+      auth:
+        kubernetes:
+          mountPath: k8s-par1
+          role: eso-{{ ns }}
+          serviceAccountRef:
+            name: eso
+            audiences:
+              - openbao.medisphere.internal
+---
+# Lecture des objets de supervision de l'espace par l'équipe (ClusterRole du M21-E29).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: supervision-lecture-{{ e.nom }}
+  namespace: {{ ns }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: supervision-lecture-equipe
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "oidc:{{ e.nom }}"
+{%- if c.alertes %}
+---
+# Route d'alertes de l'équipe (F2-S02). L'opérateur (stratégie par défaut OnNamespace) AJOUTE le filtre
+# namespace="{{ ns }}" : seules les alertes de cet espace qui portent equipe="{{ e.nom }}" partent à
+# {{ e.contact }}. La route est insérée en tête de l'arbre avec « continue » forcé : les critiques
+# continuent vers l'astreinte (configuration globale de kps/values.yaml, M21-E16).
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: alertes-{{ e.nom }}
+  namespace: {{ ns }}
+  labels:
+    medisphere.internal/alertes-equipe: "oui"
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  route:
+    receiver: equipe-courriel
+    groupBy: [alertname, namespace]
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+    matchers:
+      - name: equipe
+        value: {{ e.nom }}
+        matchType: "="
+  receivers:
+    - name: equipe-courriel
+      emailConfigs:
+        - to: {{ e.contact }}
+          sendResolved: true
+{%- endif %}

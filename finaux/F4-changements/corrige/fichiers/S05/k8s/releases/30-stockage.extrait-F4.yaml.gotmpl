@@ -1,0 +1,12 @@
+# plateforme/k8s — releases/30-stockage.yaml.gotmpl (EXTRAIT F4-S05, CHG-3405) : release « cnpg ».
+# CloudNativePG est sous Helmfile (couche de base). Montée 1.30 → 1.31 SEULEMENT si 1.31 est publiée
+# et si AUCUN Cluster n'utilise spec.backup.barmanObjectStore (supprimé en 1.31) :
+#   outils/inventaire-api-supprimees.sh
+# Effet sur les instances : RB-164 (M16-E33) — mise à jour du gestionnaire d'instance en place si
+# ENABLE_INSTANCE_MANAGER_INPLACE_UPDATES=true, sinon redémarrage progressif avec BASCULE du primaire.
+# Plugin Barman Cloud : vérifier dans ses notes de version la plage de CNPG acceptée.
+releases:
+  - name: cnpg
+    namespace: cnpg-system
+    chart: cnpg/cloudnative-pg
+    version: <VERSION-DU-CHART-POUR-CNPG-1.31>     # 0.29.1 = 1.30.1 avant F4

@@ -1,0 +1,13 @@
+# plateforme/k8s — composants/wb-checks/wb-checks-donnees-mariadb.yaml (F4-S12)
+# Lecture des objets de mariadb-operator par le compte des vérifications du workbook (wb-checks),
+# agrégée dans sa ClusterRole (étiquette workbook.medisphere.internal/checks). Jamais les Secrets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wb-checks-donnees-mariadb
+  labels:
+    workbook.medisphere.internal/checks: "true"
+rules:
+  - apiGroups: [k8s.mariadb.com]
+    resources: [mariadbs, databases, users, grants, backups, sqljobs, restores, connections]
+    verbs: [get, list, watch]

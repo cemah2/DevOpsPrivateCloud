@@ -1,0 +1,115 @@
+# GÉNÉRÉ par plateforme/equipes (outils/rendre.py) depuis equipes/medivisio.yaml — NE PAS MODIFIER ICI.
+# Environnement « dev » de l'équipe medivisio : espace medivisio-dev, rattaché au locataire medivisio
+# (référence de propriétaire posée par le CronJob capsule-system/rattacher-locataires, F2-S02).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: medivisio-dev
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    capsule.clastix.io/tenant: medivisio
+    medisphere.internal/equipe: medivisio
+    medisphere.internal/proprietaire: medivisio
+    medisphere.internal/environnement: dev
+    medisphere.internal/origine: plateforme-equipes
+    # Publication par la Gateway gw-par1 (allowedRoutes, M15-E12).
+    medisphere.internal/exposition: oui
+    # PrometheusRule et SLO de l'équipe lus par Prometheus (ruleNamespaceSelector, M21-E29) ; même
+    # sélecteur pour les AlertmanagerConfig (F2-S02).
+    medisphere.internal/supervision-regles: "oui"
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    # Un espace n'est JAMAIS supprimé par une synchronisation (données) : retrait explicite (RB-320).
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    medisphere.internal/ticket: "DEV-3202"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota
+  namespace: medivisio-dev
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  hard:
+    requests.cpu: "500m"
+    requests.memory: "768Mi"
+    limits.memory: "1536Mi"
+    pods: "10"
+    persistentvolumeclaims: "2"
+    requests.storage: "5Gi"
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+---
+# Valeurs par défaut et plafond de l'espace ; le PLANCHER (min) est répliqué par Capsule
+# (LimitRange « limites-locataire », GlobalTenantResource limites-par-defaut, M28-E05).
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limites
+  namespace: medivisio-dev
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  limits:
+    - type: Container
+      defaultRequest: {cpu: 50m, memory: 64Mi}
+      default: {memory: 256Mi}
+      max: {cpu: "1", memory: 1Gi}
+---
+# Entrée de l'espace dans le coffre (modèle M25-E13) : compte « eso » sans jeton monté, SecretStore
+# lié au rôle eso-medivisio-dev (kv/medivisio/dev/* en lecture seulement). L'équipe écrit ses
+# ExternalSecret ; elle ne peut ni créer ni modifier un SecretStore (AppProject).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso
+  namespace: medivisio-dev
+  labels:
+    app.kubernetes.io/part-of: external-secrets
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+automountServiceAccountToken: false
+---
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: openbao
+  namespace: medivisio-dev
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  provider:
+    vault:
+      server: https://openbao.par1.medisphere.internal:8200
+      path: kv
+      version: v2
+      caBundle: <RACINE-MEDISPHERE-EN-BASE64>
+      auth:
+        kubernetes:
+          mountPath: k8s-par1
+          role: eso-medivisio-dev
+          serviceAccountRef:
+            name: eso
+            audiences:
+              - openbao.medisphere.internal
+---
+# Lecture des objets de supervision de l'espace par l'équipe (ClusterRole du M21-E29).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: supervision-lecture-medivisio
+  namespace: medivisio-dev
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: supervision-lecture-equipe
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "oidc:medivisio"

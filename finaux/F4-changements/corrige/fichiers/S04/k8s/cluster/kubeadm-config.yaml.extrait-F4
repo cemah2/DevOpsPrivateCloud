@@ -1,0 +1,8 @@
+# cluster/kubeadm-config.yaml de plateforme/k8s — EXTRAIT F4-S04 (issue « go ») : seule la version change.
+# Avant la MR : « kubeadm config validate --config cluster/kubeadm-config.yaml » avec le kubeadm 1.37
+# (sur un nœud de contrôle, après l'installation du paquet) ; v1beta4 reste l'API du fichier.
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+kubernetesVersion: v1.37.<CORRECTIF>
+# … controlPlaneEndpoint (k8s-api.par1.medisphere.internal:8443), networking, apiServer
+#   (authentification structurée du M24), etcd… inchangés …

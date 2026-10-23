@@ -1,0 +1,49 @@
+# plateforme/observabilite — tests/delais-mediagenda.test.yaml (F3-S04, INC-5904, PLAT-3304)
+# Non-régression des DÉLAIS : une latence de production au-dessus de l'objectif pendant 20 min DOIT
+# avoir déclenché MediagendaLatenceElevee, et 6 % d'erreurs pendant 15 min MediagendaTauxErreurEleve
+# (critique). Un « for » démesuré, un sélecteur d'environnement faux ou une expression qui ne renvoie
+# plus rien font échouer ce test, donc la MR.
+rule_files:
+  - ../build/regles/alertes-mediagenda.yml
+evaluation_interval: 30s
+tests:
+  - name: latence de prod au-dessus de 300 ms pendant 20 min
+    interval: 30s
+    input_series:
+      - series: 'environnement:mediagenda_duree_requetes:p95_5m{equipe="mediagenda", environnement="prod"}'
+        values: '0.5x60'
+      - series: 'environnement:mediagenda_requetes:taux5m{equipe="mediagenda", environnement="prod"}'
+        values: '2x60'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: MediagendaLatenceElevee
+        exp_alerts:
+          - exp_labels:
+              alertname: MediagendaLatenceElevee
+              gravite: avertissement
+              equipe: mediagenda
+              environnement: prod
+            exp_annotations:
+              resume: "MédiAgenda prod lent : p95 à 500ms"
+              description: "5 % des requêtes de l'API MédiAgenda (prod) prennent plus de 500ms depuis 15 minutes (objectif : 300 ms)."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-212-mediagenda-latence.md
+  - name: 6 % d'erreurs en prod pendant 15 min
+    interval: 30s
+    input_series:
+      - series: 'environnement:mediagenda_requetes_5xx:ratio_taux5m{equipe="mediagenda", environnement="prod"}'
+        values: '0.06x60'
+      - series: 'environnement:mediagenda_requetes:taux5m{equipe="mediagenda", environnement="prod"}'
+        values: '2x60'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: MediagendaTauxErreurEleve
+        exp_alerts:
+          - exp_labels:
+              alertname: MediagendaTauxErreurEleve
+              gravite: critique
+              equipe: mediagenda
+              environnement: prod
+            exp_annotations:
+              resume: "MédiAgenda prod : 6% de réponses en erreur"
+              description: "Plus de 5 % des requêtes de l'API MédiAgenda (prod) se terminent en erreur 5xx depuis 10 minutes (6% sur 5 min) : des centres de santé ne peuvent pas prendre ou consulter de rendez-vous."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-211-mediagenda-erreurs.md

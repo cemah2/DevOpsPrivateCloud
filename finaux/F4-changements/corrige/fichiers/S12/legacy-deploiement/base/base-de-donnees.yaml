@@ -1,0 +1,65 @@
+# legacy/deploiement — base/base-de-donnees.yaml (F4-S12, CHG-3412)
+# Base, comptes et droits DÉCLARÉS (l'opérateur les crée et les maintient). cleanupPolicy: Skip : retirer
+# l'objet de Git ne supprime ni la base ni les comptes (données de santé : suppression = geste humain).
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Database
+metadata:
+  name: legacy-rdv
+spec:
+  mariaDbRef: {name: legacy-rdv-db}
+  name: legacy_rdv
+  characterSet: utf8mb4
+  collate: utf8mb4_unicode_ci
+  cleanupPolicy: Skip
+---
+# Compte de l'application : lecture et écriture des données, rien d'autre (pas de DDL).
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: User
+metadata:
+  name: legacy-rdv
+spec:
+  mariaDbRef: {name: legacy-rdv-db}
+  name: legacy_rdv
+  host: "%"
+  passwordSecretKeyRef: {name: legacy-rdv-mariadb, key: application}
+  maxUserConnections: 40
+  cleanupPolicy: Skip
+---
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Grant
+metadata:
+  name: legacy-rdv
+spec:
+  mariaDbRef: {name: legacy-rdv-db}
+  privileges: [SELECT, INSERT, UPDATE, DELETE]
+  database: legacy_rdv
+  table: "*"
+  username: legacy_rdv
+  host: "%"
+  cleanupPolicy: Skip
+---
+# Compte de migration : schéma (SqlJob), chargement des données de la bascule. Jamais utilisé par l'application.
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: User
+metadata:
+  name: legacy-rdv-migrateur
+spec:
+  mariaDbRef: {name: legacy-rdv-db}
+  name: legacy_rdv_migrateur
+  host: "%"
+  passwordSecretKeyRef: {name: legacy-rdv-mariadb, key: migrateur}
+  maxUserConnections: 5
+  cleanupPolicy: Skip
+---
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Grant
+metadata:
+  name: legacy-rdv-migrateur
+spec:
+  mariaDbRef: {name: legacy-rdv-db}
+  privileges: ["ALL PRIVILEGES"]
+  database: legacy_rdv
+  table: "*"
+  username: legacy_rdv_migrateur
+  host: "%"
+  cleanupPolicy: Skip

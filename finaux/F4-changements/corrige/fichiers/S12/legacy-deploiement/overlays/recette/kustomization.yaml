@@ -1,0 +1,35 @@
+# legacy/deploiement — overlays/recette/kustomization.yaml (F4-S12, CHG-3412)
+# Synchronisé par l'Application legacy-rdv-recette (ApplicationSet « legacy-rdv »).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: legacy-rdv-recette
+resources:
+  - ../../base
+labels:
+  - pairs:
+      medisphere.internal/environnement: recette
+    includeSelectors: false
+patches:
+  - target: {kind: ExternalSecret, name: legacy-rdv-mariadb}
+    patch: |-
+      - {op: replace, path: /spec/data/0/remoteRef/key, value: legacy/recette/mariadb}
+      - {op: replace, path: /spec/data/1/remoteRef/key, value: legacy/recette/mariadb}
+      - {op: replace, path: /spec/data/2/remoteRef/key, value: legacy/recette/mariadb}
+  - target: {kind: ExternalSecret, name: legacy-rdv-s3}
+    patch: |-
+      - {op: replace, path: /spec/data/0/remoteRef/key, value: legacy/recette/s3}
+      - {op: replace, path: /spec/data/1/remoteRef/key, value: legacy/recette/s3}
+  - target: {kind: Backup, name: legacy-rdv-db-quotidienne}
+    patch: |-
+      - {op: replace, path: /spec/storage/s3/prefix, value: recette}
+  - target: {kind: HTTPRoute, name: legacy-rdv}
+    patch: |-
+      - {op: replace, path: /spec/hostnames/0, value: legacy-rdv-recette.apps.par1.medisphere.internal}
+  - target: {kind: Deployment, name: legacy-rdv}
+    patch: |-
+      - {op: replace, path: /spec/template/spec/priorityClassName, value: medisphere-standard}
+# Image signée PAR EMPREINTE (relevée dans Harbor après publication et signature par la CI).
+images:
+  - name: registry.par1.medisphere.internal/medisphere/legacy-rdv
+    newTag: v2.4.0
+    digest: sha256:<EMPREINTE-LEGACY-RDV-2.4.0>

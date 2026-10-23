@@ -1,0 +1,7 @@
+# data/deploiement — traitements/kustomization.yaml (F2-S08) : à ajouter aux resources de base/.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - externalsecret-resultats.yaml
+  - agregats.yaml
+  - export-mensuel.yaml

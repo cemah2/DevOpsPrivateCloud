@@ -1,0 +1,10 @@
+# plateforme/outils — showback/tarifs.yaml (F2-S08, PLAT-3208)
+# Coûts UNITAIRES internes, en euros par mois, validés par Claire Morel (revus chaque année). Ce n'est pas
+# une facture : c'est un ordre de grandeur (showback) pour que chaque équipe voie ce qu'elle mobilise.
+# Base de calcul (RB-328) : amortissement de pve01 et de ses disques sur 5 ans + électricité + part des
+# personnes de la plateforme, ramenés à la capacité ALLOUABLE des travailleurs (et non à leur total).
+devise: EUR
+cpu_coeur_mois: 18.00        # par cœur facturé (max(réservé, utilisé)), moyenne du mois
+memoire_gio_mois: 4.50       # par Gio facturé
+stockage_bloc_gio_mois: 0.12 # par Gio de PVC demandé (ceph-rbd, 3 copies comprises)
+objet_gio_mois: 0.04         # par Gio stocké dans un compartiment RGW (déclaré à la main dans le rapport)

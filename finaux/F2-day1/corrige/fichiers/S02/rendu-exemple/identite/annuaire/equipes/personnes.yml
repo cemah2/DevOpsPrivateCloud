@@ -1,0 +1,26 @@
+# GÉNÉRÉ par plateforme/equipes (outils/rendre.py) — NE PAS MODIFIER ICI : MR sur plateforme/equipes.
+annuaire_personnes_equipes:
+- identifiant: hugo.bernard
+  prenom: Hugo
+  nom: Bernard
+  courriel: hugo.bernard@medisphere.internal
+  titre: Analyste Data
+  etat: present
+- identifiant: sarah.colin
+  prenom: Sarah
+  nom: Colin
+  courriel: sarah.colin@medisphere.internal
+  titre: Ingénieure Data
+  etat: present
+- identifiant: ines.garnier
+  prenom: Inès
+  nom: Garnier
+  courriel: ines.garnier@medisphere.internal
+  titre: Lead dev MédiVisio
+  etat: present
+- identifiant: leo.fabre
+  prenom: Léo
+  nom: Fabre
+  courriel: leo.fabre@medisphere.internal
+  titre: Développeur MédiVisio
+  etat: present

@@ -1,0 +1,3 @@
+# group_vars/env_m08/ceph.yml — EXTRAIT F4-S07 (CHG-3407), variante « ceph-orch » : image cible.
+# MR ouverte avant la fenêtre, fusionnée APRÈS la mise à jour (même règle qu'au M08-E26).
+ceph_image: quay.io/ceph/ceph:v20.2.<CORRECTIVE>

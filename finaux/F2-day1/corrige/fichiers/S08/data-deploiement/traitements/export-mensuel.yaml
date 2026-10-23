@@ -1,0 +1,98 @@
+# data/deploiement — traitements/export-mensuel.yaml (F2-S08, PLAT-3208)
+# Le 2 de chaque mois : résultats agrégés du mois écoulé déposés dans s3://data-resultats (RGW de
+# ceph-par1), seule sortie de l'équipe Data vers la direction. Règle de diffusion (ADR-0327) : aucune
+# cellule de moins de 10 rendez-vous (les praticiens trop peu actifs sont regroupés en « autres »).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: export-resultats
+  labels:
+    app.kubernetes.io/name: export-resultats
+    app.kubernetes.io/part-of: data
+  annotations:
+    medisphere.internal/ticket: PLAT-3208
+spec:
+  schedule: "0 5 2 * *"
+  timeZone: Europe/Paris
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 86400
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800
+      ttlSecondsAfterFinished: 2678400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: export-resultats
+            medisphere.internal/acces-base: statistiques
+        spec:
+          restartPolicy: Never
+          priorityClassName: medisphere-lot
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile: {type: RuntimeDefault}
+          volumes:
+            - name: travail
+              emptyDir: {sizeLimit: 64Mi}
+            - name: medisphere-ca
+              secret:
+                secretName: medisphere-ca
+          initContainers:
+            - name: requete
+              image: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie@sha256:<EMPREINTE-POSTGRESQL>
+              command: ["/bin/bash", "-ceu"]
+              args:
+                - |
+                  mois=$(date -d "$(date +%Y-%m-01) -1 month" +%Y-%m-01)
+                  psql -v ON_ERROR_STOP=1 -X -q -v mois="$mois" -f - <<'SQL'
+                  \copy (WITH p AS (SELECT praticien_pseudo, sum(rendez_vous) AS n FROM stats.activite_quotidienne WHERE date_trunc('month', jour) = :'mois'::date GROUP BY 1) SELECT CASE WHEN p.n >= 10 THEN p.praticien_pseudo ELSE 'autres' END AS praticien, sum(p.n) AS rendez_vous FROM p GROUP BY 1 HAVING sum(p.n) >= 10 ORDER BY 2 DESC) TO '/travail/praticiens.csv' WITH (FORMAT csv, HEADER true)
+                  \copy (SELECT * FROM stats.activite_mensuelle WHERE mois = :'mois'::date) TO '/travail/synthese.csv' WITH (FORMAT csv, HEADER true)
+                  SQL
+                  printf '%s\n' "$mois" > /travail/mois
+              envFrom:
+                - secretRef: {name: statistiques-db-traitement}
+              securityContext:
+                runAsUser: 26
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: ["ALL"]}
+              resources:
+                requests: {cpu: 50m, memory: 64Mi}
+                limits: {memory: 256Mi}
+              volumeMounts:
+                - {name: travail, mountPath: /travail}
+          containers:
+            - name: depot
+              image: registry.par1.medisphere.internal/dockerhub/amazon/aws-cli:2.38.5@sha256:<EMPREINTE-AWS-CLI>
+              command: ["/bin/sh", "-ceu"]
+              args:
+                - |
+                  mois=$(cut -c1-7 /travail/mois)
+                  for f in synthese praticiens; do
+                    aws s3 cp "/travail/$f.csv" "s3://data-resultats/activite/$mois/$f.csv" --only-show-errors
+                  done
+                  echo "résultats $mois déposés"
+              env:
+                - {name: AWS_ENDPOINT_URL, value: "https://rgw.par1.medisphere.internal"}
+                - {name: AWS_DEFAULT_REGION, value: us-east-1}
+                - {name: AWS_CA_BUNDLE, value: /etc/medisphere/ca.crt}
+                - {name: AWS_REQUEST_CHECKSUM_CALCULATION, value: when_required}
+                - {name: HOME, value: /travail}
+              envFrom:
+                - secretRef: {name: s3-resultats}
+              securityContext:
+                runAsUser: 65534
+                runAsGroup: 65534
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: ["ALL"]}
+              resources:
+                requests: {cpu: 50m, memory: 128Mi}
+                limits: {memory: 256Mi}
+              volumeMounts:
+                - {name: travail, mountPath: /travail}
+                - {name: medisphere-ca, mountPath: /etc/medisphere, readOnly: true}

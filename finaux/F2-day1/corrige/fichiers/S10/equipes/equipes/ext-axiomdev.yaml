@@ -1,0 +1,61 @@
+# plateforme/equipes — equipes/ext-axiomdev.yaml (F2-S10, SEC-3210 ; contrat signé par Julien Petit)
+# Prestataire AxiomDev : développe une fonctionnalité de MédiAgenda pendant trois mois. Format de l'équipe
+# en code (F2-S02) + bloc « hebergement » ajouté en F2-S10 (schema/equipe.schema.extrait-F2-S10.json).
+# Ce que le format v1 donnait déjà à un prestataire : personnes datées (principal Kerberos expirant le
+# jour de « expiration »), OTP obligatoire (groupe porteur du rôle second-facteur-obligatoire), comptes
+# GitLab externes, aucun locataire (pas de bloc kubernetes), aucune production, aucune règle HBAC.
+# Ce que S10 ajoute (hebergement) : un espace dans le locataire d'une AUTRE équipe (mediagenda), un rôle
+# limité, et l'accès direct à des projets précis (jamais à un groupe : l'héritage ouvrirait tout).
+# Relecteurs obligatoires : Plateforme ET Sophie Laurent (RSSI) — CODEOWNERS sur equipes/ext-*.yaml.
+apiVersion: equipes.medisphere.internal/v1
+kind: Equipe
+metadata:
+  nom: ext-axiomdev
+  ticket: SEC-3210
+spec:
+  description: Prestataire AxiomDev (fonctionnalité de MédiAgenda, contrat de trois mois)
+  type: prestataire
+  etat: active
+  responsable: marc.vidal
+  # Adresse INTERNE qui reçoit ce qui concerne le prestataire : son responsable chez MédiSphère.
+  contact: julien.petit@medisphere.internal
+  # Fin du contrat : expiration du principal Kerberos de chaque personne, des appartenances GitLab et
+  # de la liaison RBAC. À adapter : trois mois après ta date de début.
+  expiration: <AAAA-MM-JJ-FIN-CONTRAT>
+
+  personnes:
+    - identifiant: marc.vidal
+      prenom: Marc
+      nom: Vidal
+      courriel: marc.vidal@axiomdev.example
+      titre: Chef de projet AxiomDev (prestataire)
+      role: responsable
+    - identifiant: yanis.perrin
+      prenom: Yanis
+      nom: Perrin
+      courriel: yanis.perrin@axiomdev.example
+      titre: Développeur AxiomDev (prestataire)
+      role: developpeur
+
+  identite:
+    otp_obligatoire: true
+
+  gitlab:
+    # Groupe PROPRE du prestataire (vide de projets MédiSphère) : le seul groupe dont ils sont membres.
+    groupe: ext-axiomdev
+    externe: true
+
+  # F2-S10 — hébergement chez une autre équipe (prestataire seulement).
+  hebergement:
+    locataire: mediagenda                 # le locataire hôte : Julien reste propriétaire de l'espace
+    espace: mediagenda-axiomdev           # préfixe du locataire hôte + nom court du prestataire
+    quota: {requests.cpu: "1", requests.memory: 2Gi, limits.memory: 3Gi, pods: "15", persistentvolumeclaims: "2", requests.storage: 10Gi}
+    role: prestataire-developpeur         # gabarit k8s/prestataire-role.yaml.j2 (ni Secrets, ni RBAC, ni exec)
+    gitlab_projets:
+      mediagenda/api: developer           # membre DIRECT, avec la date d'expiration, rien d'autre
+
+  services: []
+
+  observabilite:
+    grafana:
+      titre_dossier: AxiomDev

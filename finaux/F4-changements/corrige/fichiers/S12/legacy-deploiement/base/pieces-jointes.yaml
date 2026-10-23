@@ -1,0 +1,16 @@
+# legacy/deploiement — base/pieces-jointes.yaml (F4-S12, CHG-3412)
+# Pièces jointes partagées par les réplicas ET le CronJob de purge : CephFS (classe « cephfs », M16),
+# ReadWriteMany. Données de santé : sauvegardées par Velero (Kopia, node-agent) avec l'espace.
+# ⚠️ Jamais élagué par Argo CD (Prune=false) : un PVC supprimé = pièces jointes perdues.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: legacy-rdv-pieces
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: cephfs
+  resources:
+    requests:
+      storage: 5Gi

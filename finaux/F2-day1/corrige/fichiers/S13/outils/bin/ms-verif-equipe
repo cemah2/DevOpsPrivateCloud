@@ -1,0 +1,326 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ms-verif-equipe — conformité d'une équipe accueillie sur la plateforme (F2-S13, PLAT-3213)
+#
+# Usage : ms-verif-equipe [--json] [--ignorer SOURCE[,SOURCE…]] EQUIPE
+#
+# Vérifie, en LECTURE SEULE, que tout ce que le parcours d'accueil (docs/accueil/parcours-accueil.md)
+# et l'équipe en code (plateforme/equipes) promettent existe vraiment pour EQUIPE :
+#   annuaire     groupe FreeIPA présent, au moins un membre, aucun membre désactivé encore dedans
+#   keycloak     groupe importé dans le royaume medisphere
+#   gitlab       groupe GitLab (équipe interne) — ou, pour une équipe externe (ext-*), aucun groupe hors
+#                du sien et des membres « externes »
+#   locataire    Tenant Capsule, propriétaire oidc:EQUIPE, classes de priorité déclarées ; chaque
+#                espace a un ResourceQuota, une LimitRange et un niveau Pod Security imposé
+#                (externe : pas de locataire propre, espace(s) étiqueté(s) medisphere.internal/prestataire)
+#   argocd       AppProject EQUIPE limité aux espaces de l'équipe, sans ressource de cluster, sans « * »
+#   openbao      groupe d'identité avec ses politiques (externe : aucune politique)
+#   grafana      dossier de l'équipe (UID = nom de l'équipe)
+#   alertes      une route d'Alertmanager pour equipe="EQUIPE"
+#   catalogue    entité Group de Backstage
+#   slo          si l'équipe fait tourner un service en production : au moins un ServiceLevelObjective
+#                (pyrra.dev/equipe=EQUIPE)
+# Une source sans identité configurée est « NON VÉRIFIÉE » et fait échouer la commande, sauf si elle
+# est citée dans --ignorer (et alors signalée).
+#
+# Identités (lecture seule) : fichier MS_VERIF_ENV (défaut ~/.config/ms-outils/verif-equipe.env, 600),
+# ou variables déjà définies (CI : variables protégées et masquées) :
+#   IPA_URL IPA_BASE IPA_BIND_DN IPA_BIND_PASSWORD     compte système de lecture de l'annuaire
+#   KEYCLOAK_URL KEYCLOAK_CLIENT_ID KEYCLOAK_CLIENT_SECRET   client à rôles view-users, view-realm
+#   GITLAB_URL GITLAB_TOKEN                            jeton read_api d'un administrateur
+#   KUBECONFIG                                         compte de service en lecture (sans Secrets)
+#   BAO_ADDR BAO_ROLE_ID BAO_SECRET_ID                 AppRole de métadonnées (jamais de valeur)
+#   GRAFANA_URL GRAFANA_TOKEN                          compte de service Viewer
+#   ALERTMANAGER_URL                                   API v2 d'Alertmanager
+#   BACKSTAGE_URL BACKSTAGE_TOKEN                      accès externe en lecture du catalogue
+# Dans le lab, les identités des vérifications du workbook (wb-checks) conviennent.
+#
+# Codes retour : 0 conforme, 1 au moins un contrôle en échec ou non vérifié, 2 usage.
+# =============================================================================
+set -euo pipefail
+
+MS_PROG=ms-verif-equipe
+DELAI="${MS_VERIF_DELAI:-10}"
+
+# --- Résultats ------------------------------------------------------------------------------------
+declare -a R_SOURCE=() R_STATUT=() R_DETAIL=()
+IGNORER=","
+resultat() { R_SOURCE+=("$1"); R_STATUT+=("$2"); R_DETAIL+=("$3"); }
+ok() { resultat "$1" OK "$2"; }
+ko() { resultat "$1" KO "$2"; }
+nv() {
+  if [[ "$IGNORER" == *",$1,"* ]]; then resultat "$1" IGNORE "$2"; else resultat "$1" NON-VERIFIE "$2"; fi
+}
+usage() { sed -n 's/^# Usage : //p' "${BASH_SOURCE[0]}" >&2; exit 2; }
+a() { [[ -n "${!1:-}" ]]; } # a VAR — variable définie et non vide
+
+# --- Accès (GET seulement ; identités jamais sur la ligne de commande) ------------------------------
+enc() { jq -rn --arg s "$1" '$s|@uri'; }
+
+ldap() {
+  ldapsearch -LLL -o ldif-wrap=no -o nettimeout="$DELAI" -H "$IPA_URL" -D "$IPA_BIND_DN" \
+    -y <(printf '%s' "$IPA_BIND_PASSWORD") -b "$IPA_BASE" "$@" 2>/dev/null
+}
+gitlab() {
+  curl -sf --max-time "$DELAI" -K <(printf 'header = "PRIVATE-TOKEN: %s"\n' "$GITLAB_TOKEN") "$GITLAB_URL/api/v4/$1"
+}
+kc() {
+  local j
+  j="$(curl -sf --max-time "$DELAI" -K <(printf 'user = "%s:%s"\n' "$KEYCLOAK_CLIENT_ID" "$KEYCLOAK_CLIENT_SECRET") \
+    -d grant_type=client_credentials "$KEYCLOAK_URL/realms/medisphere/protocol/openid-connect/token" | jq -r '.access_token // empty')" || return 1
+  [[ -n "$j" ]] || return 1
+  curl -sf --max-time "$DELAI" -K <(printf 'header = "Authorization: Bearer %s"\n' "$j") "$KEYCLOAK_URL/admin/realms/medisphere/$1"
+}
+k() { kubectl --request-timeout="${DELAI}s" "$@" -o json 2>/dev/null; }
+JETON_BAO=""
+bao_get() {
+  if [[ -z "$JETON_BAO" ]]; then
+    JETON_BAO="$(BAO_ROLE_ID="$BAO_ROLE_ID" BAO_SECRET_ID="$BAO_SECRET_ID" jq -nc '{role_id: env.BAO_ROLE_ID, secret_id: env.BAO_SECRET_ID}' |
+      curl -sf --max-time "$DELAI" --data @- "$BAO_ADDR/v1/auth/approle/login" | jq -r '.auth.client_token // empty')" || return 1
+    [[ -n "$JETON_BAO" ]] || return 1
+  fi
+  curl -s --max-time "$DELAI" -w '\n%{http_code}' -K <(printf 'header = "X-Vault-Token: %s"\n' "$JETON_BAO") "$BAO_ADDR/v1/$1"
+}
+grafana() {
+  curl -sf --max-time "$DELAI" -K <(printf 'header = "Authorization: Bearer %s"\n' "$GRAFANA_TOKEN") "$GRAFANA_URL/api/$1"
+}
+backstage() {
+  curl -s -o /dev/null -w '%{http_code}' --max-time "$DELAI" -K <(printf 'header = "Authorization: Bearer %s"\n' "$BACKSTAGE_TOKEN") \
+    "$BACKSTAGE_URL/api/$1"
+}
+
+# --- Contrôles --------------------------------------------------------------------------------------
+verif_annuaire() {
+  local g n d=0 u
+  if ! a IPA_URL || ! a IPA_BIND_DN || ! a IPA_BIND_PASSWORD; then nv annuaire "identité LDAP absente"; return; fi
+  g="$(ldap "(&(objectClass=ipausergroup)(cn=$EQ))" member)" || g=""
+  if ! grep -q '^dn: ' <<<"$g"; then ko annuaire "groupe $EQ absent de l'annuaire"; return; fi
+  n="$(grep -c '^member: uid=' <<<"$g" || true)"
+  while IFS= read -r u; do
+    [[ -n "$u" ]] || continue
+    if ldap "(&(uid=$u)(nsAccountLock=TRUE))" uid | grep -q '^dn: '; then d=$((d + 1)); fi
+  done < <(sed -n 's/^member: uid=\([^,]*\),.*/\1/p' <<<"$g")
+  if ((n == 0)); then ko annuaire "groupe $EQ vide"
+  elif ((d > 0)); then ko annuaire "$d personne(s) désactivée(s) encore membre(s) de $EQ (départ incomplet)"
+  else ok annuaire "groupe $EQ : $n membre(s) actif(s)"; fi
+}
+
+verif_keycloak() {
+  if ! a KEYCLOAK_URL || ! a KEYCLOAK_CLIENT_ID || ! a KEYCLOAK_CLIENT_SECRET; then nv keycloak "client de lecture absent"; return; fi
+  local r
+  r="$(kc "groups?search=$(enc "$EQ")&exact=true")" || { nv keycloak "API d'administration injoignable ou refusée"; return; }
+  if jq -e --arg g "$EQ" '[.. | objects | select(.name? == $g)] | length >= 1' <<<"$r" >/dev/null; then
+    ok keycloak "groupe $EQ importé dans le royaume medisphere"
+  else
+    ko keycloak "groupe $EQ absent de Keycloak (fédération pas synchronisée ?)"
+  fi
+}
+
+verif_gitlab() {
+  if ! a GITLAB_URL || ! a GITLAB_TOKEN; then nv gitlab "jeton absent"; return; fi
+  local g u id m externes=0 n=0 en_groupe=0 propre
+  if ((EXTERNE)); then
+    # Le groupe GitLab PROPRE de l'équipe externe (créé par l'équipe en code, sans projet de MédiSphère)
+    # est admis ; tout autre groupe ouvrirait ses projets par héritage.
+    propre="$(gitlab "groups/$(enc "$EQ")" | jq -r '.id // 0')" || propre=0
+    for u in $MEMBRES; do
+      m="$(gitlab "users?username=$(enc "$u")" | jq -c '.[0] // empty')" || m=""
+      [[ -n "$m" ]] || continue
+      n=$((n + 1))
+      jq -e '.external == true' <<<"$m" >/dev/null && externes=$((externes + 1))
+      id="$(jq -r .id <<<"$m")"
+      if gitlab "users/$id/memberships?per_page=100" |
+        jq -e --argjson g "${propre:-0}" '[.[] | select(.source_type == "Namespace" and .source_id != $g)] | length > 0' >/dev/null 2>&1; then
+        en_groupe=$((en_groupe + 1))
+      fi
+    done
+    if ((en_groupe > 0)); then ko gitlab "$en_groupe personne(s) de $EQ membre(s) d'un groupe GitLab autre que $EQ (accès hérités)"
+    elif ((externes < n)); then ko gitlab "$((n - externes)) personne(s) de $EQ non marquée(s) « externe »"
+    else ok gitlab "$n personne(s) externe(s), aucun groupe hors de $EQ"; fi
+    return
+  fi
+  g="$(gitlab "groups/$(enc "$EQ")")" || { ko gitlab "groupe GitLab $EQ absent"; return; }
+  n="$(gitlab "groups/$(jq -r .id <<<"$g")/members?per_page=100" | jq 'length')" || n=0
+  if ((n >= 1)); then ok gitlab "groupe $EQ : $n membre(s) directs"; else ko gitlab "groupe $EQ sans membre"; fi
+}
+
+ESPACES=""
+verif_locataire() {
+  if ! command -v kubectl >/dev/null 2>&1 || ! a KUBECONFIG; then nv locataire "kubeconfig de lecture absent"; return; fi
+  local t ns manque=""
+  if ((EXTERNE)); then
+    ESPACES="$(k get namespaces -l "medisphere.internal/prestataire=$EQ" | jq -r '.items[].metadata.name')" || ESPACES=""
+    if [[ -z "$ESPACES" ]]; then ko locataire "aucun espace étiqueté medisphere.internal/prestataire=$EQ"; return; fi
+  else
+    t="$(k get tenants.capsule.clastix.io "$EQ")" || { ko locataire "Tenant Capsule $EQ absent"; return; }
+    jq -e --arg g "oidc:$EQ" 'any(.spec.owners[]?; .kind == "Group" and .name == $g)' <<<"$t" >/dev/null ||
+      { ko locataire "Tenant $EQ : le groupe oidc:$EQ n'en est pas propriétaire"; return; }
+    jq -e '(.spec.priorityClasses.allowed // []) | length > 0' <<<"$t" >/dev/null ||
+      { ko locataire "Tenant $EQ : classes de priorité non déclarées"; return; }
+    ESPACES="$(jq -r '.status.namespaces[]?' <<<"$t")"
+    [[ -n "$ESPACES" ]] || { ko locataire "Tenant $EQ sans espace"; return; }
+  fi
+  for ns in $ESPACES; do
+    k get resourcequotas -n "$ns" | jq -e '.items | length >= 1' >/dev/null 2>&1 || manque+=" $ns:quota"
+    k get limitranges -n "$ns" | jq -e '.items | length >= 1' >/dev/null 2>&1 || manque+=" $ns:limites"
+    k get namespace "$ns" | jq -e '.metadata.labels["pod-security.kubernetes.io/enforce"] // "" | test("restricted|baseline")' >/dev/null 2>&1 ||
+      manque+=" $ns:pod-security"
+  done
+  if [[ -n "$manque" ]]; then ko locataire "manque :$manque"
+  else ok locataire "$(wc -w <<<"$ESPACES") espace(s) avec quota, limites et Pod Security"; fi
+}
+
+verif_argocd() {
+  if ! command -v kubectl >/dev/null 2>&1 || ! a KUBECONFIG; then nv argocd "kubeconfig de lecture absent"; return; fi
+  local p
+  p="$(k get appprojects.argoproj.io -n argocd "$EQ")" || {
+    if ((EXTERNE)); then ok argocd "aucun AppProject (équipe externe)"; else ko argocd "AppProject $EQ absent"; fi
+    return
+  }
+  ((EXTERNE)) && { ko argocd "une équipe externe n'a pas d'AppProject ($EQ existe)"; return; }
+  if ! jq -e --arg p "$EQ-" '[.spec.destinations[]? | .namespace // "*"] | length > 0 and all(startswith($p))' <<<"$p" >/dev/null; then
+    ko argocd "AppProject $EQ : destination hors des espaces $EQ-*"
+  elif jq -e '[.spec.clusterResourceWhitelist[]?] | length > 0' <<<"$p" >/dev/null; then
+    ko argocd "AppProject $EQ : ressources de cluster autorisées"
+  elif jq -e '[.spec.sourceRepos[]? | select(. == "*")] | length > 0' <<<"$p" >/dev/null; then
+    ko argocd "AppProject $EQ : tous les dépôts autorisés (« * »)"
+  else
+    ok argocd "AppProject $EQ limité à $EQ-*, sans ressource de cluster"
+  fi
+}
+
+verif_openbao() {
+  if ! a BAO_ADDR || ! a BAO_ROLE_ID || ! a BAO_SECRET_ID; then nv openbao "AppRole de lecture absent"; return; fi
+  local r code corps pols
+  r="$(bao_get "identity/group/name/$EQ")" || { nv openbao "connexion AppRole refusée"; return; }
+  code="$(tail -n 1 <<<"$r")"
+  corps="$(sed '$d' <<<"$r")"
+  case "$code" in
+    200) pols="$(jq -r '[.data.policies[]? | select(. != "default")] | join(",")' <<<"$corps")" ;;
+    404) pols="" ;;
+    *) nv openbao "groupe d'identité illisible (HTTP $code)"; return ;;
+  esac
+  if ((EXTERNE)); then
+    if [[ -z "$pols" ]]; then ok openbao "aucune politique (équipe externe)"; else ko openbao "politiques pour une équipe externe : $pols"; fi
+  elif [[ -n "$pols" ]]; then ok openbao "groupe $EQ → $pols"
+  else ko openbao "aucune politique OpenBao pour le groupe $EQ"; fi
+}
+
+verif_grafana() {
+  if ((EXTERNE)); then ok grafana "aucun dossier attendu (équipe externe)"; return; fi
+  if ! a GRAFANA_URL || ! a GRAFANA_TOKEN; then nv grafana "jeton absent"; return; fi
+  # Dossier d'équipe : UID = nom de l'équipe (état observabilite-grafana, M21-E17, équipe en code S02).
+  local d
+  if d="$(grafana "folders/$(enc "$EQ")")" && jq -e --arg e "$EQ" '.uid == $e' <<<"$d" >/dev/null 2>&1; then
+    ok grafana "dossier « $(jq -r .title <<<"$d") » (uid $EQ)"
+  else
+    ko grafana "aucun dossier d'UID $EQ visible (absent, ou fermé au compte de vérification)"
+  fi
+}
+
+verif_alertes() {
+  if ((EXTERNE)); then ok alertes "aucune route attendue (équipe externe)"; return; fi
+  if ! a ALERTMANAGER_URL; then nv alertes "ALERTMANAGER_URL absente"; return; fi
+  local c
+  c="$(curl -sf --max-time "$DELAI" "$ALERTMANAGER_URL/api/v2/status" | jq -r '.config.original // empty')" || c=""
+  [[ -n "$c" ]] || { nv alertes "configuration d'Alertmanager illisible"; return; }
+  if grep -Eq "equipe[[:space:]]*=~?[[:space:]]*\"?([^\"]*[|(])?$EQ([|)][^\"]*)?\"?" <<<"$c"; then
+    ok alertes "route d'Alertmanager pour equipe=$EQ"
+  else
+    ko alertes "aucune route d'Alertmanager ne sélectionne equipe=$EQ"
+  fi
+}
+
+verif_catalogue() {
+  if ! a BACKSTAGE_URL || ! a BACKSTAGE_TOKEN; then nv catalogue "jeton absent"; return; fi
+  local c
+  c="$(backstage "catalog/entities/by-name/group/default/$(enc "$EQ")")" || c=000
+  case "$c" in
+    200) ok catalogue "Group $EQ au catalogue" ;;
+    404) ko catalogue "Group $EQ absent du catalogue" ;;
+    *) nv catalogue "catalogue injoignable (HTTP $c)" ;;
+  esac
+}
+
+verif_slo() {
+  if ((EXTERNE)); then ok slo "pas de production (équipe externe)"; return; fi
+  if ! command -v kubectl >/dev/null 2>&1 || ! a KUBECONFIG; then nv slo "kubeconfig de lecture absent"; return; fi
+  local ns prod="" charges=0 n
+  for ns in $ESPACES; do
+    k get namespace "$ns" | jq -e '.metadata.labels["medisphere.internal/environnement"] == "prod"' >/dev/null 2>&1 || continue
+    prod+=" $ns"
+    n="$(k get deployments,statefulsets -n "$ns" | jq '.items | length' 2>/dev/null || echo 0)"
+    charges=$((charges + n))
+  done
+  if [[ -z "$prod" || "$charges" -eq 0 ]]; then ok slo "aucun service en production : SLO non exigé"; return; fi
+  n="$(k get servicelevelobjectives.pyrra.dev -A -l "pyrra.dev/equipe=$EQ" | jq '.items | length' 2>/dev/null || echo 0)"
+  if ((n >= 1)); then ok slo "$n SLO pour un service en production (${prod# })"
+  else ko slo "service en production (${prod# }) sans ServiceLevelObjective (pyrra.dev/equipe=$EQ)"; fi
+}
+
+# --- Sortie -----------------------------------------------------------------------------------------
+rapport_texte() {
+  local i c
+  printf "Conformité de l'équipe %s (%s) — %s\n\n" "$EQ" "$( ((EXTERNE)) && echo externe || echo interne)" "$(date -Is)"
+  for i in "${!R_SOURCE[@]}"; do
+    c="${R_STATUT[$i]}"
+    printf '  %-12s %-10s %s\n' "${R_SOURCE[$i]}" "$c" "${R_DETAIL[$i]}"
+  done
+}
+rapport_json() {
+  local i
+  for i in "${!R_SOURCE[@]}"; do
+    jq -nc --arg s "${R_SOURCE[$i]}" --arg t "${R_STATUT[$i]}" --arg d "${R_DETAIL[$i]}" '{controle: $s, statut: $t, detail: $d}'
+  done | jq -s --arg e "$EQ" --argjson x "$EXTERNE" --arg h "$(date -Is)" \
+    '{equipe: $e, externe: ($x == 1), date: $h, conforme: (all(.[]; .statut == "OK" or .statut == "IGNORE")), controles: .}'
+}
+
+main() {
+  local json=0 f
+  while (($#)); do
+    case "$1" in
+      --json) json=1; shift ;;
+      --ignorer) (($# >= 2)) || usage; IGNORER=",$2,"; shift 2 ;;
+      -h | --help) usage ;;
+      -*) usage ;;
+      *) break ;;
+    esac
+  done
+  (($# == 1)) || usage
+  EQ="$1"
+  [[ "$EQ" =~ ^[a-z][a-z0-9-]{1,40}$ ]] || usage
+  for f in jq curl; do command -v "$f" >/dev/null 2>&1 || { echo "$MS_PROG : outil manquant : $f" >&2; exit 1; }; done
+  f="${MS_VERIF_ENV:-$HOME/.config/ms-outils/verif-equipe.env}"
+  if [[ -r "$f" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$f"
+    set +a
+  fi
+  : "${IPA_BASE:=dc=par1,dc=medisphere,dc=internal}"
+  EXTERNE=0
+  [[ "$EQ" == ext-* ]] && EXTERNE=1
+  MEMBRES=""
+  if a IPA_URL && a IPA_BIND_DN && a IPA_BIND_PASSWORD; then
+    MEMBRES="$(ldap "(&(objectClass=ipausergroup)(cn=$EQ))" member | sed -n 's/^member: uid=\([^,]*\),.*/\1/p' | tr '\n' ' ')" || MEMBRES=""
+  fi
+
+  verif_annuaire
+  verif_keycloak
+  verif_gitlab
+  verif_locataire
+  verif_argocd
+  verif_openbao
+  verif_grafana
+  verif_alertes
+  verif_catalogue
+  verif_slo
+
+  if ((json)); then rapport_json; else rapport_texte; fi
+  local s
+  for s in "${R_STATUT[@]}"; do
+    [[ "$s" == OK || "$s" == IGNORE ]] || return 1
+  done
+}
+
+main "$@"

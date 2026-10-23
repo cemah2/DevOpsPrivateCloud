@@ -1,0 +1,4 @@
+# /etc/cron.d/stats-rdv — statistiques nocturnes (InfoGér)
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+15 2 * * * root /opt/stats/stats-rdv.sh

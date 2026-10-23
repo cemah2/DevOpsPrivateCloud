@@ -1,0 +1,29 @@
+# plateforme/ansible — inventories/lab/host_vars/s3-01/seaweedfs.yml : EXTRAIT, ajouts de F2-S07 (DEV-3207).
+# Clés dans Ansible Vault « critique » ; recopiées dans OpenBao (kv/mediagenda/secours/sas-extraction,
+# kv/data/traitements/sas-extraction, kv/data/traitements/cnpg-s3) par la plateforme.
+seaweedfs_identites:
+  # … identités existantes …
+  # Sauvegardes de la base Data : son PROPRE compartiment (jamais cnpg-k8s-par1, archive de la prod).
+  - nom: cnpg-data
+    cle_acces: "{{ vault_seaweedfs_cnpg_data_cle_acces }}"
+    cle_secrete: "{{ vault_seaweedfs_cnpg_data_cle_secrete }}"
+    actions: [Read:cnpg-data, Write:cnpg-data, List:cnpg-data]
+  # Sas d'extraction : MédiAgenda (CronJob de mediagenda-secours) DÉPOSE, sans pouvoir relire ni lister…
+  - nom: extraction-ecriture
+    cle_acces: "{{ vault_seaweedfs_extraction_ecriture_cle_acces }}"
+    cle_secrete: "{{ vault_seaweedfs_extraction_ecriture_cle_secrete }}"
+    actions: [Write:data-extractions]
+  # … l'équipe Data LIT, sans pouvoir écrire ni effacer.
+  - nom: extraction-lecture
+    cle_acces: "{{ vault_seaweedfs_extraction_lecture_cle_acces }}"
+    cle_secrete: "{{ vault_seaweedfs_extraction_lecture_cle_secrete }}"
+    actions: [Read:data-extractions, List:data-extractions]
+
+seaweedfs_compartiments:
+  # … compartiments existants …
+  - nom: cnpg-data
+    versionnage: false
+  # Sas : pas de versionnage. Les fichiers de plus de 7 jours sont purgés (RB-327 : règle de cycle de vie
+  # ou purge planifiée, selon ce que permet ta version de SeaweedFS ; à vérifier).
+  - nom: data-extractions
+    versionnage: false

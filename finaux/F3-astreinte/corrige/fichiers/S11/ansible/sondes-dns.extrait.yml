@@ -1,0 +1,55 @@
+# plateforme/ansible — rôle supervision_temoin (mon01) : sondes DNS PAR RÉCURSEUR (F3-S11, PLAT-3311).
+# EXTRAIT en trois morceaux, à insérer dans les fichiers du rôle (M21-E11/E28). Pendant INC-5911, dns02
+# répondait SERVFAIL à tout par1.medisphere.internal (ancre DNSSEC fausse) ; dns01 masquait la panne pour
+# les VMs, pas pour les pods. Une sonde qui interroge « le DNS » ne l'aurait pas vu non plus : on sonde
+# CHAQUE récurseur, avec un nom de la zone signée.
+# Vérification avant rechargement : « promtool check config » et « promtool check rules » (validate:).
+
+# --- 1. templates/blackbox.yml.j2, sous « modules: » ------------------------------------------------------
+  dns_par1:
+    prober: dns
+    timeout: 5s
+    dns:
+      transport_protocol: udp
+      preferred_ip_protocol: ip4
+      query_name: git01.par1.medisphere.internal
+      query_type: A
+      # SERVFAIL (validation DNSSEC en échec), REFUSED, NXDOMAIN : échec de la sonde.
+      valid_rcodes: [NOERROR]
+      validate_answer_rrs:
+        fail_if_none_matches_regexp:
+          - '.*\tA\t10\.10\.20\.12$'
+
+# --- 2. templates/prometheus.yml.j2, sous « scrape_configs: » ---------------------------------------------
+  - job_name: dns-recurseurs
+    metrics_path: /probe
+    params:
+      module: [dns_par1]
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["10.10.20.10:53"]
+        labels: {recurseur: dns01}
+      - targets: ["10.10.20.16:53"]
+        labels: {recurseur: dns02}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "{{ supervision_temoin_blackbox_ecoute }}"
+
+# --- 3. files/regles/dns.yml (nouveau fichier de règles du témoin) -----------------------------------------
+groups:
+  - name: temoin.dns
+    rules:
+      - alert: RecurseurDnsEnEchec
+        expr: probe_success{job="dns-recurseurs"} == 0
+        for: 3m
+        labels:
+          gravite: critique
+          equipe: plateforme
+        annotations:
+          resume: "Le récurseur {{ $labels.recurseur }} ne résout plus git01.par1.medisphere.internal"
+          description: "Sonde DNS en échec depuis 3 min sur {{ $labels.instance }} (SERVFAIL, délai ou mauvaise réponse). Les pods, qui interrogent les deux récurseurs, échouent une fois sur deux. RB-337 § 1."
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/exploitation/runbooks/RB-337-noms-intermittents.md

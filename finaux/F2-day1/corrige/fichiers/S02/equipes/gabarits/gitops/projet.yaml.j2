@@ -1,0 +1,76 @@
+{#- gabarits/gitops/projet.yaml.j2 — AppProject d'une équipe (F2-S02). Rendu dans plateforme/gitops :
+    equipes/<equipe>/projet.yaml. Modèle : projets/medidoc.yaml (M20-E07, E24, E29, E33 ; M24-E13 ; M28-E05). -#}
+# GÉNÉRÉ par plateforme/equipes (outils/rendre.py) depuis equipes/{{ e.nom }}.yaml — NE PAS MODIFIER ICI.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ e.nom }}
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: {{ e.nom }}
+    medisphere.internal/origine: plateforme-equipes
+  annotations:
+    medisphere.internal/ticket: "{{ e.ticket }}"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: "{{ e.description }}"
+  # Les dépôts du groupe GitLab de l'équipe, et eux seuls.
+  sourceRepos:
+    - https://git01.par1.medisphere.internal/{{ e.groupe_gitlab }}/*
+  # Les environnements de l'équipe, nommés un par un (jamais « {{ e.nom }}-* » : une future équipe
+  # « {{ e.nom }}-xxx » aurait le même préfixe).
+  destinations:
+{%- for env in e.environnements %}
+    - server: https://kubernetes.default.svc
+      namespace: {{ e.nom }}-{{ env }}
+{%- endfor %}
+  # Aucun objet de cluster.
+  clusterResourceWhitelist: []
+  # L'enveloppe de l'espace est à la plateforme (plateforme/equipes → plateforme/k8s).
+  namespaceResourceBlacklist:
+    - {group: "", kind: ResourceQuota}
+    - {group: "", kind: LimitRange}
+    - {group: external-secrets.io, kind: SecretStore}
+    - {group: monitoring.coreos.com, kind: AlertmanagerConfig}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+  orphanedResources:
+    warn: true
+    ignore:
+      - {group: "", kind: ServiceAccount, name: eso}
+      - {group: external-secrets.io, kind: SecretStore, name: openbao}
+      - {group: monitoring.coreos.com, kind: AlertmanagerConfig, name: "alertes-*"}
+      - {group: rbac.authorization.k8s.io, kind: RoleBinding, name: "capsule-*"}
+      - {group: rbac.authorization.k8s.io, kind: RoleBinding, name: "supervision-lecture-*"}
+      - {group: "", kind: ResourceQuota, name: quota}
+      - {group: "", kind: ResourceQuota, name: "capsule-*"}
+      - {group: "", kind: LimitRange, name: limites}
+      - {group: "", kind: LimitRange, name: limites-locataire}
+  roles:
+    - name: equipe
+      description: "Équipe {{ e.nom }} (groupe {{ e.nom }} de l'annuaire, SSO) : synchronise ses environnements, jamais hors fenêtre"
+      groups:
+        - {{ e.nom }}
+      policies:
+        - p, proj:{{ e.nom }}:equipe, applications, get, {{ e.nom }}/*, allow
+        - p, proj:{{ e.nom }}:equipe, applications, sync, {{ e.nom }}/*, allow
+        - p, proj:{{ e.nom }}:equipe, logs, get, {{ e.nom }}/*, allow
+        - p, proj:{{ e.nom }}:equipe, applications, delete, {{ e.nom }}/*, deny
+        - p, proj:{{ e.nom }}:equipe, applications, override, {{ e.nom }}/*, deny
+        - p, proj:{{ e.nom }}:equipe, exec, create, {{ e.nom }}/*, deny
+{%- if e.environnements_manuels %}
+  # Règle de la maison (CHG-2129, M20-E29) : pas de mise en production du vendredi 16:00 au lundi 08:00.
+  # manualSync: false — l'équipe ne contourne pas la fenêtre ; une dérogation (incident) passe par
+  # l'astreinte, qui ouvre la MR d'exception (RB-320 § Dérogations).
+  syncWindows:
+    - kind: deny
+      schedule: "0 16 * * 5"
+      duration: 64h
+      timeZone: Europe/Paris
+      applications:
+{%- for env in e.environnements_manuels %}
+        - "*-{{ env }}"
+{%- endfor %}
+      manualSync: false
+      description: "Pas de mise en production du vendredi 16h au lundi 8h (CHG-2129)"
+{%- endif %}

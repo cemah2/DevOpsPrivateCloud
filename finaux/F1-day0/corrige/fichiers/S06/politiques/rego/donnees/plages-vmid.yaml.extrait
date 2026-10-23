@@ -1,0 +1,7 @@
+# plateforme/politiques — rego/donnees/plages-vmid.yaml, AJOUT F1-S06 : l'état des VMs jetables du
+# final F1 (PLAN §4.6 et §4.14 : 3100-3199). Sans cette entrée, le plan de envs/f1 est refusé
+# (« état sans plage de VMID déclarée ») : c'est voulu, une plage se déclare par MR relue.
+# L'étiquette « env-f1 » satisfait déjà etiquettes.rego (au moins une étiquette env-…).
+plages_vmid:
+  envs/f1:
+    - [3100, 3199]

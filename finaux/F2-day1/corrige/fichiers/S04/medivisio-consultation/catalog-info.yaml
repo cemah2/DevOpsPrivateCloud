@@ -1,0 +1,22 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: medivisio-consultation
+  description: "Téléconsultation MédiVisio : créneaux et salles de consultation vidéo (données factices dans le lab)"
+  annotations:
+    gitlab.com/project-slug: medivisio/consultation
+    backstage.io/kubernetes-id: medivisio-consultation
+    backstage.io/techdocs-ref: dir:.
+  tags: [python]
+  links:
+    - url: https://consultation-dev.apps.par1.medisphere.internal
+      title: dev
+    - url: https://consultation-recette.apps.par1.medisphere.internal
+      title: recette
+    - url: https://consultation.apps.par1.medisphere.internal
+      title: production
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:default/medivisio
+  system: medivisio

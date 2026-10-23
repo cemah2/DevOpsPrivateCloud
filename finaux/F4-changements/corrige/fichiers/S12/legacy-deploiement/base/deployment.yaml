@@ -1,0 +1,114 @@
+# legacy/deploiement — base/deployment.yaml (F4-S12, CHG-3412)
+# Legacy-RDV 2.4.0 : deux réplicas sur deux nœuds, sessions en base, pièces jointes sur CephFS,
+# Apache sous www-data (33) sur 8080, racine en lecture seule (répertoires d'exécution d'Apache et
+# /tmp en emptyDir), mot de passe lu dans un fichier monté (jamais dans l'environnement).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: legacy-rdv
+  labels:
+    app.kubernetes.io/name: legacy-rdv
+    app.kubernetes.io/instance: legacy-rdv
+    app.kubernetes.io/component: web
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: legacy-rdv
+      app.kubernetes.io/instance: legacy-rdv
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: legacy-rdv
+        app.kubernetes.io/instance: legacy-rdv
+        app.kubernetes.io/component: web
+    spec:
+      serviceAccountName: legacy-rdv
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      priorityClassName: medisphere-standard
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 33
+        runAsGroup: 33
+        fsGroup: 33
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: legacy-rdv
+              app.kubernetes.io/component: web
+      containers:
+        - name: web
+          # Étiquette et empreinte fixées par l'overlay (images:) : signée, vérifiée par Kyverno.
+          image: registry.par1.medisphere.internal/medisphere/legacy-rdv:v0.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: legacy-rdv-config
+          ports:
+            - name: http
+              containerPort: 8080
+          startupProbe:
+            httpGet: {path: /sante.php, port: http}
+            periodSeconds: 5
+            failureThreshold: 12
+          # Vivacité : Apache et PHP, sans la base (une panne de MariaDB ne doit pas faire redémarrer le web).
+          livenessProbe:
+            httpGet: {path: /sante.php, port: http}
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Disponibilité : la base répond (pret.php, sans session).
+          readinessProbe:
+            httpGet: {path: /pret.php, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            # Laisser la Gateway retirer le pod de ses points d'accès avant l'arrêt d'Apache.
+            preStop:
+              sleep:
+                seconds: 5
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - {name: pieces, mountPath: /var/www/legacy-rdv/uploads}
+            - {name: secret-base, mountPath: /run/secrets/legacy-rdv, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+            - {name: apache-run, mountPath: /var/run/apache2}
+            - {name: apache-lock, mountPath: /var/lock/apache2}
+      volumes:
+        - name: pieces
+          persistentVolumeClaim:
+            claimName: legacy-rdv-pieces
+        - name: secret-base
+          secret:
+            secretName: legacy-rdv-mariadb
+            defaultMode: 0440
+            items:
+              - {key: application, path: application}
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+        - name: apache-run
+          emptyDir: {sizeLimit: 1Mi}
+        - name: apache-lock
+          emptyDir: {sizeLimit: 1Mi}

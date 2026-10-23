@@ -1,0 +1,7 @@
+# /etc/stats/stats.cnf — accès en lecture à la base de Legacy-RDV (root:root 0600).
+[client]
+host     = legacy-rdv01.infoger.local
+port     = 3306
+user     = stats
+password = @STATS_MDP@
+database = legacy_rdv

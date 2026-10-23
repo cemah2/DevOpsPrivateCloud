@@ -1,0 +1,96 @@
+# plateforme/observabilite — regles/enregistrement-locataires.yaml (F2-S08, PLAT-3208)
+# Consommation PAR LOCATAIRE Capsule, base du tableau « Consommation par locataire » et du rapport de
+# refacturation interne (showback, RB-328). Convention MédiSphère « niveau:métrique:opérations » (M21).
+# Le locataire d'un espace vient de l'étiquette capsule.clastix.io/tenant, exposée par kube-state-metrics
+# (metricLabelsAllowlist namespaces=[capsule.clastix.io/tenant], M28-E14) sous le nom
+# label_capsule_clastix_io_tenant ; on la renomme « locataire ».
+# Réservé (requests) = ce que l'ordonnanceur garde pour le locataire, que le locataire s'en serve ou
+# non ; utilisé = ce qu'il consomme. Facturé = le plus grand des deux (on paie ce qu'on bloque, et ce
+# qu'on prend au-delà en rafale).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: enregistrement-locataires
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: locataires.enregistrement
+      interval: 1m
+      rules:
+        # Correspondance espace → locataire (valeur 1).
+        - record: espace:locataire:info
+          expr: |
+            max by (namespace, locataire) (
+              label_replace(kube_namespace_labels{label_capsule_clastix_io_tenant!=""},
+                            "locataire", "$1", "label_capsule_clastix_io_tenant", "(.+)")
+            )
+        # --- CPU (cœurs) ---
+        - record: locataire:cpu_demande:somme
+          expr: |
+            sum by (locataire) (
+              sum by (namespace) (
+                kube_pod_container_resource_requests{resource="cpu"}
+                * on (namespace, pod) group_left ()
+                max by (namespace, pod) (kube_pod_status_phase{phase=~"Pending|Running"} == 1)
+              )
+              * on (namespace) group_left (locataire) espace:locataire:info
+            )
+        - record: locataire:cpu_utilise:taux5m
+          expr: |
+            sum by (locataire) (
+              sum by (namespace) (rate(container_cpu_usage_seconds_total{container!="", image!=""}[5m]))
+              * on (namespace) group_left (locataire) espace:locataire:info
+            )
+        - record: locataire:cpu_facture:max
+          expr: |
+            (locataire:cpu_demande:somme > locataire:cpu_utilise:taux5m)
+            or locataire:cpu_utilise:taux5m
+            or locataire:cpu_demande:somme
+        # --- Mémoire (octets) ---
+        - record: locataire:memoire_demandee:somme
+          expr: |
+            sum by (locataire) (
+              sum by (namespace) (
+                kube_pod_container_resource_requests{resource="memory"}
+                * on (namespace, pod) group_left ()
+                max by (namespace, pod) (kube_pod_status_phase{phase=~"Pending|Running"} == 1)
+              )
+              * on (namespace) group_left (locataire) espace:locataire:info
+            )
+        - record: locataire:memoire_utilisee:somme
+          expr: |
+            sum by (locataire) (
+              sum by (namespace) (container_memory_working_set_bytes{container!="", image!=""})
+              * on (namespace) group_left (locataire) espace:locataire:info
+            )
+        - record: locataire:memoire_facturee:max
+          expr: |
+            (locataire:memoire_demandee:somme > locataire:memoire_utilisee:somme)
+            or locataire:memoire_utilisee:somme
+            or locataire:memoire_demandee:somme
+        # --- Stockage en bloc (octets) : demandé par les PVC, utilisé selon le kubelet ---
+        - record: locataire:stockage_demande:somme
+          expr: |
+            sum by (locataire) (
+              sum by (namespace) (kube_persistentvolumeclaim_resource_requests_storage_bytes)
+              * on (namespace) group_left (locataire) espace:locataire:info
+            )
+        - record: locataire:stockage_utilise:somme
+          expr: |
+            sum by (locataire) (
+              sum by (namespace) (kubelet_volume_stats_used_bytes)
+              * on (namespace) group_left (locataire) espace:locataire:info
+            )
+        # --- Quotas : somme des plafonds requests.cpu des espaces du locataire, et part réservée ---
+        # (le budget global Capsule, GlobalResourceQuota, n'est pas exposé par kube-state-metrics : la
+        # somme des quotas d'espace en est la meilleure approximation lisible ici).
+        - record: locataire:quota_cpu:somme
+          expr: |
+            sum by (locataire) (
+              max by (namespace) (kube_resourcequota{type="hard", resource="requests.cpu"})
+              * on (namespace) group_left (locataire) espace:locataire:info
+            )
+        - record: locataire:quota_cpu:ratio
+          expr: locataire:cpu_demande:somme / locataire:quota_cpu:somme

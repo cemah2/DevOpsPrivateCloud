@@ -1,0 +1,4 @@
+# plateforme/observabilite — regles/kustomization.yaml (EXTRAIT F4-S02) : entrée à AJOUTER.
+resources:
+  # … entrées existantes (M21 à M29) …
+  - continuite.yaml   # F4-S02

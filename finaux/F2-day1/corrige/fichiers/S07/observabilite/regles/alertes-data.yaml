@@ -1,0 +1,62 @@
+# plateforme/observabilite — regles/alertes-data.yaml (F2-S07, DEV-3207 ; S08 ajoute les lots)
+# Alertes de l'extraction et de la base Data. Étiquette equipe=data : la route d'Alertmanager de
+# l'équipe (S02) les envoie à data@medisphere.internal ; l'extraction elle-même (côté MédiAgenda) est
+# aussi suivie par la plateforme.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alertes-data
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: data.extraction
+      rules:
+        # Chargement de plus de 30 h (une nuit manquée) ou métrique absente (base arrêtée, requêtes
+        # personnalisées cassées).
+        - alert: ExtractionDataEnRetard
+          expr: |
+            (min by (namespace) (cnpg_stats_extraction_age_secondes{namespace="data-traitements"}) > 30 * 3600)
+            or absent(cnpg_stats_extraction_age_secondes{namespace="data-traitements"})
+          for: 30m
+          labels:
+            gravite: avertissement
+            equipe: data
+          annotations:
+            resume: "L'extraction pseudonymisée n'a pas été chargée depuis plus de 30 h"
+            description: >-
+              Vérifier, dans l'ordre : le CronJob extraction-data (mediagenda-secours, côté plateforme),
+              le sas s3://data-extractions, le CronJob chargement-extraction (data-traitements). RB-327.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/accueil/runbooks/RB-327-extraction-nocturne.md
+        - alert: ExtractionDataVide
+          expr: max by (namespace) (cnpg_stats_extraction_lignes{namespace="data-traitements"}) == 0
+          for: 1h
+          labels:
+            gravite: avertissement
+            equipe: data
+          annotations:
+            resume: "Le dernier chargement de l'extraction ne contient aucune ligne"
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/accueil/runbooks/RB-327-extraction-nocturne.md
+        # Garde-fou de pseudonymisation : une colonne au nom d'identifiant apparaît dans la table chargée.
+        - alert: ExtractionDataColonneIdentifiante
+          expr: |
+            count by (namespace) (cnpg_stats_extraction_colonnes_presente{namespace="data-traitements",
+              colonne=~"(?i)(id|patient|praticien|nom|prenom|debut|cree_le|.*contact.*|.*motif.*|.*telephone.*|.*mail.*|.*adresse.*)"}) > 0
+          for: 5m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "Une colonne identifiante est apparue dans stats.rendez_vous de la base Data"
+            description: "Suspendre l'extraction (RB-327 §4), prévenir Sophie Laurent (RSSI) et le DPO."
+        - alert: ExtractionMediagendaEchec
+          expr: |
+            max by (namespace, job_name) (kube_job_status_failed{namespace="mediagenda-secours", job_name=~"extraction-data-.*"}) > 0
+          for: 10m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Le Job d'extraction de mediagenda-secours a échoué ({{ $labels.job_name }})"
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/accueil/runbooks/RB-327-extraction-nocturne.md

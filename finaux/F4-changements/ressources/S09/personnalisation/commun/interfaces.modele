@@ -1,0 +1,12 @@
+# /etc/network/interfaces — configuration InfoGér (ifupdown), VM @NOM@.
+# Carte vmxnet3 en emplacement PCI 192 sur le vDS d'InfoGér : nommée ens192 par udev.
+# Ne pas toucher : cloud-init est désactivé sur toutes nos VMs (/etc/cloud/cloud-init.disabled).
+source /etc/network/interfaces.d/*
+
+auto lo
+iface lo inet loopback
+
+auto ens192
+iface ens192 inet static
+    address @ADRESSE@/24
+    gateway 192.168.50.1

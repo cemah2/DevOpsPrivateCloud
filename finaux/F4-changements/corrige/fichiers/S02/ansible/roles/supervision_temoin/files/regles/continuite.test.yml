@@ -1,0 +1,31 @@
+# Tests de continuite.yml : promtool test rules continuite.test.yml (Prometheus 3.13 du témoin).
+rule_files:
+  - continuite.yml
+evaluation_interval: 15s
+tests:
+  - name: une sonde tombe deux minutes, l'autre reste verte
+    interval: 30s
+    input_series:
+      - series: 'probe_success{job="blackbox", groupe="continuite-mediagenda", service="mediagenda", instance="https://mediagenda.apps.par1.medisphere.internal/pret"}'
+        values: '1 1 1 0 0 0 0 1 1 1'
+      - series: 'probe_success{job="blackbox", groupe="continuite-portail", service="portail", instance="https://portail.apps.par1.medisphere.internal/.backstage/health/v1/readiness"}'
+        values: '1 1 1 1 1 1 1 1 1 1'
+      # Hors mesure : groupe sans préfixe continuite-.
+      - series: 'probe_success{job="blackbox", groupe="https", instance="https://git01.par1.medisphere.internal/users/sign_in"}'
+        values: '0 0 0 0 0 0 0 0 0 0'
+    promql_expr_test:
+      - expr: continuite:sondes_en_erreur:max
+        eval_time: 1m
+        exp_samples:
+          - labels: 'continuite:sondes_en_erreur:max{job="blackbox"}'
+            value: 0
+      - expr: continuite:sondes_en_erreur:max
+        eval_time: 2m
+        exp_samples:
+          - labels: 'continuite:sondes_en_erreur:max{job="blackbox"}'
+            value: 1
+      - expr: continuite:sonde_en_erreur{groupe="continuite-portail"}
+        eval_time: 2m
+        exp_samples:
+          - labels: 'continuite:sonde_en_erreur{job="blackbox", groupe="continuite-portail", service="portail", instance="https://portail.apps.par1.medisphere.internal/.backstage/health/v1/readiness"}'
+            value: 0

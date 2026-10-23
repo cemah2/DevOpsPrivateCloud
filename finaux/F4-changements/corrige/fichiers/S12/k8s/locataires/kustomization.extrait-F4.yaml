@@ -1,0 +1,3 @@
+# plateforme/k8s — locataires/kustomization.yaml : ajoute « - legacy.yaml » à resources (F4-S12).
+# outils/rattacher-locataires.sh : ajoute legacy-rdv-recette:legacy et legacy-rdv-prod:legacy à
+# RATTACHEMENTS, puis lance-le (--a-blanc d'abord) une fois les espaces créés.

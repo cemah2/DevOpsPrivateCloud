@@ -1,0 +1,71 @@
+# plateforme/gitops — plateforme/equipes.yaml (F2-S02, PLAT-3202)
+# Deux Applications qui livrent ce que plateforme/equipes a rendu (fichiers sous equipes/, possédés par le
+# générateur). Projet plateforme : elles créent des objets de cluster (Tenant, Namespace,
+# CiliumClusterwideNetworkPolicy, AppProject…). PAS de finaliseur resources-finalizer : supprimer une de
+# ces Applications ne supprime rien dans le cluster.
+# prune: true est sans danger pour les données : Tenant et Namespace portent Prune=false,Delete=false
+# (gabarits), et le retrait d'une équipe ne les rend plus (RB-320 § Départ : suppression explicite).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: equipes-k8s
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    medisphere.internal/ticket: "PLAT-3202"
+    # Après « capsule » (-1, CRD Tenant) et « locataires » (0, GlobalTenantResource, rattachement).
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: plateforme
+  source:
+    repoURL: https://git01.par1.medisphere.internal/plateforme/k8s.git
+    targetRevision: main
+    path: equipes
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: equipes-gitops
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    medisphere.internal/ticket: "PLAT-3202"
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: plateforme
+  source:
+    repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+    targetRevision: main
+    path: equipes
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+---
+# plateforme/capsule.yaml (M28-E05) : CHANGEMENT — un second fichier de valeurs, RENDU par
+# plateforme/equipes (liste complète des utilisateurs Capsule) ; manager.options.users est RETIRÉ de
+# valeurs/capsule/values.yaml dans la même MR (Helm remplace les listes : un seul endroit la porte).
+#
+#   spec.sources[0].helm.valueFiles:
+#     - $values/valeurs/capsule/values.yaml
+#     - $values/valeurs/capsule/utilisateurs-equipes.yaml

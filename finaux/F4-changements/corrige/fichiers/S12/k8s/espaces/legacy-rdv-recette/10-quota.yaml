@@ -1,0 +1,20 @@
+# plateforme/k8s — espaces/legacy-rdv-recette/10-quota.yaml (F4-S12)
+# Deux réplicas web (256 Mio), MariaDB (1 Gio), exportateur, sauvegarde, purge, SqlJob.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota-equipe
+  namespace: legacy-rdv-recette
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 2Gi
+    limits.memory: 4Gi
+    pods: "15"
+    services: "6"
+    services.nodeports: "0"
+    services.loadbalancers: "0"
+    persistentvolumeclaims: "4"
+    requests.storage: 20Gi
+    configmaps: "15"
+    secrets: "15"

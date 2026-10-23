@@ -1,0 +1,18 @@
+# plateforme/politiques — kyverno/images/exiger-signature-medisphere.yaml : CHANGEMENT de F2-S02
+# (PLAT-3202 ; relu par Sophie Laurent, changement de sécurité). Seul matchConstraints.namespaceSelector
+# change ; tout le reste de la politique du M26-E15 est inchangé.
+#
+# Avant : une LISTE de noms d'espaces (mediagenda-recette, mediagenda-prod, medidoc-dev, medidoc-recette,
+# wb-essais). Une nouvelle équipe n'était pas couverte tant que quelqu'un n'éditait pas cette liste.
+# Après : une ÉTIQUETTE posée par la plateforme (plateforme/k8s : espaces historiques par MR, espaces des
+# équipes en code par le rendu de plateforme/equipes, champ signature_exigee). Une équipe ne peut pas la
+# retirer : Capsule refuse les étiquettes medisphere.internal/* aux propriétaires (forbiddenLabels), et
+# ses environnements sont livrés par la plateforme.
+# Migration sans trou : (1) poser l'étiquette sur les cinq espaces historiques (MR plateforme/k8s, task
+# espaces) ; (2) vérifier « kubectl get ns -l medisphere.internal/signature-exigee=oui » (les cinq) ;
+# (3) seulement alors, fusionner ce changement.
+spec:
+  matchConstraints:
+    namespaceSelector:
+      matchLabels:
+        medisphere.internal/signature-exigee: "oui"

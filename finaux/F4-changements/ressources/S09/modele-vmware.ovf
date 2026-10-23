@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Descripteur OVF 1.0 « tel qu'exporté par le vCenter d'InfoGér » (matériel virtuel vmx-19).
+     Modèle utilisé par fabriquer-export-vmware.sh (F4-S09) : chaque variable encadrée d'arobases est
+     remplacée à la fabrication, une fois par VM. Le bloc du contrôleur dépend de la VM :
+     @CONTROLEUR_SOUS_TYPE@ = VirtualSCSI (pvscsi, « ParaVirtualSCSIController » dans vSphere) ou
+     lsilogic (« VirtualLsiLogicController ») ; @MICROLOGICIEL@ = efi ou bios. -->
+<Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1"
+          xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"
+          xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData"
+          xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData"
+          xmlns:vmw="http://www.vmware.com/schema/ovf"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <References>
+    <File ovf:id="file1" ovf:href="@DISQUE@" ovf:size="@TAILLE_FICHIER@"/>
+  </References>
+  <DiskSection>
+    <Info>Virtual disk information</Info>
+    <Disk ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:capacity="@CAPACITE_GIO@"
+          ovf:capacityAllocationUnits="byte * 2^30"
+          ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized"
+          ovf:populatedSize="@TAILLE_FICHIER@"/>
+  </DiskSection>
+  <NetworkSection>
+    <Info>The list of logical networks</Info>
+    <Network ovf:name="PG-RDV-PROD-50">
+      <Description>Groupe de ports « PG-RDV-PROD-50 » du vDS d'InfoGér (VLAN 50, 192.168.50.0/24)</Description>
+    </Network>
+  </NetworkSection>
+  <VirtualSystem ovf:id="@NOM@">
+    <Info>A virtual machine</Info>
+    <Name>@NOM@</Name>
+    <AnnotationSection>
+      <Info>A human-readable annotation</Info>
+      <Annotation>@ANNOTATION@</Annotation>
+    </AnnotationSection>
+    <OperatingSystemSection ovf:id="96" vmw:osType="debian12_64Guest">
+      <Info>The kind of installed guest operating system</Info>
+      <Description>Debian GNU/Linux 12 (64-bit)</Description>
+    </OperatingSystemSection>
+    <VirtualHardwareSection>
+      <Info>Virtual hardware requirements</Info>
+      <System>
+        <vssd:ElementName>Virtual Hardware Family</vssd:ElementName>
+        <vssd:InstanceID>0</vssd:InstanceID>
+        <vssd:VirtualSystemIdentifier>@NOM@</vssd:VirtualSystemIdentifier>
+        <vssd:VirtualSystemType>vmx-19</vssd:VirtualSystemType>
+      </System>
+      <Item>
+        <rasd:AllocationUnits>hertz * 10^6</rasd:AllocationUnits>
+        <rasd:Description>Number of Virtual CPUs</rasd:Description>
+        <rasd:ElementName>@VCPU@ virtual CPU(s)</rasd:ElementName>
+        <rasd:InstanceID>1</rasd:InstanceID>
+        <rasd:ResourceType>3</rasd:ResourceType>
+        <rasd:VirtualQuantity>@VCPU@</rasd:VirtualQuantity>
+        <vmw:CoresPerSocket ovf:required="false">@VCPU@</vmw:CoresPerSocket>
+      </Item>
+      <Item>
+        <rasd:AllocationUnits>byte * 2^20</rasd:AllocationUnits>
+        <rasd:Description>Memory Size</rasd:Description>
+        <rasd:ElementName>@MEMOIRE_MO@MB of memory</rasd:ElementName>
+        <rasd:InstanceID>2</rasd:InstanceID>
+        <rasd:ResourceType>4</rasd:ResourceType>
+        <rasd:VirtualQuantity>@MEMOIRE_MO@</rasd:VirtualQuantity>
+      </Item>
+      <Item>
+        <rasd:Address>0</rasd:Address>
+        <rasd:Description>SCSI Controller</rasd:Description>
+        <rasd:ElementName>SCSI controller 0</rasd:ElementName>
+        <rasd:InstanceID>3</rasd:InstanceID>
+        <rasd:ResourceSubType>@CONTROLEUR_SOUS_TYPE@</rasd:ResourceSubType>
+        <rasd:ResourceType>6</rasd:ResourceType>
+        <vmw:Config ovf:required="false" vmw:key="slotInfo.pciSlotNumber" vmw:value="160"/>
+      </Item>
+      <Item>
+        <rasd:AddressOnParent>0</rasd:AddressOnParent>
+        <rasd:ElementName>Hard disk 1</rasd:ElementName>
+        <rasd:HostResource>ovf:/disk/vmdisk1</rasd:HostResource>
+        <rasd:InstanceID>4</rasd:InstanceID>
+        <rasd:Parent>3</rasd:Parent>
+        <rasd:ResourceType>17</rasd:ResourceType>
+        <vmw:Config ovf:required="false" vmw:key="backing.writeThrough" vmw:value="false"/>
+      </Item>
+      <Item>
+        <rasd:Address>@MAC@</rasd:Address>
+        <rasd:AddressOnParent>7</rasd:AddressOnParent>
+        <rasd:AutomaticAllocation>true</rasd:AutomaticAllocation>
+        <rasd:Connection>PG-RDV-PROD-50</rasd:Connection>
+        <rasd:Description>VmxNet3 ethernet adapter on "PG-RDV-PROD-50"</rasd:Description>
+        <rasd:ElementName>Network adapter 1</rasd:ElementName>
+        <rasd:InstanceID>5</rasd:InstanceID>
+        <rasd:ResourceSubType>VmxNet3</rasd:ResourceSubType>
+        <rasd:ResourceType>10</rasd:ResourceType>
+        <vmw:Config ovf:required="false" vmw:key="slotInfo.pciSlotNumber" vmw:value="192"/>
+        <vmw:Config ovf:required="false" vmw:key="wakeOnLanEnabled" vmw:value="false"/>
+      </Item>
+      <vmw:Config ovf:required="false" vmw:key="firmware" vmw:value="@MICROLOGICIEL@"/>
+      <vmw:Config ovf:required="false" vmw:key="bootOptions.efiSecureBootEnabled" vmw:value="false"/>
+      <vmw:Config ovf:required="false" vmw:key="tools.syncTimeWithHost" vmw:value="false"/>
+      <vmw:Config ovf:required="false" vmw:key="tools.toolsUpgradePolicy" vmw:value="manual"/>
+      <vmw:Config ovf:required="false" vmw:key="powerOpInfo.powerOffType" vmw:value="soft"/>
+      <vmw:ExtraConfig ovf:required="false" vmw:key="guestinfo.infoger.client" vmw:value="MEDISPHERE"/>
+    </VirtualHardwareSection>
+  </VirtualSystem>
+</Envelope>

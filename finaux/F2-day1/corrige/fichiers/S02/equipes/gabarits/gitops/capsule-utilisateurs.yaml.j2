@@ -1,0 +1,14 @@
+{#- gabarits/gitops/capsule-utilisateurs.yaml.j2 — liste COMPLÈTE des utilisateurs Capsule (F2-S02).
+    Rendu dans plateforme/gitops : valeurs/capsule/utilisateurs-equipes.yaml, second fichier de valeurs
+    de l'Application « capsule » (après values.yaml). Helm remplace les listes : tout le monde y est. -#}
+# GÉNÉRÉ par plateforme/equipes (outils/rendre.py) — NE PAS MODIFIER ICI.
+# Utilisateurs Capsule : les groupes dont les requêtes passent par les règles de Capsule (création
+# d'espaces de libre-service, préfixe, quotas). Existants (config/plateforme.yaml) + équipes actives
+# ayant un locataire. REMPLACE manager.options.users de values.yaml (retiré de values.yaml en S02).
+manager:
+  options:
+    users:
+{%- for g in utilisateurs %}
+      - kind: Group
+        name: "{{ g }}"
+{%- endfor %}

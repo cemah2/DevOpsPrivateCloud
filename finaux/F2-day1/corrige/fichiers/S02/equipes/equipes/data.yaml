@@ -1,0 +1,62 @@
+# plateforme/equipes — equipes/data.yaml (F2-S02, PLAT-3202 ; demande DEV-3207 d'Hugo Bernard)
+# Équipe Data : statistiques d'activité. Pas de service exposé, pas de production : un seul
+# environnement de traitements (data-traitements), où vivront sa base CloudNativePG (F2-S07) et ses
+# traitements par lots en classe medisphere-lot (F2-S08). JAMAIS d'accès à mediagenda-* (F2-S09).
+apiVersion: equipes.medisphere.internal/v1
+kind: Equipe
+metadata:
+  nom: data
+  ticket: DEV-3207
+spec:
+  description: Équipe Data (statistiques d'activité)
+  type: interne
+  etat: active
+  responsable: hugo.bernard
+  contact: data@medisphere.internal
+
+  personnes:
+    - identifiant: hugo.bernard
+      prenom: Hugo
+      nom: Bernard
+      courriel: hugo.bernard@medisphere.internal
+      titre: Analyste Data
+      role: responsable
+    - identifiant: sarah.colin
+      prenom: Sarah
+      nom: Colin
+      courriel: sarah.colin@medisphere.internal
+      titre: Ingénieure Data
+      role: developpeur
+
+  identite:
+    otp_obligatoire: false
+
+  gitlab:
+    groupe: data
+
+  kubernetes:
+    environnements:
+      traitements:
+        # Stockage : base CNPG (une instance) + marge pour ses WAL ; lots : CPU par à-coups la nuit.
+        quota: {requests.cpu: 1500m, requests.memory: 3Gi, limits.memory: 5Gi, pods: "20", persistentvolumeclaims: "6", requests.storage: 40Gi}
+        signature_exigee: true
+        synchronisation: automatique
+        alertes: true
+    libre_service:
+      espaces: 1
+      quota: {requests.cpu: 250m, requests.memory: 512Mi, limits.memory: 1Gi, pods: "5", persistentvolumeclaims: "1", requests.storage: 5Gi}
+    budget: {requests.cpu: "2", requests.memory: 3584Mi, limits.memory: 6Gi, pods: "30"}
+    classes_priorite:
+      # Pas de production : pas de medisphere-critique. Les lots attendent leur tour (Never).
+      autorisees: [medisphere-standard, medisphere-lot]
+      defaut: medisphere-standard
+    classes_stockage: [ceph-rbd]
+
+  secrets:
+    ecriture: [traitements]
+
+  services: []
+
+  observabilite:
+    grafana:
+      titre_dossier: Data

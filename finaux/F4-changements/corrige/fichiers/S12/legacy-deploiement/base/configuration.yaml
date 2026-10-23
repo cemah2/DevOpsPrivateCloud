@@ -1,0 +1,19 @@
+# legacy/deploiement — base/configuration.yaml (F4-S12) : configuration NON secrète (facteur III).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: legacy-rdv-config
+data:
+  LEGACY_RDV_DB_HOST: legacy-rdv-db
+  LEGACY_RDV_DB_PORT: "3306"
+  LEGACY_RDV_DB_NAME: legacy_rdv
+  LEGACY_RDV_DB_USER: legacy_rdv
+  LEGACY_RDV_DB_PASS_FILE: /run/secrets/legacy-rdv/application
+  LEGACY_RDV_SESSIONS: base
+  LEGACY_RDV_SESSION_DUREE: "1440"
+  LEGACY_RDV_UPLOAD_DIR: /var/www/legacy-rdv/uploads
+  LEGACY_RDV_LOG_FILE: php://stderr
+  LEGACY_RDV_AFFICHER_ERREURS: "0"
+  LEGACY_RDV_FUSEAU: Europe/Paris
+  LEGACY_RDV_RETENTION_JOURS: "365"
+  TZ: Europe/Paris

@@ -1,0 +1,81 @@
+# plateforme/equipes — equipes/medivisio.yaml (F2-S02, PLAT-3202 ; demande DEV-3202 d'Inès Garnier)
+# Une équipe = un fichier. Le nom du fichier est le nom de l'équipe (metadata.nom) : groupe de
+# l'annuaire, groupe GitLab, locataire Capsule, préfixe des espaces, dossier Grafana, entité Group du
+# portail. Format de référence : README.md et schema/equipe.schema.json (énoncé F2, 00-introduction).
+# Une MR sur ce fichier = un changement relu (Plateforme) ; la CI le valide, en vérifie le coût en
+# capacité, puis le propage dans les dépôts qui appliquent (identite, secrets, k8s, gitops, infra).
+apiVersion: equipes.medisphere.internal/v1
+kind: Equipe
+metadata:
+  nom: medivisio
+  ticket: DEV-3202
+spec:
+  description: Équipe produit MédiVisio (téléconsultation)
+  type: interne
+  etat: active
+  responsable: ines.garnier
+  # Adresse de l'équipe : alertes (Alertmanager), équipe Grafana. Boîte reçue par Mailpit dans le lab.
+  contact: medivisio@medisphere.internal
+
+  personnes:
+    - identifiant: ines.garnier
+      prenom: Inès
+      nom: Garnier
+      courriel: ines.garnier@medisphere.internal
+      titre: Lead dev MédiVisio
+      role: responsable
+    - identifiant: leo.fabre
+      prenom: Léo
+      nom: Fabre
+      courriel: leo.fabre@medisphere.internal
+      titre: Développeur MédiVisio
+      role: developpeur
+
+  identite:
+    # Équipe interne : OTP recommandé, pas imposé (même règle que mediagenda). Un prestataire : vrai.
+    otp_obligatoire: false
+
+  gitlab:
+    # responsable → maintainer, developpeur → developer, lecteur → reporter (outil synchro-gitlab).
+    groupe: medivisio
+
+  kubernetes:
+    # Locataire Capsule « medivisio » : un espace par environnement, nommé medivisio-<environnement>.
+    environnements:
+      dev:
+        quota: {requests.cpu: 500m, requests.memory: 768Mi, limits.memory: 1536Mi, pods: "10", persistentvolumeclaims: "2", requests.storage: 5Gi}
+        signature_exigee: false
+        synchronisation: automatique
+        alertes: false
+      recette:
+        quota: {requests.cpu: 500m, requests.memory: 768Mi, limits.memory: 1536Mi, pods: "10", persistentvolumeclaims: "2", requests.storage: 5Gi}
+        signature_exigee: true
+        synchronisation: automatique
+        alertes: true
+      prod:
+        quota: {requests.cpu: "1", requests.memory: 1Gi, limits.memory: 2Gi, pods: "12", persistentvolumeclaims: "2", requests.storage: 10Gi}
+        signature_exigee: true
+        synchronisation: manuelle
+        alertes: true
+    # Espaces que l'équipe crée elle-même (medivisio-<nom>), budget partagé entre eux.
+    libre_service:
+      espaces: 2
+      quota: {requests.cpu: 500m, requests.memory: 512Mi, limits.memory: 1Gi, pods: "10", persistentvolumeclaims: "2", requests.storage: 5Gi}
+    # Budget GLOBAL du locataire (tous ses espaces) : c'est lui qui entre dans le bilan de capacité.
+    budget: {requests.cpu: 2500m, requests.memory: 3Gi, limits.memory: 6Gi, pods: "45"}
+    classes_priorite:
+      autorisees: [medisphere-critique, medisphere-standard]
+      defaut: medisphere-standard
+    classes_stockage: [ceph-rbd]
+
+  secrets:
+    # kv/medivisio/<environnement>/* : l'équipe écrit elle-même (OIDC) dans ces environnements.
+    ecriture: [dev, recette, prod]
+
+  # Services livrés par le chemin balisé (projets medivisio/<service> et medivisio/<service>-deploiement) :
+  # rôles CI d'OpenBao (signature, promotion). Vide à l'arrivée ; F2-S04 y ajoute « consultation ».
+  services: []
+
+  observabilite:
+    grafana:
+      titre_dossier: MédiVisio

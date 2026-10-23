@@ -1,0 +1,11 @@
+# roles/supervision_temoin/templates/blackbox.yml.j2 — EXTRAIT F4-S08 : module à AJOUTER sous
+# « modules: ». HTTP en clair vers une IP flottante (pas de nom, pas de certificat) : seule la réponse
+# 2xx compte. Délai court : une coupure du plan de données doit se voir, pas s'étirer.
+  http_2xx_clair:
+    prober: http
+    timeout: 5s
+    http:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      follow_redirects: false
+      fail_if_ssl: true

@@ -1,0 +1,32 @@
+# plateforme/k8s — espaces/mediagenda-recette/50-mediagenda-db.yaml, EXTRAIT (F1-S11, PLAT-3111).
+# Seuls les blocs qui changent pour la reconstruction ; le reste du fichier (M16-E18/E19, M25-E14,
+# M27-E02 : image par empreinte, paramètres, synchrone, affinité, rôles gérés, Service pour OpenBao)
+# est INCHANGÉ. Appliqué par « kubectl apply --server-side -f » de CE fichier (exception écrite du M27),
+# jamais par « task appliquer » pendant la fenêtre.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db
+  namespace: mediagenda-recette
+spec:
+  # Remplace « bootstrap: initdb: … » (M16-E18) : la recette renaît de son archive.
+  bootstrap:
+    recovery:
+      source: mediagenda-db-avant-day0
+      database: mediagenda
+      owner: mediagenda
+  externalClusters:
+    - name: mediagenda-db-avant-day0
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: cnpg-s3
+          # La recette archivait sous le nom du cluster (défaut du plugin, M16-E19).
+          serverName: mediagenda-db
+  # Archivage de la recette reconstruite sous un NOUVEAU nom (jamais celui qu'on lit).
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: cnpg-s3
+        serverName: mediagenda-db-day0

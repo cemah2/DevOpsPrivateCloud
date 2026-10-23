@@ -1,0 +1,17 @@
+# Collecte des métriques du service (F2-S05) : l'opérateur impose namespace="<espace>" sur les séries
+# (enforcedNamespaceLabel, M21-E29). Étiquette de sélection des ServiceMonitor de la plateforme.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: consultation
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: consultation
+      medisphere.internal/supervision: "oui"
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s

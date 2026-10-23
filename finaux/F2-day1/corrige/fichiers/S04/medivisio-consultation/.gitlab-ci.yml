@@ -1,0 +1,62 @@
+# medivisio/consultation — .gitlab-ci.yml (modèle « Nouveau service » v2, F2-S04, DEV-3204)
+# Chaîne standard de MédiSphère par composants (plateforme/ci-templates) : construction (BuildKit),
+# analyse et signature (rôle ci-signature : le groupe medivisio y a été ajouté par plateforme/equipes),
+# puis MR de promotion vers l'overlay dev du projet de déploiement (rôle ci-medivisio-consultation-promotion,
+# jeton de groupe kv/medivisio/ci/promotion). Recette et production : MR de l'équipe dans le projet de
+# déploiement (même empreinte, jamais une reconstruction).
+# Versions des composants : celles du modèle (M28-E08) ; Renovate propose les montées.
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/construction-image@v2.8.0
+    inputs:
+      image_nom: medisphere/medivisio-consultation
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/securite@v2.10.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/promotion@v2.8.0
+    inputs:
+      overlay: dev
+      declenchement: on_success
+      projet_deploiement: medivisio/consultation-deploiement
+      nom_image: registry.par1.medisphere.internal/medisphere/medivisio-consultation
+
+stages: [lint, test, construction, analyse, publication, signature, promotion, documentation]
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+
+# Tests du service (bibliothèque standard : pas de dépendance à installer).
+tests:
+  stage: test
+  tags: [k8s]
+  image: registry.par1.medisphere.internal/dockerhub/library/python:3.13-slim-trixie@sha256:<DIGEST-PYTHON>
+  script:
+    - python -m unittest discover -s tests -v
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Documentation (TechDocs) : même job que mediagenda/api (M28-E10). Identité d'ÉCRITURE du compartiment
+# portail-techdocs : variables PROTÉGÉES et MASQUÉES du groupe medivisio (TECHDOCS_S3_CLE,
+# TECHDOCS_S3_SECRET), posées par la Plateforme — première intervention manuelle notée dans la mesure
+# du délai (docs/accueil/mesures/medivisio-premier-deploiement.md).
+techdocs:publication:
+  stage: documentation
+  tags: [k8s]
+  image: registry.par1.medisphere.internal/plateforme/outils-techdocs:1.0.0@sha256:<DIGEST-OUTILS-TECHDOCS>
+  needs: []
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes: [docs/**/*, mkdocs.yml]
+  variables:
+    AWS_REGION: us-east-1
+    NODE_EXTRA_CA_CERTS: $MEDISPHERE_ROOT_CA
+  script:
+    - techdocs-cli generate --no-docker --verbose
+    - >
+      AWS_ACCESS_KEY_ID="$TECHDOCS_S3_CLE" AWS_SECRET_ACCESS_KEY="$TECHDOCS_S3_SECRET"
+      techdocs-cli publish --publisher-type awsS3 --storage-name portail-techdocs
+      --entity default/Component/medivisio-consultation
+      --awsEndpoint https://s3-01.par1.medisphere.internal:8333 --awsS3ForcePathStyle

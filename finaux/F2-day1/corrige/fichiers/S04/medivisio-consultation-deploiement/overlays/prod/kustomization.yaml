@@ -1,0 +1,31 @@
+# medivisio/consultation-deploiement — overlays/prod/ (F2-S04 ; secret et supervision : F2-S05)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: medivisio-prod
+resources:
+  - ../../base
+  - secret.yaml
+labels:
+  - pairs:
+      medisphere.internal/environnement: prod
+    includeSelectors: false
+    includeTemplates: true
+patches:
+  - target: {kind: HTTPRoute, name: consultation}
+    patch: |-
+      - op: replace
+        path: /spec/hostnames/0
+        value: consultation.apps.par1.medisphere.internal
+  - target: {kind: Deployment, name: consultation}
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: prod
+# Mise en production : MR de l'équipe (relue par un second membre) qui recopie l'empreinte VALIDÉE en
+# recette ; synchronisation manuelle, hors fenêtre interdite (F2-S05).
+images:
+  - name: registry.par1.medisphere.internal/medisphere/medivisio-consultation
+    digest: sha256:<EMPREINTE-VALIDÉE-EN-RECETTE>

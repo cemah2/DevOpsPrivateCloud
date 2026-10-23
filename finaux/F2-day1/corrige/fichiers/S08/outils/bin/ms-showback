@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ms-showback — rapport mensuel de refacturation interne (showback) par locataire
+# (F2-S08, PLAT-3208 ; procédure : RB-328)
+#
+# Usage : ms-showback [-m|--mois AAAA-MM] [-t|--tarifs FICHIER] [--partiel] [--json]
+#
+# Lit les règles d'enregistrement « locataire:* » (plateforme/observabilite,
+# regles/enregistrement-locataires.yaml) dans Prometheus (Thanos Query, vue globale) : moyenne sur
+# le mois de ce qui est FACTURÉ (max(réservé, utilisé)) en CPU et en mémoire, et du stockage DEMANDÉ ;
+# applique les tarifs (showback/tarifs.yaml) ; écrit un tableau Markdown (ou du JSON) sur stdout.
+# Mois par défaut : le mois précédent. --partiel accepte le mois en cours (du 1er à maintenant :
+# premier rapport d'une équipe arrivée en cours de mois, essais), et le signale dans le titre.
+#
+# Variables : MS_PROM_URL (défaut http://prometheus.apps.par1.medisphere.internal:9090).
+# Codes retour : 0 succès, 1 erreur (Prometheus injoignable, aucune série), 2 usage.
+# =============================================================================
+set -euo pipefail
+
+PROM="${MS_PROM_URL:-http://prometheus.apps.par1.medisphere.internal:9090}"
+ICI="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+
+usage() { sed -n 's/^# Usage : //p' "${BASH_SOURCE[0]}" >&2; exit 2; }
+die() { printf 'ms-showback : %s\n' "$1" >&2; exit "${2:-1}"; }
+
+# requete 'PromQL' FIN — requête instantanée à la date FIN (epoch) ; JSON [{locataire, valeur}].
+requete() {
+  curl -sf --max-time 30 --data-urlencode "query=$1" --data-urlencode "time=$2" "$PROM/api/v1/query" |
+    jq -c '[.data.result[] | {locataire: .metric.locataire, valeur: (.value[1] | tonumber)}]'
+}
+
+main() {
+  local mois="" tarifs="$ICI/../showback/tarifs.yaml" json=0 partiel=0 debut fin jours
+  while (($#)); do
+    case "$1" in
+      -m | --mois) (($# >= 2)) || usage; mois="$2"; shift ;;
+      -t | --tarifs) (($# >= 2)) || usage; tarifs="$2"; shift ;;
+      --json) json=1 ;;
+      --partiel) partiel=1 ;;
+      -h | --help) usage ;;
+      *) usage ;;
+    esac
+    shift
+  done
+  for c in curl jq yq date; do command -v "$c" >/dev/null 2>&1 || die "outil manquant : $c"; done
+  [[ -r "$tarifs" ]] || die "tarifs illisibles : $tarifs"
+  [[ -n "$mois" ]] || mois="$(date -d "$(date +%Y-%m-01) -1 month" +%Y-%m)"
+  [[ "$mois" =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ ]] || die "mois invalide : $mois (AAAA-MM)" 2
+
+  debut="$(date -d "$mois-01 00:00" +%s)"
+  fin="$(date -d "$mois-01 00:00 +1 month" +%s)"
+  if ((fin > $(date +%s))); then
+    ((partiel)) || die "le mois $mois n'est pas terminé (--partiel pour un rapport du 1er à maintenant)"
+    fin="$(date +%s)"
+    mois="$mois (partiel, au $(date +%F))"
+  fi
+  (( fin > debut )) || die "le mois $mois n'a pas commencé"
+  jours=$(((fin - debut + 86399) / 86400))
+
+  local cpu mem sto t
+  cpu="$(requete "avg_over_time(locataire:cpu_facture:max[${jours}d])" "$fin")" || die "Prometheus injoignable ($PROM)"
+  mem="$(requete "avg_over_time(locataire:memoire_facturee:max[${jours}d]) / 2^30" "$fin")" || die "Prometheus injoignable"
+  sto="$(requete "avg_over_time(locataire:stockage_demande:somme[${jours}d]) / 2^30" "$fin")" || die "Prometheus injoignable"
+  t="$(yq -o=json '.' "$tarifs")" || die "tarifs illisibles (yq de mikefarah attendu)"
+
+  local rapport
+  rapport="$(jq -n --argjson c "$cpu" --argjson m "$mem" --argjson s "$sto" --argjson t "$t" --arg mois "$mois" '
+    def v($l; $tab): ([$tab[] | select(.locataire == $l) | .valeur][0] // 0);
+    ([$c[], $m[], $s[]] | map(.locataire) | unique) as $ls
+    | {mois: $mois, devise: $t.devise, tarifs: $t,
+       locataires: [ $ls[] as $l
+         | {locataire: $l, cpu_coeurs: v($l; $c), memoire_gio: v($l; $m), stockage_gio: v($l; $s)}
+         | .cout = ((.cpu_coeurs * $t.cpu_coeur_mois) + (.memoire_gio * $t.memoire_gio_mois)
+                    + (.stockage_gio * $t.stockage_bloc_gio_mois)) ]}
+    | .total = ([.locataires[].cout] | add // 0)')"
+  [[ "$(jq '.locataires | length' <<<"$rapport")" -gt 0 ]] || die "aucune série locataire:* pour $mois (règles d'enregistrement absentes ?)"
+
+  if ((json)); then
+    printf '%s\n' "$rapport"
+    return 0
+  fi
+  jq -r '
+    def f2: (. * 100 | round / 100 | tostring);
+    "# Refacturation interne (showback) — \(.mois)\n",
+    "Moyennes du mois, tirées des règles `locataire:*` de Prometheus (RB-328). CPU et mémoire : max(réservé, utilisé) ; stockage : PVC demandés. Tarifs : `showback/tarifs.yaml`. Montants indicatifs, pas une facture.\n",
+    "| Locataire | CPU facturé (cœurs) | Mémoire facturée (Gio) | Stockage demandé (Gio) | Coût indicatif (\(.devise)) |",
+    "|---|---:|---:|---:|---:|",
+    (.locataires | sort_by(-.cout)[] | "| \(.locataire) | \(.cpu_coeurs | f2) | \(.memoire_gio | f2) | \(.stockage_gio | f2) | \(.cout | f2) |"),
+    "| **Total** | | | | **\(.total | f2)** |"
+  ' <<<"$rapport"
+}
+
+main "$@"

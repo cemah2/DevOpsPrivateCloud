@@ -1,0 +1,49 @@
+# plateforme/politiques — kyverno/validation/rbac-prestataires.yaml (F2-S11, SEC-3211)
+# Un groupe de prestataire (oidc:ext-<société>) n'est lié QUE dans les espaces « <locataire>-<société> »
+# (ex. oidc:ext-axiomdev → mediagenda-axiomdev), jamais par une liaison de cluster, jamais à admin,
+# edit ni cluster-admin. Ce qu'une revue d'accès trouve après coup, l'admission le refuse avant.
+# Ne couvre pas : les appartenances (annuaire, GitLab) — revue d'accès et contrôle du fichier d'équipe ;
+# un utilisateur oidc:<identifiant> d'un prestataire lié nominativement (interdit par le modèle
+# d'autorisation : liaisons par groupe seulement ; la revue signale « liaison-hors-oidc »).
+# failurePolicy Ignore, comme les autres politiques de la maison ; la revue reste le second rempart.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: rbac-prestataires
+  annotations:
+    policies.kyverno.io/title: Liaisons RBAC des prestataires limitées à leur espace
+    policies.kyverno.io/severity: high
+    medisphere.internal/ticket: SEC-3211
+spec:
+  validationActions: [Deny]
+  failurePolicy: Ignore
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [rbac.authorization.k8s.io]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [rolebindings, clusterrolebindings]
+  variables:
+    - name: prestataires
+      expression: >-
+        has(object.subjects) ?
+          object.subjects.filter(s, s.kind == 'Group' && s.name.startsWith('oidc:ext-')).map(s, s.name) : []
+  validations:
+    - expression: "object.kind != 'ClusterRoleBinding' || size(variables.prestataires) == 0"
+      messageExpression: >-
+        'liaison de CLUSTER interdite pour un prestataire : ' + variables.prestataires.join(', ') + ' (SEC-3211, RB-329)'
+      reason: Forbidden
+    - expression: >-
+        object.kind != 'RoleBinding' || variables.prestataires.all(g,
+          object.metadata.namespace.endsWith('-' + g.substring(9)))
+      messageExpression: >-
+        'un prestataire n''est lié que dans son espace <locataire>-<société> : ' + variables.prestataires.join(', ')
+        + ' refusé dans ' + object.metadata.namespace + ' (SEC-3211, RB-329)'
+      reason: Forbidden
+    - expression: >-
+        size(variables.prestataires) == 0 || !(object.roleRef.name in ['admin', 'edit', 'cluster-admin'])
+      message: "un prestataire n'est jamais lié à admin, edit ni cluster-admin (Role dédié, RB-329)"
+      reason: Forbidden

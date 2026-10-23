@@ -1,0 +1,50 @@
+# legacy/deploiement — base/reseau.yaml (F4-S12, CHG-3412)
+# L'espace est en refus par défaut (Kyverno, networkpolicy-par-defaut) avec la sortie DNS. On ouvre :
+#   - Gateway (identité réservée « ingress ») → web 8080 ;
+#   - tout l'espace ↔ tout l'espace (web, purge, sauvegarde, SqlJob, exportateur → base 3306) ;
+#   - opérateur (mariadb-system) → base 3306 (création des comptes, des droits, des bases) ;
+#   - Prometheus (supervision) → exportateur ;
+#   - sauvegarde → s3-01 (10.10.20.14:8333).
+# ⚠️ À vérifier sur ton cluster : étiquettes des pods créés par l'opérateur, besoins des Jobs de
+# l'opérateur envers l'API Kubernetes (hubble observe -n <espace> --verdict DROPPED pendant une
+# sauvegarde), et ouvre le strict nécessaire.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: legacy-rdv-entrees
+spec:
+  description: "Legacy-RDV : entrées (CHG-3412)"
+  endpointSelector: {}
+  ingress:
+    - fromEndpoints:
+        - {}
+    - fromEntities: ["ingress"]
+      toPorts:
+        - ports:
+            - {port: "8080", protocol: TCP}
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: mariadb-system
+      toPorts:
+        - ports:
+            - {port: "3306", protocol: TCP}
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: legacy-rdv-sorties
+spec:
+  description: "Legacy-RDV : sorties (CHG-3412)"
+  endpointSelector: {}
+  egress:
+    - toEndpoints:
+        - {}
+    - toCIDR:
+        - 10.10.20.14/32
+      toPorts:
+        - ports:
+            - {port: "8333", protocol: TCP}

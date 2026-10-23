@@ -1,0 +1,33 @@
+# plateforme/portail — app-config.production.yaml : CHANGEMENTS de F2-S02 (PLAT-3202), une fois pour
+# toutes, pour qu'une NOUVELLE équipe apparaisse au catalogue sans toucher au portail (ni image, ni
+# configuration) : son groupe de l'annuaire suffit.
+catalog:
+  providers:
+    # 1. Organisation : au lieu d'une liste de groupes nommés (M28-E07), tous les groupes de personnes de
+    #    l'annuaire SAUF les groupes techniques de FreeIPA. Une équipe créée par plateforme/equipes devient
+    #    une entité Group (spec.type: equipe) à la synchronisation suivante (≤ 30 min).
+    ldapOrg:
+      freeipa:
+        groups:
+          - dn: cn=groups,cn=accounts,dc=par1,dc=medisphere,dc=internal
+            options:
+              scope: one
+              filter: (&(objectClass=ipausergroup)(!(cn=admins))(!(cn=ipausers))(!(cn=editors))(!(cn=trust admins)))
+            # map et set : inchangés (M28-E07).
+    # 2. Découverte : un fournisseur pour TOUTE l'instance au lieu d'un par groupe (M28-E07). Sans « group »,
+    #    la découverte GitLab parcourt tous les projets que svc-portail peut LIRE : il doit donc être
+    #    membre (Reporter suffit pour lire, Developer pour les modèles) des groupes d'équipe — c'est le
+    #    job gitlab:equipes de plateforme/equipes qui l'y ajoute (config/plateforme.yaml,
+    #    comptes_service_groupe ; synchro-gitlab ne gère que les personnes de l'annuaire).
+    #    Remplace les fournisseurs mediagenda, medidoc, medinotif, plateforme.
+    gitlab:
+      instance:
+        host: git01.par1.medisphere.internal
+        branch: main
+        entityFilename: catalog-info.yaml
+        skipForkedRepos: true
+        excludeRepos:
+          - plateforme/portail-modeles
+        schedule:
+          frequency: { minutes: 15 }
+          timeout: { minutes: 5 }

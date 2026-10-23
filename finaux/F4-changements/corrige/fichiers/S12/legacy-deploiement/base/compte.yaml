@@ -1,0 +1,8 @@
+# Compte de service de Legacy-RDV : aucun droit sur l'API, aucun jeton monté.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: legacy-rdv
+  labels:
+    app.kubernetes.io/name: legacy-rdv
+automountServiceAccountToken: false

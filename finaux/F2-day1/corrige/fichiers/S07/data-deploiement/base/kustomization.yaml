@@ -1,0 +1,12 @@
+# data/deploiement — base/kustomization.yaml (F2-S07 ; S08 ajoute traitements/)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: data-traitements
+resources:
+  - reseau.yaml
+  - externalsecrets.yaml
+  - initialisation.yaml
+  - sauvegarde.yaml
+  - supervision.yaml
+  - statistiques-db.yaml
+  - ../chargement

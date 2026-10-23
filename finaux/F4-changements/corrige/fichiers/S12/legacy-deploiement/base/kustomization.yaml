@@ -1,0 +1,34 @@
+# legacy/deploiement — base/kustomization.yaml (F4-S12, CHG-3412)
+# Même modèle que mediagenda/deploiement et medinotif/deploiement : une base commune, un overlay par
+# environnement (recette synchronisée automatiquement, prod à la main ; ApplicationSet « legacy-rdv »).
+# La base ne contient aucun secret ni aucune valeur propre à un environnement.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: legacy-rdv
+    includeSelectors: false
+resources:
+  - secrets.yaml
+  - mariadb.yaml
+  - base-de-donnees.yaml
+  - schema.yaml
+  - sauvegarde.yaml
+  - compte.yaml
+  - configuration.yaml
+  - pieces-jointes.yaml
+  - deployment.yaml
+  - service.yaml
+  - pdb.yaml
+  - httproute.yaml
+  - reseau.yaml
+  - purge.yaml
+secretGenerator:
+  # Racine MédiSphère (certificat PUBLIC) : TLS vers s3-01 pour les sauvegardes de l'opérateur, qui
+  # ne lit une autorité que dans un Secret (S3.tls.caSecretKeyRef). Copie de
+  # /usr/local/share/ca-certificates/medisphere-root-ca.crt d'adm01.
+  - name: legacy-rdv-racine
+    files:
+      - ca.crt=medisphere-root-ca.crt
+    options:
+      disableNameSuffixHash: true

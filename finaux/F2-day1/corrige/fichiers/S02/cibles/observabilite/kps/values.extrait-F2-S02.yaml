@@ -1,0 +1,22 @@
+# plateforme/observabilite — kps/values.yaml : AJOUT de F2-S02 (PLAT-3202).
+# Les routes d'alertes des équipes en code sont des AlertmanagerConfig (monitoring.coreos.com/v1alpha1),
+# RENDUES par plateforme/equipes dans les espaces d'équipe (equipes/<equipe>/espaces/ de plateforme/k8s),
+# jamais écrites par les équipes (AppProject : AlertmanagerConfig interdit). L'opérateur les fusionne dans
+# la configuration globale (alertmanager.config, M21-E16, inchangée) :
+#   - chaque route d'un AlertmanagerConfig reçoit le filtre namespace="<son espace>" (stratégie par défaut
+#     de l'opérateur, OnNamespace) : une équipe ne reçoit que les alertes de SES espaces ;
+#   - ces routes sont placées AVANT les routes de la configuration globale, avec « continue » forcé au
+#     premier niveau : une alerte critique de l'équipe part à l'équipe ET à l'astreinte.
+# Les équipes historiques (mediagenda, medidoc) gardent leurs routes dans alertmanager.config.
+# Vérification après synchronisation : amtool config routes show (ou l'API /api/v2/status), puis
+# outils/tester-routes.sh avec une ligne par équipe dans alertmanager/routes-tests.txt (M21-E07).
+alertmanager:
+  alertmanagerSpec:
+    # Seuls les AlertmanagerConfig étiquetés par la plateforme…
+    alertmanagerConfigSelector:
+      matchLabels:
+        medisphere.internal/alertes-equipe: "oui"
+    # … dans les espaces dont la plateforme lit déjà les règles (étiquette posée par plateforme/k8s).
+    alertmanagerConfigNamespaceSelector:
+      matchLabels:
+        medisphere.internal/supervision-regles: "oui"

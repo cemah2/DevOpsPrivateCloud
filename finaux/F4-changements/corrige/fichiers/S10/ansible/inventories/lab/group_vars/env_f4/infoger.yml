@@ -1,0 +1,25 @@
+---
+# group_vars/env_f4/infoger.yml (plateforme/ansible) — VMs migrées d'InfoGér (F4-S10, CHG-3410).
+# Groupe env_f4 = étiquette NetBox « env-f4 » (inventaire NetBox, M06-E12).
+#
+# Debian 12 : hors référentiel du rôle « durcissement » (CIS Debian 13 v1.0.0, ANSSI-BP-028 sur
+# Debian 13). On n'applique PAS le rôle (il refuse une famille qu'il ne connaît pas) : exception
+# EXC-H-034 du registre docs/securite/durcissement/exceptions.md, validée par Sophie Laurent, revue à
+# la date de décommissionnement de chaque VM (F4-S14). Mesures compensatoires : playbooks/f4-infoger.yml.
+infoger_exception_durcissement: EXC-H-034
+
+# Pare-feu local (nftables) : seuls les flux inventoriés en F4-S09.
+infoger_flux_entrants:
+  legacy-rdv01:
+    - {port: 22, proto: tcp, depuis: [10.10.10.0/24], pourquoi: "administration depuis MGMT"}
+    - {port: 80, proto: tcp, depuis: [10.10.70.10, 10.10.70.11], pourquoi: "lb01/lb02 (rdv), exception EXC-H-035 (HTTP) jusqu'à CHG-3413"}
+    - {port: 3306, proto: tcp, depuis: [10.10.20.46], pourquoi: "stats01, statistiques nocturnes"}
+    - {port: 9100, proto: tcp, depuis: [10.10.40.0/24], pourquoi: "node_exporter (Prometheus du cluster)"}
+  ftp-part01:
+    - {port: 22, proto: tcp, depuis: [10.10.10.0/24], pourquoi: "administration depuis MGMT"}
+    - {port: 21, proto: tcp, depuis: [0.0.0.0/0], pourquoi: "dépôts des partenaires (contrôle)"}
+    - {port: "40000-40100", proto: tcp, depuis: [0.0.0.0/0], pourquoi: "dépôts des partenaires (passif)"}
+    - {port: 9100, proto: tcp, depuis: [10.10.40.0/24], pourquoi: "node_exporter"}
+  stats01:
+    - {port: 22, proto: tcp, depuis: [10.10.10.0/24], pourquoi: "administration depuis MGMT"}
+    - {port: 9100, proto: tcp, depuis: [10.10.40.0/24], pourquoi: "node_exporter"}

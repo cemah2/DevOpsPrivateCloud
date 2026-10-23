@@ -1,0 +1,18 @@
+# plateforme/charts-miroir — charts.yaml (EXTRAIT F4-S05, CHG-3405) : entrées à MODIFIER (format du
+# M20-E13 : nom, depot, version, empreinte, usage). Une MR par composant, ou une MR qui regroupe les
+# entrées d'une même vague ; les anciennes versions restent publiées dans Harbor (retour arrière).
+# Versions et empreintes : EMPLACEMENTS à relever le jour J dans l'index du dépôt amont, puis à
+# recalculer sur l'archive téléchargée (sha256sum) : les deux doivent être égales.
+#   curl -s https://kyverno.github.io/kyverno/index.yaml | yq '.entries.kyverno[] | select(.version == "<V>") | .digest'
+charts:
+  # … entrées existantes …
+  - nom: kyverno
+    depot: https://kyverno.github.io/kyverno/
+    version: <VERSION-DU-CHART-POUR-KYVERNO-1.20>     # appVersion v1.20.x (« helm show chart »)
+    empreinte: sha256:<EMPREINTE>
+    usage: "Admission (M26-E07), montée 1.19 → 1.20 (F4-S05, CHG-3405), Application plateforme/gitops plateforme/kyverno.yaml"
+  - nom: keda
+    depot: https://kedacore.github.io/charts
+    version: <VERSION-DU-CHART-KEDA>                  # mineure qui déclare la cible de Kubernetes (matrice CHG-3403)
+    empreinte: sha256:<EMPREINTE>
+    usage: "Autoscaling (M28), montée de mineure (F4-S05, CHG-3405), Application plateforme/gitops plateforme/keda.yaml"

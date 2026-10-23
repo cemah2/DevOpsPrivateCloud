@@ -1,0 +1,180 @@
+# plateforme/portail-modeles — modeles/nouveau-service/template.yaml, v2 (F2-S04, DEV-3204 ; ADR-0321)
+# Évolution du modèle du M28-E08 pour les équipes décrites dans plateforme/equipes (« équipes en code »).
+#
+# Équipes HISTORIQUES (mediagenda, medidoc) : comportement du M28 inchangé (nom préfixé, espace par
+#   service <nom>-dev proposé par MR à plateforme/k8s, Application proposée par MR à plateforme/gitops).
+# Équipes EN CODE (toutes les autres, spec.type: equipe dans le catalogue) : leurs environnements existent
+#   déjà (<equipe>-dev, -recette, -prod, rendus par plateforme/equipes) ; le modèle
+#     CRÉE  <equipe>/<nom> (code) et <equipe>/<nom>-deploiement (Kustomize, overlays de TOUS les
+#           environnements de l'équipe), les enregistre au catalogue ;
+#     OUVRE une MR dans <equipe>/gitops (services/<nom>.yaml) : fusionnée par l'ÉQUIPE elle-même,
+#           l'ApplicationSet de l'équipe crée les Applications. Aucune MR à la Plateforme.
+#   Ce qui reste à la Plateforme pour un NOUVEAU service : déclarer le service dans equipes/<equipe>.yaml
+#   (rôles CI d'OpenBao : signature, promotion) — MR courte, relue sous 4 h ouvrées (ADR-0321).
+#
+# Les environnements proposés (dev, recette, prod) sont ceux du profil « équipe produit » ; une équipe
+# d'un autre profil (Data : traitements) adapte son dépôt de déploiement à la main.
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: nouveau-service
+  title: Nouveau service
+  description: Crée un service MédiSphère (code, CI, déploiement Kustomize) et le déclare au déploiement de son équipe.
+  tags: [recommande, kubernetes, gitops]
+spec:
+  owner: group:default/plateforme
+  type: service
+
+  parameters:
+    - title: Le service
+      required: [equipe, langage, description]
+      properties:
+        equipe:
+          title: Équipe propriétaire
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            catalogFilter:
+              kind: Group
+              spec.type: equipe
+        langage:
+          title: Langage
+          type: string
+          enum: [python, go]
+          enumNames: ["Python 3.13", "Go 1.26"]
+        description:
+          title: Description (une phrase)
+          type: string
+          maxLength: 200
+      dependencies:
+        equipe:
+          oneOf:
+            # --- Équipes historiques : branches du M28-E08, inchangées --------------------------------
+            - properties:
+                equipe:
+                  const: group:default/medidoc
+                locataire: {title: Locataire, type: string, enum: [medidoc]}
+                nom:
+                  title: Nom du service
+                  type: string
+                  pattern: '^medidoc-[a-z][a-z0-9-]{1,28}[a-z0-9]$'
+              required: [locataire, nom]
+            - properties:
+                equipe:
+                  const: group:default/mediagenda
+                locataire: {title: Locataire, type: string, enum: [mediagenda, medinotif]}
+                nom:
+                  title: Nom du service
+                  type: string
+                  pattern: '^(mediagenda|medinotif)-[a-z][a-z0-9-]{1,28}[a-z0-9]$'
+              required: [locataire, nom]
+            # --- Équipes en code : le locataire EST l'équipe, le nom n'est pas préfixé ------------------
+            - properties:
+                equipe:
+                  not:
+                    enum: [group:default/medidoc, group:default/mediagenda]
+                nom:
+                  title: Nom du service
+                  type: string
+                  pattern: '^[a-z][a-z0-9-]{1,28}[a-z0-9]$'
+                  ui:help: "minuscules, chiffres, tirets ; sans le nom de l'équipe (ex. consultation)"
+              required: [nom]
+
+  steps:
+    # Valeurs communes. « enCode » : vrai pour une équipe décrite dans plateforme/equipes.
+    - id: code
+      name: Squelette du code
+      action: fetch:template
+      input:
+        url: ./squelettes/${{ parameters.langage }}
+        targetPath: ./service
+        values:
+          nom: ${{ parameters.nom }}
+          equipe: ${{ parameters.equipe | parseEntityRef | pick('name') }}
+          locataire: ${{ parameters.locataire or (parameters.equipe | parseEntityRef | pick('name')) }}
+          composant: ${{ (parameters.equipe | parseEntityRef | pick('name')) + '-' + parameters.nom if not parameters.locataire else parameters.nom }}
+          description: ${{ parameters.description }}
+          langage: ${{ parameters.langage }}
+
+    # Équipes historiques : steps du M28-E08 (deploiement, propositions-k8s, propositions-gitops,
+    # publier-code, publier-deploiement, mr-k8s, mr-gitops), chacun avec :
+    #   if: ${{ parameters.locataire }}
+    # (texte inchangé, non recopié ici : voir corrige/fichiers/M28-E08 du module 28).
+
+    # --- Équipes en code ------------------------------------------------------------------------------
+    - id: deploiement-equipe
+      if: ${{ not parameters.locataire }}
+      name: Base de déploiement (environnements de l'équipe)
+      action: fetch:template
+      input:
+        url: ./squelettes/deploiement-equipe
+        targetPath: ./deploiement
+        values:
+          nom: ${{ parameters.nom }}
+          equipe: ${{ parameters.equipe | parseEntityRef | pick('name') }}
+          composant: ${{ (parameters.equipe | parseEntityRef | pick('name')) + '-' + parameters.nom }}
+
+    - id: index-equipe
+      if: ${{ not parameters.locataire }}
+      name: Déclaration du service (index de l'équipe)
+      action: fetch:template
+      input:
+        url: ./propositions/equipe-gitops
+        targetPath: ./index
+        values:
+          nom: ${{ parameters.nom }}
+
+    - id: publier-code-equipe
+      if: ${{ not parameters.locataire }}
+      name: Projet du code
+      action: publish:gitlab
+      input:
+        repoUrl: git01.par1.medisphere.internal?owner=${{ parameters.equipe | parseEntityRef | pick('name') }}&repo=${{ parameters.nom }}
+        sourcePath: ./service
+        defaultBranch: main
+        repoVisibility: private
+        gitCommitMessage: "feat: squelette initial (modèle nouveau-service v2 du portail)"
+
+    - id: publier-deploiement-equipe
+      if: ${{ not parameters.locataire }}
+      name: Projet de déploiement
+      action: publish:gitlab
+      input:
+        repoUrl: git01.par1.medisphere.internal?owner=${{ parameters.equipe | parseEntityRef | pick('name') }}&repo=${{ parameters.nom }}-deploiement
+        sourcePath: ./deploiement
+        defaultBranch: main
+        repoVisibility: private
+        gitCommitMessage: "feat: base Kustomize et overlays dev, recette, prod (modèle nouveau-service v2)"
+
+    - id: mr-index-equipe
+      if: ${{ not parameters.locataire }}
+      name: MR de déclaration (<équipe>/gitops)
+      action: publish:gitlab:merge-request
+      input:
+        repoUrl: git01.par1.medisphere.internal?owner=${{ parameters.equipe | parseEntityRef | pick('name') }}&repo=gitops
+        branchName: portail/${{ parameters.nom }}
+        title: "feat(services): ${{ parameters.nom }}"
+        description: "Demandé par ${{ user.entity.metadata.name }} depuis le portail. À fusionner par l'équipe APRÈS le premier pipeline vert du code (image signée) et la déclaration du service dans plateforme/equipes (rôles CI)."
+        sourcePath: ./index
+        targetPath: services
+        commitAction: create
+        removeSourceBranch: true
+
+    - id: catalogue
+      name: Enregistrement au catalogue
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publier-code-equipe'].output.repoContentsUrl or steps['publier-code'].output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+
+  output:
+    links:
+      - title: Projet du code
+        url: ${{ steps['publier-code-equipe'].output.remoteUrl or steps['publier-code'].output.remoteUrl }}
+      - title: Projet de déploiement
+        url: ${{ steps['publier-deploiement-equipe'].output.remoteUrl or steps['publier-deploiement'].output.remoteUrl }}
+      - title: MR de déclaration du service (équipe)
+        url: ${{ steps['mr-index-equipe'].output.mergeRequestUrl }}
+      - title: Dans le catalogue
+        icon: catalog
+        entityRef: ${{ steps['catalogue'].output.entityRef }}

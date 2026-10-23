@@ -1,0 +1,61 @@
+# plateforme/politiques — kyverno/validation/cnpg-sauvegarde-obligatoire.yaml (F2-S07, DEV-3207)
+# Base en libre-service = base SAUVEGARDÉE : dans les espaces des locataires, un Cluster CloudNativePG
+# n'est admis que s'il archive ses WAL par le plugin Barman Cloud, déclare sa classe de stockage et une
+# limite mémoire, et n'active pas le superutilisateur. Exceptions : les réplicas (replica.enabled : ils
+# rejouent l'archive d'un autre, M27-E15) et les espaces de développement (base jetable, reconstruite
+# par la CI : décision écrite dans l'ADR-0327).
+# Ce que l'admission ne peut pas voir : qu'une ScheduledBackup existe et réussit (objet distinct). C'est
+# l'alerte de supervision (regles/alertes-data.yaml) et lab/bin/check F2 7 qui le contrôlent.
+#
+# Déploiement : d'abord validationActions: [Audit] (rapports de politique, aucun refus), revue des
+# Cluster existants (kubectl get clusters.postgresql.cnpg.io -A), correction, puis [Deny] par MR.
+# failurePolicy Ignore comme les autres politiques de la maison : une panne de Kyverno ne doit pas
+# bloquer l'opérateur.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: cnpg-sauvegarde-obligatoire
+  annotations:
+    policies.kyverno.io/title: Bases CloudNativePG des locataires sauvegardées et bornées
+    policies.kyverno.io/severity: high
+    medisphere.internal/ticket: DEV-3207
+spec:
+  validationActions: [Deny]
+  failurePolicy: Ignore
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: capsule.clastix.io/tenant
+          operator: Exists
+        - key: medisphere.internal/environnement
+          operator: NotIn
+          values: [dev]
+    resourceRules:
+      - apiGroups: [postgresql.cnpg.io]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [clusters]
+  matchConditions:
+    - name: pas-un-replica
+      expression: >-
+        !(has(object.spec.replica) && has(object.spec.replica.enabled) && object.spec.replica.enabled)
+  validations:
+    - expression: >-
+        has(object.spec.plugins) && object.spec.plugins.exists(p,
+          p.name == 'barman-cloud.cloudnative-pg.io' && has(p.isWALArchiver) && p.isWALArchiver)
+      message: "Une base de locataire archive ses WAL par le plugin Barman Cloud (spec.plugins, isWALArchiver: true) — offre de service, DEV-3207"
+      reason: Forbidden
+    - expression: "has(object.spec.storage) && has(object.spec.storage.storageClass) && object.spec.storage.storageClass != ''"
+      message: "spec.storage.storageClass doit être déclarée (classe autorisée par le locataire)"
+      reason: Forbidden
+    - expression: >-
+        has(object.spec.resources) && has(object.spec.resources.limits) && 'memory' in object.spec.resources.limits
+        && has(object.spec.resources.requests) && 'memory' in object.spec.resources.requests
+      message: "spec.resources doit déclarer requests.memory et limits.memory (quotas du locataire)"
+      reason: Forbidden
+    - expression: "!has(object.spec.enableSuperuserAccess) || !object.spec.enableSuperuserAccess"
+      message: "Le superutilisateur PostgreSQL reste désactivé dans les bases des locataires"
+      reason: Forbidden

@@ -1,0 +1,47 @@
+# roles/freeipa_client/tasks/main.yml (plateforme/ansible) — EXTRAIT F1-S05 : RÉINSCRIPTION d'un hôte
+# reconstruit. Remplace la tâche « Mot de passe à usage unique généré sur ipa01 » du M24-E19.
+#
+# Le M24 refuse (à juste titre) d'inscrire un hôte dont l'entrée a déjà un keytab : une machine
+# inconnue qui prendrait le nom d'un hôte inscrit hériterait de ses droits HBAC et sudo.
+# Procédure retenue pour une reconstruction PRÉVUE (fiche CHG) : avant la destruction, l'hôte est
+# DÉSACTIVÉ dans l'annuaire (« ipa host-disable <fqdn> » : keytab et certificats révoqués, entrée,
+# groupes d'hôtes et règles HBAC CONSERVÉS) — c'est la décision humaine tracée. Ensuite seulement,
+# le rôle accepte de générer un nouveau mot de passe à usage unique pour cette entrée sans keytab.
+# Un hôte qui a encore un keytab reste refusé, comme avant.
+# ⚠️ Comportement de « ipahost » (random + update_password: always sur une entrée existante) à
+# vérifier sur ta version de freeipa.ansible_freeipa (1.17.0 au M24) : lis le retour du module.
+
+- name: L'hôte est-il déjà connu de l'annuaire, et avec un keytab ?
+  ansible.builtin.command:
+    argv: [ipa, host-show, "{{ ansible_facts['fqdn'] }}"]
+  delegate_to: "{{ freeipa_client_hote_serveur }}"
+  become: true
+  register: _freeipa_client_entree
+  changed_when: false
+  failed_when: false
+  # « ipa » exige un ticket Kerberos d'administrateur sur ipa01 : le rôle freeipa_serveur en pose un
+  # pour le compte de service d'Ansible (M24) ; sinon, remplace par le module ipahost en lecture.
+
+- name: Refuser une entrée qui a encore un keytab (ancienne inscription active)
+  ansible.builtin.assert:
+    that: >-
+      _freeipa_client_entree.rc != 0 or
+      (_freeipa_client_entree.stdout | regex_search('Keytab: True')) is none
+    fail_msg: >-
+      {{ ansible_facts['fqdn'] }} existe dans l'annuaire avec un keytab actif. Une reconstruction
+      prévue désactive d'abord l'hôte (ipa host-disable, fiche CHG) ; sinon, enquête : ce n'est
+      peut-être pas la machine que tu crois.
+    quiet: true
+
+- name: Mot de passe à usage unique (création, ou réinscription d'une entrée désactivée)
+  freeipa.ansible_freeipa.ipahost:
+    ipaadmin_password: "{{ freeipa_client_admin_mot_de_passe }}"
+    name: "{{ ansible_facts['fqdn'] }}"
+    random: true
+    # on_create pour une entrée nouvelle ; always pour une entrée existante SANS keytab (vérifié ci-dessus).
+    update_password: "{{ 'always' if _freeipa_client_entree.rc == 0 else 'on_create' }}"
+    state: present
+  delegate_to: "{{ freeipa_client_hote_serveur }}"
+  become: true
+  register: _freeipa_client_hote
+  no_log: true

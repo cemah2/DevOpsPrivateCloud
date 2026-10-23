@@ -1,0 +1,6 @@
+[
+  {"nom": "bm01", "statut": "planned", "plateforme": "debian-13", "mac": "02:4d:53:60:00:01", "ip": "10.10.60.101/24", "dns_name": "bm01.par1.medisphere.internal"},
+  {"nom": "bm04", "statut": "active", "plateforme": "rocky-10", "mac": "02:4d:53:60:00:04", "ip": "10.10.60.104/24", "dns_name": "bm04.par1.medisphere.internal", "pxe_action": "local"},
+  {"nom": "f1-usine-essai", "statut": "staged", "plateforme": "k8s-noeud", "mac": "02:4d:53:60:31:01", "ips": ["10.10.60.191/24"], "ip_service": "10.10.60.191/24", "dns_name": "f1-usine-essai.par1.medisphere.internal", "pxe_action": "installer"},
+  {"nom": "k8s-w03", "statut": "staged", "plateforme": "k8s-noeud", "mac": "bc:24:11:40:00:63", "ips": ["10.10.40.63/24", "10.10.60.163/24"], "ip_service": "10.10.40.63/24", "dns_name": "k8s-w03.par1.medisphere.internal", "pxe_action": "installer"}
+]

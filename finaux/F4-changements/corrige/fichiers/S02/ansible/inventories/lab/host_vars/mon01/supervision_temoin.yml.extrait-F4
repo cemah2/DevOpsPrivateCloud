@@ -1,0 +1,42 @@
+# host_vars/mon01/supervision_temoin.yml (plateforme/ansible) — EXTRAIT F4-S02 (CHG-3402) : groupes à
+# AJOUTER à supervision_temoin_sondes. Un groupe par service : l'étiquette « service » sert au tableau
+# « Changement en cours » et à la mesure par service ; le préfixe « continuite- » du nom de groupe est
+# celui que lisent les règles continuite.yml et les checks du final F4.
+# Intervalle : celui du job blackbox du témoin (30 s au M21) ; une coupure plus courte que l'intervalle
+# peut passer entre deux sondes : la charge k6 (5 s) la verra.
+  - nom: continuite-mediagenda
+    module: https_2xx
+    etiquettes: {equipe: mediagenda, service: mediagenda, environnement: prod}
+    cibles:
+      # /pret : PostgreSQL (par le pooler) et Valkey répondent ; même URL que le groupe « mediagenda »
+      # du M21, mais un groupe à part pour ne pas mélanger mesure de changement et alerte permanente.
+      - https://mediagenda.apps.par1.medisphere.internal/pret
+  - nom: continuite-medidoc
+    module: https_2xx
+    etiquettes: {equipe: medidoc, service: medidoc, environnement: recette}
+    cibles:
+      # MédiDoc n'est publié qu'en recette dans le lab (M20-E33) : /readyz vérifie le stockage objet (RGW).
+      - https://medidoc-recette.apps.par1.medisphere.internal/readyz
+  - nom: continuite-rabbitmq
+    module: https_2xx
+    etiquettes: {equipe: plateforme, service: rabbitmq, environnement: prod}
+    cibles:
+      # Interface de gestion (HTTPRoute de gw-par1) : prouve la Gateway et le plugin de gestion d'un nœud,
+      # pas la tenue des files ; la charge (publication de MédiAgenda) et les alertes du M27 complètent.
+      - https://rabbitmq.apps.par1.medisphere.internal/
+  - nom: continuite-portail
+    module: https_2xx
+    etiquettes: {equipe: plateforme, service: portail, environnement: prod}
+    cibles:
+      - https://portail.apps.par1.medisphere.internal/.backstage/health/v1/readiness
+  # À DÉCOMMENTER en F4-S08 quand le profil openstack tourne (instance « sonde-fip01 » du projet
+  # plateforme, IP flottante notée <FIP-SONDE>) : ping ET HTTP (nginx de l'instance).
+  # - nom: continuite-openstack
+  #   module: icmp
+  #   etiquettes: {equipe: plateforme, service: openstack, environnement: prod}
+  #   cibles: [<FIP-SONDE>]
+  # - nom: continuite-openstack-http
+  #   module: http_2xx_clair
+  #   etiquettes: {equipe: plateforme, service: openstack, environnement: prod}
+  #   cibles: ["http://<FIP-SONDE>/"]
+  # À AJOUTER en F4-S10 (VMs d'InfoGér migrées) : groupe « continuite-legacy-rdv », service legacy-rdv.

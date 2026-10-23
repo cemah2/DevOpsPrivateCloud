@@ -1,0 +1,36 @@
+# plateforme/gitops — plateforme/mariadb-operator.yaml (F4-S12, CHG-3412)
+# Opérateur mariadb-operator 26.6 (MIT, projet communautaire ; distinct du MariaDB Enterprise Operator)
+# dans mariadb-system (créé par plateforme/k8s, espaces/mariadb-system/). Valeurs relues dans ce dépôt.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mariadb-operator
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    medisphere.internal/ticket: "CHG-3412"
+spec:
+  project: plateforme
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mariadb-system
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: mariadb-operator
+      targetRevision: 26.6.0
+      helm:
+        releaseName: mariadb-operator
+        valueFiles:
+          - $values/valeurs/mariadb-operator/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

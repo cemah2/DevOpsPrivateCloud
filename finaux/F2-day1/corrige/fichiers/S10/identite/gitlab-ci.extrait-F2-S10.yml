@@ -1,0 +1,30 @@
+# plateforme/identite — .gitlab-ci.yml : EXTRAIT, job ajouté en F2-S10 (SEC-3210).
+# Après synchro:gitlab (les personnes doivent exister dans GitLab : première connexion SSO faite).
+# GITLAB_TOKEN : jeton du compte svc-synchro-identite (administrateur, portée api), variable protégée et
+# masquée de main, comme pour synchro:gitlab (M24-E11).
+gitlab:prestataires:
+  stage: appliquer
+  tags: [shell, socle]
+  needs: [synchro:gitlab]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes: [outils/gitlab-prestataires.d/*, outils/gitlab-prestataire.sh]
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  script:
+    - |
+      code=0
+      for f in outils/gitlab-prestataires.d/*.yml; do
+        n=$(yq '.gitlab_prestataires | length' "$f")
+        for i in $(seq 0 $((n - 1))); do
+          exp=$(yq -r ".gitlab_prestataires[$i].expiration" "$f")
+          propre=$(yq -r ".gitlab_prestataires[$i].groupe_propre" "$f")
+          mapfile -t personnes < <(yq -r ".gitlab_prestataires[$i].personnes[]" "$f")
+          while IFS=$'\t' read -r projet niveau; do
+            outils/gitlab-prestataire.sh --projet "$projet" --niveau "$niveau" --expiration "$exp" \
+              --groupe-propre "$propre" "${personnes[@]}" || code=$?
+          done < <(yq -r ".gitlab_prestataires[$i].projets | to_entries[] | [.key, .value] | @tsv" "$f")
+        done
+      done
+      # 3 = au moins une personne pas encore connue de GitLab (première connexion SSO à faire) : visible,
+      # sans bloquer les autres ; tout autre échec bloque.
+      [ "$code" = 0 ] || [ "$code" = 3 ] || exit "$code"

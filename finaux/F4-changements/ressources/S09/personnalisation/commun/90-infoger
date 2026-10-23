@@ -1,0 +1,2 @@
+# /etc/sudoers.d/90-infoger — compte d'exploitation d'InfoGér (mot de passe exigé).
+infoger ALL=(ALL:ALL) ALL

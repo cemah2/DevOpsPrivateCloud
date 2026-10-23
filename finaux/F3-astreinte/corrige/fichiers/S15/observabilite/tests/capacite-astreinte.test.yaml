@@ -1,0 +1,87 @@
+# plateforme/observabilite — tests/capacite-astreinte.test.yaml (F3-S15, PLAT-3315) : promtool test rules
+# Une règle remplacée doit garder sa couverture : un cas qui sonne, un cas qui ne sonne pas, et la
+# preuve que le délai (for: 1h) absorbe un pic court.
+rule_files:
+  - ../build/regles/capacite-astreinte.yml
+evaluation_interval: 1m
+tests:
+  - name: trois travailleurs de 4 CPU, 9 CPU demandés en continu (sonne après 1 h)
+    interval: 1m
+    input_series:
+      - series: 'kube_node_status_allocatable{job="kube-state-metrics", node="k8s-w01", resource="cpu", unit="core"}'
+        values: '4x90'
+      - series: 'kube_node_status_allocatable{job="kube-state-metrics", node="k8s-w02", resource="cpu", unit="core"}'
+        values: '4x90'
+      - series: 'kube_node_status_allocatable{job="kube-state-metrics", node="k8s-w03", resource="cpu", unit="core"}'
+        values: '4x90'
+      - series: 'kube_pod_container_resource_requests{job="kube-state-metrics", namespace="a", pod="p1", container="c", resource="cpu", unit="core"}'
+        values: '3x90'
+      - series: 'kube_pod_container_resource_requests{job="kube-state-metrics", namespace="a", pod="p2", container="c", resource="cpu", unit="core"}'
+        values: '3x90'
+      - series: 'kube_pod_container_resource_requests{job="kube-state-metrics", namespace="b", pod="p3", container="c", resource="cpu", unit="core"}'
+        values: '3x90'
+      - series: 'kube_pod_status_phase{job="kube-state-metrics", namespace="a", pod="p1", phase="Running"}'
+        values: '1x90'
+      - series: 'kube_pod_status_phase{job="kube-state-metrics", namespace="a", pod="p2", phase="Running"}'
+        values: '1x90'
+      - series: 'kube_pod_status_phase{job="kube-state-metrics", namespace="b", pod="p3", phase="Running"}'
+        values: '1x90'
+    alert_rule_test:
+      - eval_time: 50m
+        alertname: CapaciteCpuSansMargeDeNoeud
+        exp_alerts: []
+      - eval_time: 70m
+        alertname: CapaciteCpuSansMargeDeNoeud
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme}
+            exp_annotations:
+              resume: "Les demandes de CPU ne tiennent plus si un nœud tombe"
+              description: "Depuis 1 h, la somme des demandes de CPU des pods dépasse l'allouable du cluster moins son plus gros nœud : la perte d'un nœud laisserait des pods en attente. Revue de capacité (recommandations VPA, quotas) à planifier, pas d'action de nuit."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/exploitation/revue-alertes-semaine.md
+      - eval_time: 70m
+        alertname: CapaciteMemoireSansMargeDeNoeud
+        exp_alerts: []
+  - name: pic de 30 min d'un Job (ne sonne pas) ; un pod terminé ne compte pas
+    interval: 1m
+    input_series:
+      - series: 'kube_node_status_allocatable{job="kube-state-metrics", node="k8s-w01", resource="cpu", unit="core"}'
+        values: '4x90'
+      - series: 'kube_node_status_allocatable{job="kube-state-metrics", node="k8s-w02", resource="cpu", unit="core"}'
+        values: '4x90'
+      - series: 'kube_node_status_allocatable{job="kube-state-metrics", node="k8s-w03", resource="cpu", unit="core"}'
+        values: '4x90'
+      - series: 'kube_pod_container_resource_requests{job="kube-state-metrics", namespace="a", pod="p1", container="c", resource="cpu", unit="core"}'
+        values: '6x90'
+      # Job de migration : 3 CPU pendant 30 min, puis terminé (Succeeded).
+      - series: 'kube_pod_container_resource_requests{job="kube-state-metrics", namespace="a", pod="migration", container="c", resource="cpu", unit="core"}'
+        values: '3x90'
+      - series: 'kube_pod_status_phase{job="kube-state-metrics", namespace="a", pod="p1", phase="Running"}'
+        values: '1x90'
+      - series: 'kube_pod_status_phase{job="kube-state-metrics", namespace="a", pod="migration", phase="Running"}'
+        values: '1x30 0x60'
+      - series: 'kube_pod_status_phase{job="kube-state-metrics", namespace="a", pod="migration", phase="Succeeded"}'
+        values: '0x30 1x60'
+    alert_rule_test:
+      - eval_time: 85m
+        alertname: CapaciteCpuSansMargeDeNoeud
+        exp_alerts: []
+  - name: mémoire insuffisante (sonne)
+    interval: 1m
+    input_series:
+      - series: 'kube_node_status_allocatable{job="kube-state-metrics", node="k8s-w01", resource="memory", unit="byte"}'
+        values: '10000000000x90'
+      - series: 'kube_node_status_allocatable{job="kube-state-metrics", node="k8s-w02", resource="memory", unit="byte"}'
+        values: '10000000000x90'
+      - series: 'kube_pod_container_resource_requests{job="kube-state-metrics", namespace="a", pod="p1", container="c", resource="memory", unit="byte"}'
+        values: '12000000000x90'
+      - series: 'kube_pod_status_phase{job="kube-state-metrics", namespace="a", pod="p1", phase="Running"}'
+        values: '1x90'
+    alert_rule_test:
+      - eval_time: 75m
+        alertname: CapaciteMemoireSansMargeDeNoeud
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme}
+            exp_annotations:
+              resume: "Les demandes de mémoire ne tiennent plus si un nœud tombe"
+              description: "Depuis 1 h, la somme des demandes de mémoire des pods dépasse l'allouable du cluster moins son plus gros nœud : la perte d'un nœud laisserait des pods en attente. Revue de capacité (recommandations VPA, quotas) à planifier, pas d'action de nuit."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/exploitation/revue-alertes-semaine.md

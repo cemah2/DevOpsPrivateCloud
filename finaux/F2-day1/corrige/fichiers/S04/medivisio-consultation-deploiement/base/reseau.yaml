@@ -1,0 +1,30 @@
+# Refus par défaut dans les deux sens (modèle M28 + cloison du locataire medivisio, F2-S02), puis :
+# entrée depuis la Gateway (entité « ingress », M15) et Prometheus (espace supervision) sur 8080,
+# sondes du kubelet (entité « host »), sortie DNS seulement.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: consultation
+spec:
+  description: "MédiVisio consultation : Gateway, Prometheus et sondes en entrée ; DNS en sortie"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/instance: consultation
+  ingress:
+    - fromEntities: [host]
+    - fromEntities: [ingress]
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports: [{port: "53", protocol: ANY}]

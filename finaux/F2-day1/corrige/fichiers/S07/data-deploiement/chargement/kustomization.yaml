@@ -1,0 +1,5 @@
+# data/deploiement — chargement/kustomization.yaml (F2-S07)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cronjob.yaml

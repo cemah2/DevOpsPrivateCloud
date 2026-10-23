@@ -1,0 +1,125 @@
+# data/deploiement — chargement/cronjob.yaml (F2-S07, DEV-3207, RB-327)
+# Chargement NOCTURNE de l'extraction pseudonymisée déposée par MédiAgenda dans le sas
+# s3://data-extractions/rendez-vous/AAAA-MM-JJ.csv.gz (+ manifeste .json) :
+#   1. « recuperation » : télécharge le fichier DU JOUR et son manifeste (identité en lecture seule sur
+#      le sas), vérifie l'empreinte SHA-256 annoncée ; pas de fichier du jour = échec visible (alerte) ;
+#   2. « chargement » : remplace le contenu de stats.rendez_vous en UNE transaction (les analyses en
+#      cours voient l'ancien jeu jusqu'au COMMIT) et inscrit le chargement dans stats.chargements, que
+#      lisent les métriques. Compte dynamique d'OpenBao (bail 1 h), session sous le rôle stats_ecriture.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: chargement-extraction
+  labels:
+    app.kubernetes.io/name: chargement-extraction
+    app.kubernetes.io/part-of: data
+  annotations:
+    medisphere.internal/ticket: DEV-3207
+    medisphere.internal/runbook: RB-327
+spec:
+  schedule: "30 3 * * *"
+  timeZone: Europe/Paris
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800
+      ttlSecondsAfterFinished: 604800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: chargement-extraction
+            medisphere.internal/acces-base: statistiques
+        spec:
+          restartPolicy: Never
+          priorityClassName: medisphere-lot
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile: {type: RuntimeDefault}
+          volumes:
+            - name: travail
+              emptyDir: {sizeLimit: 512Mi}
+            - name: medisphere-ca
+              secret:
+                secretName: medisphere-ca
+          initContainers:
+            - name: recuperation
+              image: registry.par1.medisphere.internal/dockerhub/amazon/aws-cli:2.38.5@sha256:<EMPREINTE-AWS-CLI>
+              command: ["/bin/sh", "-ceu"]
+              args:
+                - |
+                  jour=$(date -u +%F)
+                  cd /travail
+                  aws s3 cp "s3://data-extractions/rendez-vous/$jour.json" manifeste.json --only-show-errors
+                  aws s3 cp "s3://data-extractions/rendez-vous/$jour.csv.gz" rendez-vous.csv.gz --only-show-errors
+                  attendu=$(sed -n 's/.*"sha256":"\([0-9a-f]*\)".*/\1/p' manifeste.json)
+                  obtenu=$(sha256sum rendez-vous.csv.gz | cut -d' ' -f1)
+                  if [ -z "$attendu" ] || [ "$attendu" != "$obtenu" ]; then
+                    echo "empreinte du fichier $jour différente du manifeste : chargement refusé" >&2
+                    exit 1
+                  fi
+                  echo "fichier $jour récupéré, empreinte vérifiée"
+              env:
+                - {name: AWS_ENDPOINT_URL, value: "https://s3-01.par1.medisphere.internal:8333"}
+                - {name: AWS_DEFAULT_REGION, value: us-east-1}
+                - {name: AWS_CA_BUNDLE, value: /etc/medisphere/ca.crt}
+                - {name: HOME, value: /travail}
+              envFrom:
+                - secretRef: {name: sas-extraction-lecture}
+              securityContext:
+                runAsUser: 65534
+                runAsGroup: 65534
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: ["ALL"]}
+              resources:
+                requests: {cpu: 50m, memory: 128Mi}
+                limits: {memory: 256Mi}
+              volumeMounts:
+                - {name: travail, mountPath: /travail}
+                - {name: medisphere-ca, mountPath: /etc/medisphere, readOnly: true}
+          containers:
+            - name: chargement
+              image: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie@sha256:<EMPREINTE-POSTGRESQL>
+              command: ["/bin/bash", "-ceu"]
+              args:
+                - |
+                  cd /travail
+                  gunzip -f rendez-vous.csv.gz
+                  jour=$(date -u +%F)
+                  lignes=$(sed -n 's/.*"lignes":\([0-9]*\).*/\1/p' manifeste.json)
+                  empreinte=$(sed -n 's/.*"sha256":"\([0-9a-f]*\)".*/\1/p' manifeste.json)
+                  # Contrôle : le fichier contient ce que le manifeste annonce (une ligne par
+                  # rendez-vous : aucun champ de l'extraction ne contient de retour à la ligne).
+                  recu=$(( $(wc -l < rendez-vous.csv) - 1 ))
+                  if [ "$recu" -ne "$lignes" ]; then
+                    echo "nombre de lignes ($recu) différent du manifeste ($lignes) : chargement refusé" >&2
+                    exit 1
+                  fi
+                  # -1 : tout le script en UNE transaction (BEGIN/COMMIT autour de -f).
+                  psql -v ON_ERROR_STOP=1 -X -q -1 \
+                    -v jour="$jour" -v lignes="$lignes" -v empreinte="$empreinte" -f - <<'SQL'
+                  CREATE TEMP TABLE arrivee (LIKE stats.rendez_vous) ON COMMIT DROP;
+                  \copy arrivee FROM 'rendez-vous.csv' WITH (FORMAT csv, HEADER true)
+                  TRUNCATE stats.rendez_vous;
+                  INSERT INTO stats.rendez_vous SELECT * FROM arrivee;
+                  INSERT INTO stats.chargements (fichier, jour, lignes, sha256)
+                    VALUES ('rendez-vous/' || :'jour' || '.csv.gz', :'jour', :lignes, :'empreinte');
+                  SQL
+                  echo "chargement $jour : $lignes lignes"
+              envFrom:
+                - secretRef: {name: statistiques-db-traitement}
+              securityContext:
+                runAsUser: 26
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: ["ALL"]}
+              resources:
+                requests: {cpu: 100m, memory: 128Mi}
+                limits: {memory: 512Mi}
+              volumeMounts:
+                - {name: travail, mountPath: /travail}

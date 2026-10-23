@@ -1,0 +1,43 @@
+# legacy/deploiement — base/sauvegarde.yaml (F4-S12, CHG-3412)
+# Sauvegarde logique quotidienne (mariadb-dump) de legacy_rdv vers s3-01, compartiment
+# mariadb-legacy-rdv (identité S3 « mariadb-legacy-rdv », droits sur ce seul compartiment), préfixe =
+# environnement (patch de l'overlay). 30 jours gardés. TLS vérifié par la racine MédiSphère.
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Backup
+metadata:
+  name: legacy-rdv-db-quotidienne
+spec:
+  mariaDbRef: {name: legacy-rdv-db}
+  schedule:
+    cron: "30 2 * * *"
+  timeZone: Europe/Paris
+  maxRetention: 720h
+  compression: gzip
+  databases: [legacy_rdv]
+  storage:
+    s3:
+      bucket: mariadb-legacy-rdv
+      endpoint: s3-01.par1.medisphere.internal:8333
+      region: us-east-1
+      prefix: ENV
+      accessKeyIdSecretKeyRef: {name: legacy-rdv-s3, key: access_key_id}
+      secretAccessKeySecretKeyRef: {name: legacy-rdv-s3, key: secret_access_key}
+      tls:
+        enabled: true
+        caSecretKeyRef: {name: legacy-rdv-racine, key: ca.crt}
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  priorityClassName: medisphere-lot
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 512Mi}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]

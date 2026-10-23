@@ -1,0 +1,9 @@
+# host_vars/mon01/supervision_temoin.yml — EXTRAIT F4-S07 : groupe à AJOUTER à supervision_temoin_sondes.
+# Le point d'entrée S3 du RGW (VIP de l'ingress de cephadm, M08-E11) : une requête anonyme sur « / »
+# fait répondre un démon RGW derrière haproxy (à vérifier sur ton lab : code et corps de la réponse
+# anonyme ; si elle n'est pas en 2xx, sonder un objet public de test ou passer au module tcp).
+  - nom: continuite-rgw
+    module: https_2xx
+    etiquettes: {equipe: plateforme, service: rgw, environnement: prod}
+    cibles:
+      - https://rgw.par1.medisphere.internal/

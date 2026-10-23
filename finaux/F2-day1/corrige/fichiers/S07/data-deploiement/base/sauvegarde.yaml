@@ -1,0 +1,50 @@
+# data/deploiement — base/sauvegarde.yaml (F2-S07, DEV-3207)
+# Sauvegardes de la base Data vers s3-01, compartiment cnpg-data (PROPRE à l'équipe : jamais
+# cnpg-k8s-par1, où une identité en écriture pourrait toucher l'archive de la production). Identité
+# SeaweedFS « cnpg-data » (Read, Write, List sur cnpg-data seulement), clés dans OpenBao
+# (kv/data/traitements/cnpg-s3), Secret par ESO (externalsecrets.yaml).
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: cnpg-data
+spec:
+  # Rétention appliquée par le sidecar de statistiques-db : 14 jours de restauration à un instant donné.
+  retentionPolicy: "14d"
+  configuration:
+    destinationPath: s3://cnpg-data/
+    endpointURL: https://s3-01.par1.medisphere.internal:8333
+    endpointCA:
+      name: medisphere-ca
+      key: ca.crt
+    s3Credentials:
+      accessKeyId:
+        name: cnpg-data-s3
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: cnpg-data-s3
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: gzip
+      maxParallel: 2
+    data:
+      compression: gzip
+  instanceSidecarConfiguration:
+    resources:
+      requests: {cpu: 20m, memory: 64Mi}
+      limits: {cpu: 500m, memory: 256Mi}
+---
+# Sauvegarde de base chaque nuit à 01:20 (format à six champs de CloudNativePG : secondes en tête),
+# avant l'extraction (02:30) et le chargement (03:30).
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: statistiques-db-nuit
+spec:
+  schedule: "0 20 1 * * *"
+  backupOwnerReference: self
+  immediate: true
+  cluster:
+    name: statistiques-db
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

@@ -1,0 +1,69 @@
+# legacy/deploiement — base/purge.yaml (F4-S12, CHG-3412)
+# Ancien /etc/cron.d/legacy-rdv : une seule exécution par nuit quel que soit le nombre de réplicas,
+# même image, même volume ; la 2.4.0 met la base à jour avec le disque et purge les sessions expirées.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: legacy-rdv-purge
+spec:
+  schedule: "30 3 * * *"
+  timeZone: Europe/Paris
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: legacy-rdv
+            app.kubernetes.io/component: purge
+        spec:
+          restartPolicy: Never
+          serviceAccountName: legacy-rdv
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          priorityClassName: medisphere-lot
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 33
+            runAsGroup: 33
+            fsGroup: 33
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: purge
+              image: registry.par1.medisphere.internal/medisphere/legacy-rdv:v0.0.0
+              command: ["php", "/var/www/legacy-rdv/cron/purge-uploads.php"]
+              envFrom:
+                - configMapRef:
+                    name: legacy-rdv-config
+              resources:
+                requests: {cpu: 20m, memory: 64Mi}
+                limits: {memory: 128Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - {name: pieces, mountPath: /var/www/legacy-rdv/uploads}
+                - {name: secret-base, mountPath: /run/secrets/legacy-rdv, readOnly: true}
+                - {name: tmp, mountPath: /tmp}
+          volumes:
+            - name: pieces
+              persistentVolumeClaim:
+                claimName: legacy-rdv-pieces
+            - name: secret-base
+              secret:
+                secretName: legacy-rdv-mariadb
+                defaultMode: 0440
+                items:
+                  - {key: application, path: application}
+            - name: tmp
+              emptyDir: {sizeLimit: 16Mi}

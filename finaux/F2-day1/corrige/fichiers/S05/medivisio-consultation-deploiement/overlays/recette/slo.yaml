@@ -1,0 +1,30 @@
+# SLO de la consultation en RECETTE (F2-S05) : même SLI, objectif 99 %, rien ne réveille (avertissements
+# aux heures ouvrées vers medivisio@ seulement) : la recette sert à voir le SLO avant la production.
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: medivisio-consultation-disponibilite
+  labels:
+    pyrra.dev/equipe: medivisio
+  annotations:
+    pyrra.dev/resume: "MédiVisio consultation (recette) consomme son budget d'erreurs trop vite"
+    pyrra.dev/runbook_url: https://git01.par1.medisphere.internal/medivisio/consultation/-/blob/main/docs/runbook.md
+spec:
+  description: "MédiVisio consultation (recette) : requêtes servies sans erreur 5xx"
+  target: "99"
+  window: 28d
+  indicator:
+    ratio:
+      errors:
+        metric: consultation_http_requests_total{namespace="medivisio-recette", route!~"/sante|/pret|/metrics", code=~"5.."}
+      total:
+        metric: consultation_http_requests_total{namespace="medivisio-recette", route!~"/sante|/pret|/metrics"}
+  alerting:
+    burnrates: true
+    absent: true
+    severities:
+      fastBurn: avertissement
+      mediumBurn: avertissement
+      slowBurn: info
+      longTermBurn: info
+      absent: avertissement

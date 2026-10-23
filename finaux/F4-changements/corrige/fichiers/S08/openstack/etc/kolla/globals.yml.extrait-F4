@@ -1,0 +1,7 @@
+# plateforme/openstack — etc/kolla/globals.yml (EXTRAIT F4-S08, CHG-3408).
+# Seule la série change ici ; le reste du fichier est comparé aux défauts de la 23.x
+# (.venv/share/kolla-ansible/etc_examples/kolla/globals.yml, chemin à vérifier dans ton .venv) et aux
+# notes de version (« Upgrade Notes » de chaque service) : clés renommées, défauts changés, services
+# retirés. kolla_base_distro reste « debian » : vérifier dans la matrice de prise en charge de la 23.x
+# que Debian 13 (trixie) est toujours un système hôte ET une base d'images prise en charge.
+openstack_release: "2026.2"

@@ -1,0 +1,98 @@
+{#- gabarits/k8s/locataire.yaml.j2 — Tenant Capsule d'une équipe (F2-S02). Rendu dans plateforme/k8s :
+    equipes/<equipe>/locataire.yaml, livré par l'Application Argo CD « equipes-k8s ».
+    Modèle : locataires/mediagenda.yaml du M28 (E05, E14, E15), propriétaire = groupe OIDC. -#}
+# GÉNÉRÉ par plateforme/equipes (outils/rendre.py) depuis equipes/{{ e.nom }}.yaml — NE PAS MODIFIER ICI :
+# toute modification passe par une MR sur plateforme/equipes ({{ e.ticket }}).
+#
+# ⚠️ Les espaces rattachés portent une référence de propriétaire vers ce Tenant : le supprimer
+# supprimerait ces espaces. D'où preventDeletion ET les options d'Argo CD (jamais élagué, jamais supprimé
+# avec l'Application) : retirer une équipe se fait par le runbook RB-320 (§ Départ), jamais par la CI.
+apiVersion: capsule.clastix.io/v1beta2
+kind: Tenant
+metadata:
+  name: {{ e.nom }}
+  labels:
+    # Sélectionné par la GlobalTenantResource « limites-par-defaut » (plancher de LimitRange, M28-E05).
+    app.kubernetes.io/part-of: plateforme-k8s
+    medisphere.internal/equipe: {{ e.nom }}
+    medisphere.internal/origine: plateforme-equipes
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-1"
+    medisphere.internal/ticket: "{{ e.ticket }}"
+spec:
+  preventDeletion: true
+  forceTenantPrefix: true
+  owners:
+    # Lecture seule dans TOUS les espaces du locataire (environnements compris) ; « admin » seulement
+    # dans le libre-service (règle plus bas). Les environnements sont livrés par Argo CD.
+    - kind: Group
+      name: "oidc:{{ e.nom }}"
+      clusterRoles:
+        - view
+  namespaceOptions:
+    # Environnements ({{ e.environnements | length }}) + espaces de libre-service ({{ e.libre_service.espaces }}).
+    quota: {{ e.environnements | length + e.libre_service.espaces }}
+    forbiddenLabels:
+      deniedRegex: '^(medisphere\.internal|pod-security\.kubernetes\.io)/.*'
+    additionalMetadataList:
+      - namespaceSelector:
+          matchExpressions:
+            - key: medisphere.internal/environnement
+              operator: DoesNotExist
+        labels:
+          pod-security.kubernetes.io/enforce: restricted
+          pod-security.kubernetes.io/enforce-version: latest
+          pod-security.kubernetes.io/warn: restricted
+          medisphere.internal/libre-service: "oui"
+          medisphere.internal/proprietaire: {{ e.nom }}
+  priorityClasses:
+    allowed: [{{ e.classes_priorite.autorisees | join(', ') }}]
+    default: {{ e.classes_priorite.defaut }}
+  storageClasses:
+    allowed:
+{%- for c in e.classes_stockage %}
+      - {{ c }}
+{%- endfor %}
+    default: {{ e.classes_stockage[0] }}
+  rules:
+    # Libre-service : l'équipe y est administratrice et peut supprimer ses espaces ; budget partagé.
+    - namespaceSelector:
+        matchExpressions:
+          - key: medisphere.internal/environnement
+            operator: DoesNotExist
+      permissions:
+        bindings:
+          - clusterRoleName: admin
+            subjects:
+              - apiGroup: rbac.authorization.k8s.io
+                kind: Group
+                name: "oidc:{{ e.nom }}"
+          - clusterRoleName: capsule-namespace-deleter
+            subjects:
+              - apiGroup: rbac.authorization.k8s.io
+                kind: Group
+                name: "oidc:{{ e.nom }}"
+      quota:
+        - name: libre-service
+          hard:
+{%- for k, v in e.libre_service.quota.items() %}
+            {{ k }}: "{{ v }}"
+{%- endfor %}
+            services.loadbalancers: "0"
+            services.nodeports: "0"
+    # Budget GLOBAL du locataire (tous ses espaces) : c'est lui que compte le bilan de capacité.
+    - quota:
+        - name: budget
+          hard:
+{%- for k, v in e.budget.items() %}
+            {{ k }}: "{{ v }}"
+{%- endfor %}
+    # Aucune exposition hors de la Gateway de la plateforme (SEC-2915, M28-E15).
+    - enforce:
+        action: deny
+        services:
+          types:
+            - LoadBalancer
+            - NodePort
+            - ExternalName

@@ -1,0 +1,12 @@
+# plateforme/ceph — outils/rgw-compartiments.yaml (F2-S08, PLAT-3208)
+# Compartiments RGW des locataires : une ligne par compartiment, appliquée par
+#   admin@adm01:~/src/ceph$ yq -r '.compartiments[] | [.utilisateur, .compartiment, .quota, .chemin_kv] | @tsv' \
+#       outils/rgw-compartiments.yaml | while IFS=$'\t' read -r u c q k; do outils/rgw-compartiment.sh "$u" "$c" "$q" "$k"; done
+# Ajouter un compartiment = une MR ici (relue par la plateforme), puis la commande ci-dessus.
+compartiments:
+  - utilisateur: data-resultats
+    compartiment: data-resultats
+    quota: 5G
+    chemin_kv: data/traitements/s3-resultats
+    locataire: data
+    ticket: PLAT-3208

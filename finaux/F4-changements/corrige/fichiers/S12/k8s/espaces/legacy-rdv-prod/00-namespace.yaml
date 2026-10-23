@@ -1,0 +1,26 @@
+# plateforme/k8s — espaces/legacy-rdv-prod/00-namespace.yaml (F4-S12, CHG-3412)
+# Espace de Legacy-RDV (prod), rattaché au locataire Capsule « legacy » (locataires/legacy.yaml,
+# outils/rattacher-locataires.sh). Étiquettes :
+#   medisphere.internal/equipe: plateforme     Legacy-RDV n'a pas d'équipe de développement ; déclenche
+#                                              la GeneratingPolicy networkpolicy-par-defaut (M26-E16),
+#                                              exiger-limites, la collecte de Prometheus ;
+#   medisphere.internal/environnement: prod    signatures exigées par Kyverno (exiger-signature-medisphere) ;
+#   medisphere.internal/exposition: oui        HTTPRoute admises sur gw-par1.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: legacy-rdv-prod
+  labels:
+    medisphere.internal/equipe: plateforme
+    medisphere.internal/environnement: prod
+    medisphere.internal/exposition: "oui"
+    capsule.clastix.io/tenant: legacy
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+  annotations:
+    medisphere.internal/responsable: "karim.benali"
+    medisphere.internal/ticket: "CHG-3412"

@@ -1,0 +1,48 @@
+# plateforme/outils — .gitlab-ci.yml : EXTRAIT, jobs ajoutés en F2-S13 (PLAT-3213).
+# La qualité (shellcheck, bash -n) vient déjà du composant « qualite » de plateforme/ci-templates (M19).
+test:ms-verif-equipe:
+  stage: test
+  tags: [shell, socle]            # runner01 : jq, ldapsearch non requis (faux outils du test)
+  script:
+    - shellcheck -x bin/ms-verif-equipe bin/ms-showback tests/ms-verif-equipe/lancer.sh
+    - bash -n bin/ms-verif-equipe
+    - tests/ms-verif-equipe/lancer.sh
+  rules:
+    - changes: [bin/ms-verif-equipe, tests/ms-verif-equipe/**/*, .gitlab-ci.yml]
+
+# Contrôle quotidien des équipes accueillies (pipeline planifié « conformite-equipes », 07:40) :
+# identités de lecture en variables protégées et masquées de l'environnement « lab/verif-equipe »,
+# rapport JSON en artefact ; un échec prévient la plateforme (notification du pipeline).
+conformite:equipes:
+  stage: test
+  tags: [shell, socle]
+  environment: {name: lab/verif-equipe, action: verify}
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $TACHE == "conformite-equipes"'
+  variables:
+    EQUIPES: "medivisio data"
+  script:
+    - mkdir -p rapports
+    - |
+      code=0
+      for e in $EQUIPES; do
+        bin/ms-verif-equipe --json "$e" > "rapports/$e.json" || code=1
+        jq -r '"\(.equipe) : \(if .conforme then "conforme" else "NON CONFORME" end)"' "rapports/$e.json"
+      done
+      exit "$code"
+  artifacts:
+    when: always
+    expire_in: 90 days
+    paths: [rapports/]
+
+# Rapport de refacturation (S08, RB-328) : le 2 du mois, préparé en artefact ; la MR reste humaine.
+showback:mensuel:
+  stage: test
+  tags: [shell, socle]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $TACHE == "showback"'
+  script:
+    - bin/ms-showback > "showback-$(date -d "$(date +%Y-%m-01) -1 month" +%Y-%m).md"
+  artifacts:
+    expire_in: 400 days
+    paths: [showback-*.md]

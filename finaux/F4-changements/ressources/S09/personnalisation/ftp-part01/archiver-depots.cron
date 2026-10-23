@@ -1,0 +1,4 @@
+# /etc/cron.d/archiver-depots
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+40 4 * * * root /usr/local/sbin/archiver-depots

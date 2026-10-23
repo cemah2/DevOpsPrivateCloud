@@ -1,0 +1,48 @@
+# medivisio/consultation-deploiement — overlays/prod/ : état de fin de F2-S05 (DEV-3205).
+# Production : deux réplicas en medisphere-critique, budget de perturbation, SLO (Pyrra) dont les alertes
+# partent à medivisio@ (route rendue par plateforme/equipes) et, si critiques, à l'astreinte.
+# Synchronisation MANUELLE (ApplicationSet : environnement « manuelle »), jamais du vendredi 16 h au
+# lundi 8 h (fenêtre de l'AppProject medivisio).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: medivisio-prod
+resources:
+  - ../../base
+  - secret.yaml
+  - production.yaml
+  - slo.yaml
+labels:
+  - pairs:
+      medisphere.internal/environnement: prod
+    includeSelectors: false
+    includeTemplates: true
+patches:
+  - target: {kind: HTTPRoute, name: consultation}
+    patch: |-
+      - op: replace
+        path: /spec/hostnames/0
+        value: consultation.apps.par1.medisphere.internal
+  - target: {kind: Deployment, name: consultation}
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: prod
+      - op: add
+        path: /spec/template/spec/priorityClassName
+        value: medisphere-critique
+      - op: add
+        path: /spec/template/spec/topologySpreadConstraints
+        value:
+          - maxSkew: 1
+            topologyKey: kubernetes.io/hostname
+            whenUnsatisfiable: ScheduleAnyway
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/instance: consultation
+# Mise en production : MR de l'équipe (relue par un second membre) qui recopie l'empreinte VALIDÉE en recette.
+images:
+  - name: registry.par1.medisphere.internal/medisphere/medivisio-consultation
+    digest: sha256:<EMPREINTE-VALIDÉE-EN-RECETTE>

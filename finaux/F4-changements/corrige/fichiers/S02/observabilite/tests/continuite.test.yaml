@@ -1,0 +1,46 @@
+# plateforme/observabilite — tests/continuite.test.yaml (F4-S02, CHG-3402)
+# promtool test rules tests/continuite.test.yaml   (après outils/extraire-regles.sh, M21-E14)
+rule_files:
+  - ../build/regles/continuite.yml
+evaluation_interval: 15s
+tests:
+  - name: aucune erreur, puis une rafale d'erreurs k6, puis une sonde fédérée en échec
+    interval: 15s
+    input_series:
+      # Charge : 2 req/s réussies tout du long ; erreurs de 2 min à 3 min.
+      - series: 'k6_http_reqs_total{testid="sonde-continuite-CHG-3404", expected_response="true"}'
+        values: '0+30x40'
+      - series: 'k6_http_reqs_total{testid="sonde-continuite-CHG-3404", expected_response="false"}'
+        values: '0x8 0+15x4 60x27'
+      # Sondes (fédérées depuis mon01) : en échec de 6 min à 7 min.
+      - series: 'continuite:sondes_en_erreur:max{job="blackbox"}'
+        values: '0x24 1x4 0x12'
+      # Prod : aucune 5xx (compteur à zéro).
+      - series: 'mediagenda_http_requests_total{namespace="mediagenda-prod", route="/api/v1/creneaux", code="200"}'
+        values: '0+30x40'
+    promql_expr_test:
+      - expr: continuite:en_erreur
+        eval_time: 1m
+        exp_samples:
+          - labels: 'continuite:en_erreur'
+            value: 0
+      - expr: continuite:en_erreur
+        eval_time: 2m30s
+        exp_samples:
+          - labels: 'continuite:en_erreur'
+            value: 1
+      - expr: continuite:en_erreur
+        eval_time: 6m30s
+        exp_samples:
+          - labels: 'continuite:en_erreur'
+            value: 1
+      - expr: continuite:en_erreur
+        eval_time: 9m
+        exp_samples:
+          - labels: 'continuite:en_erreur'
+            value: 0
+      - expr: continuite:prod_5xx:taux1m
+        eval_time: 5m
+        exp_samples:
+          - labels: 'continuite:prod_5xx:taux1m'
+            value: 0

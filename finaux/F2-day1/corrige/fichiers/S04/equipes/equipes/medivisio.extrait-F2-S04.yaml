@@ -1,0 +1,7 @@
+# plateforme/equipes — equipes/medivisio.yaml : CHANGEMENT de F2-S04 (MR d'Inès Garnier, DEV-3204),
+# relu par la Plateforme. Seule la liste des services change : la propagation crée dans plateforme/secrets
+# les rôles JWT ci-medivisio-consultation et ci-medivisio-consultation-promotion (et leurs politiques),
+# et ajoute le groupe medivisio aux groupes autorisés du rôle ci-signature.
+spec:
+  services:
+    - consultation

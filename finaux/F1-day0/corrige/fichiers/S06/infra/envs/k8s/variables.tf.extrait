@@ -1,0 +1,20 @@
+# envs/k8s/variables.tf (plateforme/infra) — AJOUT F1-S06 (PLAT-3106).
+
+variable "noeuds_usine" {
+  description = <<-EOT
+    Nœuds de k8s-par1 installés par l'usine de provisioning plutôt que clonés (usine.tf), avec leur
+    phase : « installation » (VM vide sur le VLAN 60, éteinte) ou « service » (VLAN 40, démarrée).
+    Vide par défaut : tous les nœuds viennent du module vm-noeud (M14). F1-S07 : { k8s-w03 = … }.
+  EOT
+  type    = map(string)
+  default = {}
+
+  validation {
+    condition     = alltrue([for p in values(var.noeuds_usine) : contains(["installation", "service"], p)])
+    error_message = "Phase inconnue : « installation » ou « service »."
+  }
+  validation {
+    condition     = alltrue([for n in keys(var.noeuds_usine) : can(regex("^k8s-(cp|w)0[1-9]$", n))])
+    error_message = "Seul un nœud de k8s-par1 (k8s-cpNN, k8s-wNN) peut être installé par l'usine."
+  }
+}

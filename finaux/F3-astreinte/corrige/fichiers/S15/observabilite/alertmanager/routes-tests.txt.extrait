@@ -1,0 +1,6 @@
+# alertmanager/routes-tests.txt — lignes AJOUTÉES par la MR PLAT-3315 (F3-S15).
+# Format : <récepteur attendu> | <étiquettes de l'alerte>. Les inhibitions ne se testent pas par
+# « amtool config routes test » : elles sont vérifiées dans Alertmanager (alerte source + cible
+# simulées par amtool alert add sur l'Alertmanager du cluster, voir le corrigé).
+plateforme-mail | alertname=ExternalSecretEnErreur gravite=avertissement equipe=plateforme espace=mediagenda-recette name=mediagenda-db-api
+plateforme-mail | alertname=CapaciteCpuSansMargeDeNoeud gravite=avertissement equipe=plateforme

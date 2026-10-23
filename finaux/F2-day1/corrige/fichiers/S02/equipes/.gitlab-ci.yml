@@ -1,0 +1,147 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/equipes (F2-S02, PLAT-3202) : une équipe en un changement.
+#
+# Étapes :
+#   lint       composant qualite (pre-commit, commitlint, Gitleaks) + ruff
+#   valider    schéma et cohérence (outils/rendre.py --valider), tests du générateur (pytest)
+#   capacite   bilan des budgets contre l'allouable relevé (outils/capacite.py) — BLOQUANT
+#   rendre     rendu complet des fichiers des dépôts cibles (artefact rendu/)
+#   apercu     (MR) ce que la fusion changera dans GitLab et dans chaque dépôt cible — lecture seule
+#   gitlab     (main) groupes, projet <equipe>/gitops, jetons de groupe rangés dans OpenBao
+#   propager   (main) une MR par dépôt cible, fusionnée seule si SON pipeline réussit
+#
+# Runner : runner01 (exécuteur shell, étiquette « shell », uv, bao). Aucune variable de CI secrète :
+# le job se connecte à OpenBao par son jeton d'identité (rôle JWT ci-plateforme-equipes : main et conf/*
+# PROTÉGÉES de ce projet), lit le jeton de svc-equipes dans kv/plateforme/equipes/gitlab, et écrit les
+# jetons de groupe (kv/<equipe>/ci/promotion, kv/plateforme/argocd/depot-<equipe>). Politique :
+# plateforme/secrets, politiques/ci-plateforme-equipes.hcl.
+# Qui peut fusionner dans main : Maintainers de ce projet (groupe plateforme-admins) ; une MR d'équipe
+# est relue par la Plateforme (Karim Benali) et, pour un prestataire, par Sophie Laurent.
+# =============================================================================
+
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@v2.11.0
+
+stages: [lint, valider, capacite, rendre, apercu, gitlab, propager]
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+variables:
+  BAO_ADDR: https://openbao.par1.medisphere.internal:8200
+
+.uv:
+  tags: [shell]
+  interruptible: true
+  before_script:
+    - test "$(id -un)" = gitlab-runner
+    - uv sync --locked
+    # requests utilise le magasin de certifi par défaut : on lui donne celui du système (racine MédiSphère).
+    - export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+
+# Jobs qui parlent à GitLab ou à OpenBao avec une identité : jeton de 10 min, révoqué en fin de job.
+.identite:
+  extends: .uv
+  id_tokens:
+    OPENBAO_ID_TOKEN:
+      aud: openbao.medisphere.internal
+  before_script:
+    - !reference [.uv, before_script]
+    - . outils/openbao-ci.sh ci-plateforme-equipes
+    # Variable du SHELL (jamais exportée dans un fichier, jamais affichée).
+    - GITLAB_EQUIPES_JETON="$(bao kv get -mount=kv -field=jeton plateforme/equipes/gitlab)"
+    - export GITLAB_EQUIPES_JETON
+  after_script:
+    - . outils/openbao-ci.sh --fin
+
+ruff:
+  extends: .uv
+  stage: lint
+  script:
+    - uv run ruff check outils/ tests/
+    - uv run ruff format --check outils/ tests/
+
+valider:
+  extends: .uv
+  stage: valider
+  script:
+    - uv run outils/rendre.py --valider
+    - uv run pytest -q tests/
+
+capacite:
+  extends: .uv
+  stage: capacite
+  script:
+    - uv run outils/capacite.py | tee capacite.md
+  artifacts:
+    when: always
+    expire_in: 90 days
+    paths: [capacite.md]
+
+rendre:
+  extends: .uv
+  stage: rendre
+  script:
+    - uv run outils/rendre.py
+  artifacts:
+    expire_in: 30 days
+    paths: [rendu/]
+
+# MR d'une branche NON protégée : le coffre refuse son jeton d'identité ; un échec qui explique.
+apercu:branche-non-protegee:
+  stage: apercu
+  tags: [shell]
+  script:
+    - echo "La MR vient de « $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME », branche non protégée : pas d'aperçu."
+    - echo "Pousse le travail sur conf/<sujet> (branches protégées), ou demande l'aperçu à la Plateforme."
+    - exit 1
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_PROTECTED != "true"
+
+apercu:
+  extends: .identite
+  stage: apercu
+  needs: [rendre]
+  script:
+    # Code 3 = des différences à appliquer : c'est le cas normal d'une MR, pas un échec.
+    - rc=0; uv run outils/gitlab_equipes.py || rc=$?; test "$rc" -eq 0 -o "$rc" -eq 3
+    - rc=0; uv run outils/propager.py --apercu | tee apercu.diff || rc=$?; test "$rc" -eq 0 -o "$rc" -eq 3
+  artifacts:
+    when: always
+    access: developer
+    expire_in: 30 days
+    paths: [apercu.diff]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_PROTECTED == "true"
+
+gitlab:equipes:
+  extends: .identite
+  stage: gitlab
+  interruptible: false
+  resource_group: equipes
+  script:
+    - uv run outils/gitlab_equipes.py --appliquer
+    # Convergence : un second passage ne doit plus rien trouver à faire.
+    - uv run outils/gitlab_equipes.py
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+
+propager:
+  extends: .identite
+  stage: propager
+  needs: [rendre, "gitlab:equipes"]
+  interruptible: false
+  resource_group: equipes
+  script:
+    - uv run outils/propager.py --appliquer | tee propagation.txt
+  artifacts:
+    when: always
+    expire_in: 1 year
+    paths: [propagation.txt]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"

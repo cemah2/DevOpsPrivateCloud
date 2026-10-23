@@ -1,0 +1,27 @@
+# legacy/deploiement — base/httproute.yaml (F4-S12) : nom posé par l'overlay. Écouteur HTTPS de
+# gw-par1, certificat joker apps-joker ; nom publié par ExternalDNS. Interne au lab : seul
+# rdv.par1.medisphere.internal est publié aux cabinets, par lb01/lb02 (F4-S13).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: legacy-rdv
+spec:
+  parentRefs:
+    - name: gw-par1
+      namespace: passerelles
+      sectionName: https
+  hostnames:
+    - NOM-PAR-OVERLAY.apps.par1.medisphere.internal
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /}
+      filters:
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - {name: Strict-Transport-Security, value: "max-age=31536000"}
+              - {name: X-Content-Type-Options, value: nosniff}
+              - {name: Referrer-Policy, value: same-origin}
+      backendRefs:
+        - name: legacy-rdv
+          port: 80

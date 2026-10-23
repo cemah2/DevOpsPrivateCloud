@@ -1,0 +1,24 @@
+# plateforme/k8s — espaces/data-traitements/20-quota-lots.yaml (F2-S08, PLAT-3208)
+# Quota PROPRE aux traitements par lots : il ne compte que les pods de classe medisphere-lot (portée
+# scopeSelector PriorityClass). Il s'ajoute au quota de l'espace (S02) et au budget global du locataire
+# (Capsule) : un lot qui s'emballe (parallélisme, boucle de relance) bute sur CE plafond avant de
+# priver la base Data ou les autres locataires. Un pod de cette classe doit déclarer ses requests et sa
+# limite mémoire (sinon refus du quota) : la LimitRange de l'espace en pose par défaut.
+# medisphere-lot = priorité 100, preemptionPolicy Never (M28-E14) : un lot attend qu'il y ait de la place,
+# il ne déloge jamais personne ; et c'est lui qu'on évince en premier sous pression.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: lots
+  namespace: data-traitements
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 1Gi
+    limits.memory: 2Gi
+    pods: "6"
+  scopeSelector:
+    matchExpressions:
+      - scopeName: PriorityClass
+        operator: In
+        values: [medisphere-lot]

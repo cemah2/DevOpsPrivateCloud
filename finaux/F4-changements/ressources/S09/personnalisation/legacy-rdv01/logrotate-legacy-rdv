@@ -1,0 +1,9 @@
+# /etc/logrotate.d/legacy-rdv — journal applicatif de Legacy-RDV.
+/var/log/legacy-rdv/app.log {
+    weekly
+    rotate 52
+    compress
+    missingok
+    notifempty
+    create 0640 www-data adm
+}

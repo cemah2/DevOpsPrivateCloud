@@ -1,0 +1,73 @@
+# legacy/deploiement — base/mariadb.yaml (F4-S12, CHG-3412) — mariadb-operator 26.6, k8s.mariadb.com/v1alpha1.
+# Une instance (pas de Galera ni de réplication pour une application de 40 cabinets : ADR des choix) ;
+# disponibilité par la sauvegarde quotidienne et la restauration éprouvée. PAS de PDB sur la base :
+# avec une seule instance, un PDB bloquerait tout drain de nœud (F4-S06) ; l'arrêt de la base pendant
+# un drain coupe Legacy-RDV le temps du redémarrage (≈ 1 min) : accepté et écrit.
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: MariaDB
+metadata:
+  name: legacy-rdv-db
+spec:
+  # Image officielle (seules les images officielles sont prises en charge), par le cache Harbor
+  # « dockerhub » (hosts.toml de containerd). 11.8 : LTS. Empreinte à ajouter après relevé.
+  image: docker.io/library/mariadb:11.8.9
+  imagePullPolicy: IfNotPresent
+  rootPasswordSecretKeyRef:
+    name: legacy-rdv-mariadb
+    key: root
+    generate: false
+  port: 3306
+  replicas: 1
+  # Fuseau par défaut du serveur : celui des cabinets (charge les tables de fuseaux). L'application ne
+  # dépend plus de NOW() (index.php 2.4.0), mais les requêtes faites à la main, les statistiques et
+  # les fonctions de date de MariaDB, si.
+  timeZone: Europe/Paris
+  storage:
+    size: 5Gi
+    storageClassName: ceph-rbd
+    resizeInUseVolumes: true
+  myCnf: |
+    [mariadb]
+    bind-address=*
+    default_storage_engine=InnoDB
+    character_set_server=utf8mb4
+    collation_server=utf8mb4_unicode_ci
+    innodb_buffer_pool_size=256M
+    max_connections=100
+    max_allowed_packet=64M
+  resources:
+    requests: {cpu: 100m, memory: 512Mi}
+    limits: {memory: 1Gi}
+  priorityClassName: medisphere-standard
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    capabilities:
+      drop: ["ALL"]
+  # Étiquette lue par le sélecteur de kps (M21) ; transmise aux objets créés (ServiceMonitor compris :
+  # à vérifier sur ta version, sinon ServiceMonitor écrit à la main dans ce dépôt).
+  inheritMetadata:
+    labels:
+      medisphere.internal/supervision: "oui"
+  metrics:
+    enabled: true
+    exporter:
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {memory: 64Mi}
+      podSecurityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]

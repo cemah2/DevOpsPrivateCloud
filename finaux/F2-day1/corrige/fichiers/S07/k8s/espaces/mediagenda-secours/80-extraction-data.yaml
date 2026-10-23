@@ -1,0 +1,203 @@
+# plateforme/k8s — espaces/mediagenda-secours/80-extraction-data.yaml (F2-S07, DEV-3207, ADR-0327)
+# Extraction NOCTURNE pseudonymisée vers l'équipe Data, exécutée CÔTÉ MÉDIAGENDA (modèle « pousser ») :
+#   1. conteneur d'init « lecture » : lit extraction.rendez_vous_pseudo sur le RÉPLICA DE SECOURS
+#      (jamais la prod : aucune charge, aucun verrou sur la base qui sert les patients), avec le rôle
+#      extraction_data qui n'a QUE ce droit (migration V5), puis compresse et calcule l'empreinte ;
+#   2. conteneur « depot » : dépose le fichier et son manifeste dans le compartiment data-extractions de
+#      s3-01, avec une identité qui ne sait QU'ÉCRIRE dans ce compartiment (ni lire, ni lister).
+# L'équipe Data n'a aucun chemin vers MédiAgenda : ni flux réseau, ni rôle PostgreSQL, ni secret. Elle
+# charge ce qu'on lui dépose (data/deploiement, chargement/). Le « sas » S3 est la frontière, et la
+# décision de ce qui la franchit appartient au responsable de la donnée (Julien Petit) et à la RSSI.
+#
+# Appliqué comme le reste de l'espace (exception écrite du M27 : kubectl apply depuis adm01, relu par MR).
+# Prérequis : migration V5 en prod, rôle géré extraction_data (mediagenda/deploiement, overlays/prod),
+# secrets kv/mediagenda/prod/extraction-data et kv/mediagenda/secours/sas-extraction, politique
+# eso-mediagenda-secours étendue (plateforme/secrets, eso-espaces.tf), identité extraction-ecriture et
+# compartiment data-extractions sur s3-01 (plateforme/ansible, host_vars/s3-01/seaweedfs.yml).
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: extraction-data
+  namespace: mediagenda-secours
+spec:
+  refreshInterval: 1h
+  secretStoreRef: {kind: SecretStore, name: openbao}
+  target:
+    name: extraction-data
+    creationPolicy: Owner
+  data:
+    # Même secret que le rôle géré de la prod (le réplica a le même catalogue, donc le même mot de passe).
+    - secretKey: PGPASSWORD
+      remoteRef: {key: mediagenda/prod/extraction-data, property: password}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: sas-extraction
+  namespace: mediagenda-secours
+spec:
+  refreshInterval: 1h
+  secretStoreRef: {kind: SecretStore, name: openbao}
+  target:
+    name: sas-extraction
+    creationPolicy: Owner
+  data:
+    - secretKey: AWS_ACCESS_KEY_ID
+      remoteRef: {key: mediagenda/secours/sas-extraction, property: AWS_ACCESS_KEY_ID}
+    - secretKey: AWS_SECRET_ACCESS_KEY
+      remoteRef: {key: mediagenda/secours/sas-extraction, property: AWS_SECRET_ACCESS_KEY}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: extraction-data
+  namespace: mediagenda-secours
+  labels:
+    app.kubernetes.io/name: extraction-data
+    app.kubernetes.io/part-of: mediagenda
+  annotations:
+    medisphere.internal/ticket: DEV-3207
+    medisphere.internal/runbook: RB-327
+spec:
+  # 02:30 heure de Paris : après l'archivage de la journée (archive_timeout 5 min), avant le chargement
+  # de l'équipe Data (03:30).
+  schedule: "30 2 * * *"
+  timeZone: Europe/Paris
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      activeDeadlineSeconds: 1800
+      ttlSecondsAfterFinished: 604800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: extraction-data
+        spec:
+          restartPolicy: Never
+          priorityClassName: medisphere-lot
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile: {type: RuntimeDefault}
+          volumes:
+            - name: travail
+              emptyDir: {sizeLimit: 512Mi}
+            - name: medisphere-ca
+              secret:
+                secretName: medisphere-ca
+          initContainers:
+            - name: lecture
+              # Même image que la base (psql 18, gzip, sha256sum de Debian) : par empreinte, à TA valeur.
+              image: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie@sha256:<EMPREINTE-POSTGRESQL>
+              command: ["/bin/bash", "-ceu"]
+              args:
+                - |
+                  cd /travail
+                  # Lecture seule sur un réplica en récupération : une requête longue peut être annulée par
+                  # le rejeu des WAL (max_standby_archive_delay, 30 s par défaut) ; le Job réessaie.
+                  psql "host=mediagenda-db-secours-r port=5432 dbname=mediagenda user=extraction_data sslmode=require connect_timeout=10 application_name=extraction-data" \
+                    -v ON_ERROR_STOP=1 -X -q \
+                    -c "\copy (SELECT rdv_pseudo, patient_pseudo, praticien_pseudo, jour, heure, jour_semaine, duree_minutes, canal_rappel, delai_reservation_jours FROM extraction.rendez_vous_pseudo ORDER BY jour, rdv_pseudo) TO 'rendez-vous.csv' WITH (FORMAT csv, HEADER true)"
+                  lignes=$(( $(wc -l < rendez-vous.csv) - 1 ))
+                  if [ "$lignes" -lt 1 ]; then echo "extraction vide : rien n'est déposé" >&2; exit 1; fi
+                  gzip -9 rendez-vous.csv
+                  empreinte=$(sha256sum rendez-vous.csv.gz | cut -d' ' -f1)
+                  printf '{"jour":"%s","lignes":%d,"sha256":"%s","source":"mediagenda-db-secours","vue":"extraction.rendez_vous_pseudo"}\n' \
+                    "$(date -u +%F)" "$lignes" "$empreinte" > manifeste.json
+                  cat manifeste.json
+              envFrom:
+                - secretRef: {name: extraction-data}
+              securityContext:
+                runAsUser: 26
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: ["ALL"]}
+              resources:
+                requests: {cpu: 50m, memory: 64Mi}
+                limits: {memory: 256Mi}
+              volumeMounts:
+                - {name: travail, mountPath: /travail}
+          containers:
+            - name: depot
+              image: registry.par1.medisphere.internal/dockerhub/amazon/aws-cli:2.38.5@sha256:<EMPREINTE-AWS-CLI>
+              command: ["/bin/sh", "-ceu"]
+              args:
+                - |
+                  jour=$(date -u +%F)
+                  # Le fichier d'abord, le manifeste ensuite : le chargement attend le manifeste.
+                  aws s3 cp /travail/rendez-vous.csv.gz "s3://data-extractions/rendez-vous/$jour.csv.gz" --only-show-errors
+                  aws s3 cp /travail/manifeste.json "s3://data-extractions/rendez-vous/$jour.json" --only-show-errors
+                  echo "déposé : rendez-vous/$jour.csv.gz"
+              env:
+                - {name: AWS_ENDPOINT_URL, value: "https://s3-01.par1.medisphere.internal:8333"}
+                - {name: AWS_DEFAULT_REGION, value: us-east-1}
+                - {name: AWS_CA_BUNDLE, value: /etc/medisphere/ca.crt}
+                - {name: AWS_REQUEST_CHECKSUM_CALCULATION, value: when_required}
+                - {name: HOME, value: /travail}
+              envFrom:
+                - secretRef: {name: sas-extraction}
+              securityContext:
+                runAsUser: 65534
+                runAsGroup: 65534
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: ["ALL"]}
+              resources:
+                requests: {cpu: 50m, memory: 128Mi}
+                limits: {memory: 256Mi}
+              volumeMounts:
+                - {name: travail, mountPath: /travail}
+                - {name: medisphere-ca, mountPath: /etc/medisphere, readOnly: true}
+---
+# Réseau : s'ajoute au refus par défaut et à secours-postgresql (40-reseau.yaml, M27-E15).
+# Le Job joint les instances du réplica (5432) et s3-01 (8333) ; les instances acceptent le Job en 5432.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: extraction-data
+  namespace: mediagenda-secours
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: extraction-data
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - podSelector:
+            matchLabels: {cnpg.io/cluster: mediagenda-db-secours}
+      ports:
+        - {protocol: TCP, port: 5432}
+    - to:
+        - ipBlock: {cidr: 10.10.20.14/32}
+      ports:
+        - {protocol: TCP, port: 8333}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: secours-postgresql-extraction
+  namespace: mediagenda-secours
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: mediagenda-db-secours
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: extraction-data}
+      ports:
+        - {protocol: TCP, port: 5432}

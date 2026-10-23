@@ -1,0 +1,39 @@
+# plateforme/observabilite — regles/reseau-bordure.yaml (F3-S11, INC-5911, action PLAT-3311)
+# Sessions BGP entre les nœuds annonceurs (Cilium, AS 65040) et la bordure (gw01, gw02, AS 65000).
+# Pendant INC-5911, une session tombée a rendu injoignables les adresses de service en
+# externalTrafficPolicy: Local dont tous les pods étaient sur ce nœud, sans qu'aucune alerte ne le dise.
+# Métrique de l'agent Cilium (plan de contrôle BGP) : cilium_bgp_control_plane_session_state, 1 = établie,
+# 0 = autre état ; étiquettes vrouter (AS local) et neighbor (adresse du pair). ⚠️ À vérifier sur ta
+# version de Cilium (page « Metrics » de la documentation 1.20) : nom et étiquettes exacts.
+# « instance » identifie le nœud (agent en réseau d'hôte, port 9962).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: reseau-bordure
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision-regles: "oui"
+spec:
+  groups:
+    - name: reseau.bordure
+      rules:
+        - alert: BgpSessionTombee
+          expr: max by (instance, neighbor) (cilium_bgp_control_plane_session_state) == 0
+          for: 5m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "Session BGP {{ $labels.instance }} → {{ $labels.neighbor }} tombée"
+            description: "Le nœud {{ $labels.instance }} n'a plus de session BGP avec la passerelle {{ $labels.neighbor }} depuis 5 min : les adresses de service en externalTrafficPolicy Local dont les pods sont sur ce nœud ne sont plus annoncées à cette passerelle. RB-337 § 2."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/exploitation/runbooks/RB-337-noms-intermittents.md
+        - alert: BgpSessionsAbsentes
+          expr: absent(cilium_bgp_control_plane_session_state)
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Aucune mesure d'état des sessions BGP de Cilium"
+            description: "La métrique cilium_bgp_control_plane_session_state a disparu (agents non collectés, métrique renommée ou plan de contrôle BGP désactivé) : BgpSessionTombee ne peut plus sonner."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/exploitation/runbooks/RB-337-noms-intermittents.md

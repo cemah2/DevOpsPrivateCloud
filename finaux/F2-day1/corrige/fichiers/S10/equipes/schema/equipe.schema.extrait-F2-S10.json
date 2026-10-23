@@ -1,0 +1,26 @@
+{
+  "$comment": "plateforme/equipes — schema/equipe.schema.json : EXTRAIT (F2-S10, SEC-3210). Propriété ajoutée à spec.properties ; règle ajoutée au « if type == prestataire » existant : « hebergement » est permis aux prestataires SEULEMENT, et exclut « kubernetes » (un prestataire n'a pas de locataire à lui).",
+  "hebergement": {
+    "description": "S10 — prestataire hébergé dans le locataire d'une autre équipe : un espace, un rôle limité, des projets GitLab précis.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["locataire", "espace", "quota", "role"],
+    "properties": {
+      "locataire": {"type": "string", "pattern": "^[a-z][a-z0-9-]+$"},
+      "espace": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,62}$"},
+      "quota": {"$ref": "#/$defs/quota"},
+      "role": {"enum": ["prestataire-developpeur", "prestataire-lecteur"]},
+      "gitlab_projets": {
+        "type": "object",
+        "propertyNames": {"pattern": "^[a-z][a-z0-9-]+/[a-z0-9][a-z0-9._-]*$"},
+        "additionalProperties": {"enum": ["developer", "reporter"]}
+      }
+    }
+  },
+  "$regles_supplementaires_rendre_py": [
+    "hebergement seulement si type == prestataire ; pas de bloc kubernetes en même temps",
+    "hebergement.espace commence par « <locataire>- » et finit par le nom de l'équipe sans « ext- » (mediagenda-axiomdev)",
+    "hebergement.locataire est une équipe existante ou un locataire historique (mediagenda, medidoc, medinotif)",
+    "gitlab_projets : jamais un projet du groupe propre de la plateforme (plateforme/*)"
+  ]
+}

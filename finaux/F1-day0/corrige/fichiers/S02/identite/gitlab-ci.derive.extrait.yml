@@ -1,0 +1,42 @@
+# plateforme/identite — .gitlab-ci.yml, EXTRAIT F1-S02 (PLAT-3102) : le plan du royaume tourne aussi
+# dans un pipeline PLANIFIÉ (et à la demande, « Run pipeline »), sans job d'application.
+# À fusionner dans le fichier de M24-E08 : seules les règles de « tofu:plan » changent, et un job
+# « annuaire:verifier » planifié (même logique pour l'annuaire FreeIPA).
+#
+# Planification : Build → Pipeline schedules, branche main, « 41 2 * * * » (Europe/Paris),
+# variable PLANIF=derive. Le pipeline planifié s'exécute avec les variables protégées (main est
+# protégée) : mêmes identités que le plan d'une poussée.
+# Un plan non vide n'échoue pas le job (code 2 enregistré dans plan.code) : le job « derive:identite »
+# ci-dessous transforme ce code en échec visible dans un pipeline planifié.
+
+tofu:plan:
+  extends: .tofu
+  stage: plan
+  # script et artifacts : INCHANGÉS (M24-E08)
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $KEYCLOAK_CLIENT_SECRET
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE =~ /^(push|schedule|web)$/ && $KEYCLOAK_CLIENT_SECRET
+
+# Échec (rouge) si le plan du royaume n'est pas vide dans un pipeline planifié ou lancé à la main.
+derive:identite:
+  stage: appliquer
+  tags: [shell]
+  needs: ["tofu:plan"]
+  script:
+    - test -s tofu/plan.code
+    - |
+      if [ "$(cat tofu/plan.code)" != "0" ]; then
+        echo "Dérive ou écart de code sur le royaume medisphere : lire tofu/plan.txt (artefact du job tofu:plan)."
+        exit 1
+      fi
+      echo "Royaume conforme au code (No changes)."
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE =~ /^(schedule|web)$/ && $KEYCLOAK_CLIENT_SECRET
+
+annuaire:verifier:
+  # INCHANGÉ (M24-E08) sauf les règles : aussi dans le pipeline planifié.
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_PROTECTED == "true"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# tofu:apply et annuaire:appliquer : INCHANGÉS, jamais dans un pipeline planifié (règle « push » seule).

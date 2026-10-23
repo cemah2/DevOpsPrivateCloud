@@ -1,0 +1,10 @@
+#!/bin/sh
+# /usr/local/sbin/archiver-depots — InfoGér : déplace les dépôts de plus de 30 jours dans archive/,
+# compresse ceux de plus de 90 jours. Rien n'est jamais supprimé (« le client verra »).
+set -eu
+for p in /srv/depot/partenaire-labo /srv/depot/partenaire-radio; do
+  [ -d "$p/entrant" ] || continue
+  mkdir -p "$p/archive"
+  find "$p/entrant" -maxdepth 1 -type f -mtime +30 -exec mv -t "$p/archive/" {} +
+  find "$p/archive" -maxdepth 1 -type f -name '*.csv' -mtime +90 -exec gzip -9 {} \;
+done

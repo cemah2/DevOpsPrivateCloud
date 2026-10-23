@@ -1,0 +1,56 @@
+# plateforme/observabilite — regles/capacite-astreinte.yaml (F3-S15, PLAT-3315)
+# REMPLACE les règles KubeCPUOvercommit et KubeMemoryOvercommit du chart (désactivées par
+# defaultRules.disabled, kps/values.yaml) : sur un lab dimensionné au plus juste, elles sonnaient en
+# permanence (for: 10m) et personne ne les lisait plus — 41 notifications dans la semaine, aucune action.
+# Même question (« les demandes tiennent-elles si un nœud tombe ? »), mais :
+#   - for: 1h : un pic de déploiement (Rollout canary, Job de migration) ne réveille personne ;
+#   - avertissement, équipe plateforme : routé aux heures ouvrées (route de M21-E16) ;
+#   - une annotation qui dit quoi faire (revue de capacité, VPA en mode Off du M28).
+# Couverture conservée : le jour où la capacité manque vraiment, l'alerte sonne toujours (tests).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: capacite-astreinte
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision-regles: "oui"
+spec:
+  groups:
+    - name: capacite.astreinte
+      rules:
+        - alert: CapaciteCpuSansMargeDeNoeud
+          expr: |
+            sum(
+              kube_pod_container_resource_requests{job="kube-state-metrics", resource="cpu"}
+              * on (namespace, pod) group_left ()
+              max by (namespace, pod) (kube_pod_status_phase{job="kube-state-metrics", phase=~"Pending|Running"} == 1)
+            )
+            >
+            sum(kube_node_status_allocatable{job="kube-state-metrics", resource="cpu"})
+              - max(kube_node_status_allocatable{job="kube-state-metrics", resource="cpu"})
+          for: 1h
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Les demandes de CPU ne tiennent plus si un nœud tombe"
+            description: "Depuis 1 h, la somme des demandes de CPU des pods dépasse l'allouable du cluster moins son plus gros nœud : la perte d'un nœud laisserait des pods en attente. Revue de capacité (recommandations VPA, quotas) à planifier, pas d'action de nuit."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/exploitation/revue-alertes-semaine.md
+        - alert: CapaciteMemoireSansMargeDeNoeud
+          expr: |
+            sum(
+              kube_pod_container_resource_requests{job="kube-state-metrics", resource="memory"}
+              * on (namespace, pod) group_left ()
+              max by (namespace, pod) (kube_pod_status_phase{job="kube-state-metrics", phase=~"Pending|Running"} == 1)
+            )
+            >
+            sum(kube_node_status_allocatable{job="kube-state-metrics", resource="memory"})
+              - max(kube_node_status_allocatable{job="kube-state-metrics", resource="memory"})
+          for: 1h
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Les demandes de mémoire ne tiennent plus si un nœud tombe"
+            description: "Depuis 1 h, la somme des demandes de mémoire des pods dépasse l'allouable du cluster moins son plus gros nœud : la perte d'un nœud laisserait des pods en attente. Revue de capacité (recommandations VPA, quotas) à planifier, pas d'action de nuit."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/exploitation/revue-alertes-semaine.md

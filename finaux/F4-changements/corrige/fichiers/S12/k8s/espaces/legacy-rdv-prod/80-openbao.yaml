@@ -1,0 +1,32 @@
+# plateforme/k8s — espaces/legacy-rdv-prod/80-openbao.yaml (F4-S12, modèle de M25-E13 / M27-E04)
+# Compte « eso » sans jeton monté, SecretStore « openbao » lié au rôle eso-legacy-rdv-prod
+# (kv/legacy/prod/* seulement ; plateforme/secrets, tofu/legacy.tf).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso
+  namespace: legacy-rdv-prod
+  labels:
+    app.kubernetes.io/part-of: external-secrets
+automountServiceAccountToken: false
+---
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: openbao
+  namespace: legacy-rdv-prod
+spec:
+  provider:
+    vault:
+      server: https://openbao.par1.medisphere.internal:8200
+      path: kv
+      version: v2
+      caBundle: <RACINE-MEDISPHERE-EN-BASE64>
+      auth:
+        kubernetes:
+          mountPath: k8s-par1
+          role: eso-legacy-rdv-prod
+          serviceAccountRef:
+            name: eso
+            audiences:
+              - openbao.medisphere.internal

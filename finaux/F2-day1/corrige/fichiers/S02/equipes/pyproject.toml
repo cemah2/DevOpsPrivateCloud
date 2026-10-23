@@ -1,0 +1,26 @@
+# plateforme/equipes — pyproject.toml (F2-S02). Outils gérés par uv (PLAN §4.8) : « uv sync --locked ».
+# Versions minimales : celles de Debian 13 ou plus récentes ; uv.lock les fige (créé par « uv lock »).
+[project]
+name = "plateforme-equipes"
+version = "1.0.0"
+description = "Équipes de MédiSphère décrites en code : validation, bilan de capacité, rendu, propagation"
+requires-python = ">=3.13"
+dependencies = [
+  "jinja2>=3.1",
+  "jsonschema>=4.23",
+  "pyyaml>=6.0",
+  "requests>=2.32",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "ruff>=0.8",
+]
+
+[tool.ruff]
+line-length = 130
+target-version = "py313"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

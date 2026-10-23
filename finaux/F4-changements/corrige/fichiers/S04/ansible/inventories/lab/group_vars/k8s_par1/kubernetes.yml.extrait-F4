@@ -1,0 +1,8 @@
+# group_vars/k8s_par1/kubernetes.yml — EXTRAIT F4-S04 (CHG-3404), issue « go » SEULEMENT.
+# Mêmes deux valeurs qu'au M14-E25, MR fusionnée APRÈS la montée (le rôle k8s_noeud refuse un
+# changement de version sur un nœud membre hors du playbook de montée).
+# Les valeurs ci-dessous sont des EMPLACEMENTS : relève-les le jour J.
+k8s_version: "1.37.<CORRECTIF>"               # dernier correctif publié de la 1.37 (kubernetes.io/releases)
+# Image pause attendue par kubeadm 1.37 : « kubeadm config images list --kubernetes-version v1.37.<CORRECTIF> »
+# sur un nœud de contrôle après l'installation du paquet kubeadm 1.37 ; containerd_image_sandbox en dérive.
+k8s_image_pause: registry.k8s.io/pause:<VERSION-DE-KUBEADM-1.37>

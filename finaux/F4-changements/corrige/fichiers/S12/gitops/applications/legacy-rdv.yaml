@@ -1,0 +1,57 @@
+# plateforme/gitops — applications/legacy-rdv.yaml (F4-S12, CHG-3412 ; prod livrée vide en S12,
+# remplie à la bascule CHG-3413). Modèle de « medinotif » (M27-E04) : liste explicite, prod à la main.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: legacy-rdv
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - env: recette
+            auto: true
+          - env: prod
+            auto: false
+  syncPolicy:
+    applicationsSync: create-update
+    preserveResourcesOnDeletion: true
+  template:
+    metadata:
+      name: "legacy-rdv-{{ .env }}"
+      labels:
+        medisphere.internal/equipe: plateforme
+        medisphere.internal/application: legacy-rdv
+        medisphere.internal/environnement: "{{ .env }}"
+      annotations:
+        argocd.argoproj.io/compare-options: ServerSideDiff=true
+    spec:
+      project: legacy
+      source:
+        repoURL: https://git01.par1.medisphere.internal/legacy/deploiement.git
+        targetRevision: main
+        path: "overlays/{{ .env }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "legacy-rdv-{{ .env }}"
+  templatePatch: |
+    spec:
+      syncPolicy:
+        {{- if .auto }}
+        automated:
+          prune: true
+          selfHeal: true
+        {{- end }}
+        syncOptions:
+          - ServerSideApply=true
+          - CreateNamespace=false
+          - PruneLast=true
+          - FailOnSharedResource=true
+        retry:
+          limit: 3
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m

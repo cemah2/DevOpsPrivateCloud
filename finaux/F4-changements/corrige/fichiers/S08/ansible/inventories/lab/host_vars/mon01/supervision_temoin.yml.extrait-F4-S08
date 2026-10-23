@@ -1,0 +1,12 @@
+# host_vars/mon01/supervision_temoin.yml — EXTRAIT F4-S08 : groupes à AJOUTER (ou décommenter, S02).
+# Instance « sonde-fip01 » (projet plateforme, gabarit le plus petit, nginx servi par cloud-init, groupe
+# de sécurité ouvert en ICMP et 80 depuis 10.10.20.19 seulement) ; <FIP-SONDE> dans 10.10.52.200-249.
+# Flux : mon01 → <FIP-SONDE> en ICMP et TCP 80 (règle de bordure, VLAN 20 → VLAN 52, M10-E12).
+  - nom: continuite-openstack
+    module: icmp
+    etiquettes: {equipe: plateforme, service: openstack, environnement: prod}
+    cibles: [<FIP-SONDE>]
+  - nom: continuite-openstack-http
+    module: http_2xx_clair
+    etiquettes: {equipe: plateforme, service: openstack, environnement: prod}
+    cibles: ["http://<FIP-SONDE>/"]

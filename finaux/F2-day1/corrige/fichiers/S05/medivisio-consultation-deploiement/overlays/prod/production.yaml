@@ -1,0 +1,10 @@
+# Une interruption volontaire (drain d'un nœud, montée de version) laisse toujours un pod servir.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: consultation
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: consultation

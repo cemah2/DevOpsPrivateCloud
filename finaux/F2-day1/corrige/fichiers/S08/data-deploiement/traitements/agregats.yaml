@@ -1,0 +1,88 @@
+# data/deploiement — traitements/agregats.yaml (F2-S08, PLAT-3208)
+# Agrégats quotidiens et mensuels, recalculés chaque nuit après le chargement (03:30) : tables
+# stats.activite_quotidienne et stats.activite_mensuelle (créées au premier passage, propriétaire
+# stats_ecriture : la session du compte dynamique prend ce rôle). Classe medisphere-lot : priorité basse,
+# jamais de préemption, compté dans le quota « lots ».
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: agregats-quotidiens
+  labels:
+    app.kubernetes.io/name: agregats-quotidiens
+    app.kubernetes.io/part-of: data
+  annotations:
+    medisphere.internal/ticket: PLAT-3208
+spec:
+  schedule: "15 4 * * *"
+  timeZone: Europe/Paris
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 7200
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800
+      ttlSecondsAfterFinished: 604800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: agregats-quotidiens
+            medisphere.internal/acces-base: statistiques
+        spec:
+          restartPolicy: Never
+          priorityClassName: medisphere-lot
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: agregats
+              image: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie@sha256:<EMPREINTE-POSTGRESQL>
+              command: ["/bin/bash", "-ceu"]
+              args:
+                - |
+                  psql -v ON_ERROR_STOP=1 -X -q -1 -f - <<'SQL'
+                  CREATE TABLE IF NOT EXISTS stats.activite_quotidienne (
+                      jour                 date    NOT NULL,
+                      praticien_pseudo     text    NOT NULL,
+                      rendez_vous          integer NOT NULL,
+                      duree_totale_minutes integer NOT NULL,
+                      delai_moyen_jours    numeric(6,1) NOT NULL,
+                      part_rappel_sms      numeric(4,3) NOT NULL,
+                      PRIMARY KEY (jour, praticien_pseudo)
+                  );
+                  CREATE TABLE IF NOT EXISTS stats.activite_mensuelle (
+                      mois                 date    PRIMARY KEY,
+                      rendez_vous          integer NOT NULL,
+                      patients_distincts   integer NOT NULL,
+                      praticiens_actifs    integer NOT NULL,
+                      delai_median_jours   numeric(6,1) NOT NULL,
+                      part_sans_rappel     numeric(4,3) NOT NULL
+                  );
+                  TRUNCATE stats.activite_quotidienne, stats.activite_mensuelle;
+                  INSERT INTO stats.activite_quotidienne
+                  SELECT jour, praticien_pseudo, count(*), sum(duree_minutes),
+                         round(avg(delai_reservation_jours), 1),
+                         round(avg((canal_rappel = 'sms')::int), 3)
+                    FROM stats.rendez_vous
+                   GROUP BY jour, praticien_pseudo;
+                  INSERT INTO stats.activite_mensuelle
+                  SELECT date_trunc('month', jour)::date, count(*), count(DISTINCT patient_pseudo),
+                         count(DISTINCT praticien_pseudo),
+                         percentile_cont(0.5) WITHIN GROUP (ORDER BY delai_reservation_jours),
+                         round(avg((canal_rappel = 'aucun')::int), 3)
+                    FROM stats.rendez_vous
+                   GROUP BY 1;
+                  SQL
+                  echo "agrégats recalculés"
+              envFrom:
+                - secretRef: {name: statistiques-db-traitement}
+              securityContext:
+                runAsUser: 26
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: ["ALL"]}
+              resources:
+                requests: {cpu: 100m, memory: 128Mi}
+                limits: {memory: 256Mi}

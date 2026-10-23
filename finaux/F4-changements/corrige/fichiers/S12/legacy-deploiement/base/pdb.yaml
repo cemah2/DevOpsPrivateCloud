@@ -1,0 +1,11 @@
+# Un drain n'arrête qu'un pod web à la fois (deux réplicas) : jamais minAvailable = réplicas (F4-S06).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: legacy-rdv
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: legacy-rdv
+      app.kubernetes.io/component: web

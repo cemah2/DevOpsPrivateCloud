@@ -1,0 +1,16 @@
+# plateforme/k8s — espaces/mariadb-system/00-namespace.yaml (F4-S12, CHG-3412)
+# Espace de mariadb-operator 26.6 (contrôleur, webhook, cert-controller). PSA restricted : les valeurs
+# du chart posent les contextes de sécurité. Pas d'étiquette d'équipe : espace de plateforme.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mariadb-system
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    medisphere.internal/supervision-regles: "oui"
+  annotations:
+    medisphere.internal/responsable: "karim.benali"
+    medisphere.internal/ticket: "CHG-3412"

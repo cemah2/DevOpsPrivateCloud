@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: consultation
+  labels:
+    # Sélecteur des ServiceMonitor de la plateforme (M21) : nécessaire au ServiceMonitor ci-dessous.
+    medisphere.internal/supervision: "oui"
+spec:
+  selector:
+    app.kubernetes.io/instance: consultation
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

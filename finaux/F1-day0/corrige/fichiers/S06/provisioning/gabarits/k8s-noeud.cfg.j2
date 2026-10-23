@@ -1,0 +1,120 @@
+{# gabarits/k8s-noeud.cfg.j2 — preseed du profil « k8s-noeud » (F1-S06, PLAT-3106).
+   Rendu par outils/netbox-provision.py dans preseed/<nom>.cfg pour une VM NetBox de plate-forme
+   k8s-noeud à installer ; remis par iPXE à la racine de l'initrd (/preseed.cfg), comme debian13.cfg.j2
+   (M11-E13) dont il reprend tout ce qui n'est pas propre aux nœuds Kubernetes.
+   Ce qui change par rapport à debian13.cfg.j2, et pourquoi :
+     1. partitionnement SANS swap (kubeadm le refuse tant que failSwapOn n'est pas levé ; le rôle
+        k8s_noeud le neutraliserait, mais un disque de nœud ne doit pas en contenir) ;
+     2. le système installé reçoit son adresse de SERVICE, statique (m.service_adresse : VLAN 40 pour
+        k8s-w03), écrite pour netplan (systemd-networkd), carte reconnue par sa MAC et renommée eth0 :
+        mêmes conventions que les nœuds clonés de l'image dorée (M14, M16 : eth0, eth1, netplan). Pendant
+        l'installation, la machine est sur le VLAN 60 avec son adresse de PROVISIONING (bail Kea) ;
+     3. résolveurs et NTP de la plate-forme écrits en dur (le DHCP du VLAN 60 ne sert qu'à installer) ;
+     4. /etc/cloud/cloud.cfg.d créé vide : le rôle k8s_reseau_stockage (M16) y dépose sa protection
+        cloud-init, sans objet ici mais inoffensive.
+   Le reste (dépôt Kubernetes, containerd, modules, sysctl, kubelet) appartient aux rôles Ansible
+   containerd et k8s_noeud (M14) : l'usine installe un Debian conforme, pas un nœud Kubernetes.
+   Validation dans le pipeline : debconf-set-selections -c sur le rendu (outils/verifier.sh) et
+   outils/verifier-rendu.sh (partitionnement confirmé, disque désigné, HTTPS seulement).
+   ⚠️ Recette « expert » de partman et ordre netplan/ifupdown : à vérifier sur ta version de
+   debian-installer (trixie) en lisant /var/log/installer/syslog de la machine d'essai. -#}
+#_preseed_V1
+# preseed/{{ m.nom }}.cfg — GÉNÉRÉ par outils/netbox-provision.py depuis NetBox : ne pas modifier.
+# Profil k8s-noeud — {{ m.fqdn }} ; service {{ m.service_adresse }} (passerelle {{ m.service_passerelle }}),
+# provisioning {{ m.ip }}, MAC {{ m.mac }}
+
+### Langue, clavier
+d-i debian-installer/locale string fr_FR.UTF-8
+d-i keyboard-configuration/xkb-keymap select fr
+
+### Réseau de l'INSTALLATEUR (bail réservé par Kea sur le VLAN 60)
+d-i netcfg/choose_interface select auto
+d-i netcfg/get_hostname string {{ m.nom }}
+d-i netcfg/get_domain string {{ p.domaine }}
+d-i netcfg/hostname string {{ m.nom }}
+d-i hw-detect/load_firmware boolean true
+
+### Miroir (HTTP : les paquets sont authentifiés par la signature du fichier Release)
+d-i mirror/country string manual
+d-i mirror/http/hostname string {{ p.miroir | default('deb.debian.org') }}
+d-i mirror/http/directory string /debian
+d-i mirror/http/proxy string
+
+### Comptes : root verrouillé, admin sans mot de passe (connexion par clé)
+d-i passwd/root-login boolean false
+d-i passwd/make-user boolean true
+d-i passwd/user-fullname string Administrateur MediSphere
+d-i passwd/username string admin
+d-i passwd/user-password-crypted password !
+
+### Heure
+d-i clock-setup/utc boolean true
+d-i time/zone string Europe/Paris
+d-i clock-setup/ntp boolean true
+d-i clock-setup/ntp-server string {{ p.ntp | default('10.10.60.1') }}
+
+### Partitionnement : /boot + LVM (racine sur tout le reste), SANS swap, sans question
+d-i partman-auto/disk string /dev/{{ p.disque | default('sda') }}
+d-i partman-auto/method string lvm
+d-i partman-auto-lvm/new_vg_name string vg-systeme
+d-i partman-auto-lvm/guided_size string max
+d-i partman-auto/expert_recipe string \
+    k8s-noeud :: \
+      1024 1024 1024 ext4 \
+        $primary{ } $bootable{ } method{ format } format{ } \
+        use_filesystem{ } filesystem{ ext4 } mountpoint{ /boot } . \
+      20000 30000 -1 ext4 \
+        $lvmok{ } lv_name{ racine } method{ format } format{ } \
+        use_filesystem{ } filesystem{ ext4 } mountpoint{ / } .
+d-i partman-auto/choose_recipe select k8s-noeud
+# Pas de swap : répondre « non » à « revenir au partitionnement pour en ajouter un ? ».
+d-i partman-basicfilesystems/no_swap boolean false
+d-i partman-lvm/device_remove_lvm boolean true
+d-i partman-md/device_remove_md boolean true
+d-i partman-lvm/confirm boolean true
+d-i partman-lvm/confirm_nooverwrite boolean true
+d-i partman-partitioning/confirm_write_new_label boolean true
+d-i partman/choose_partition select finish
+d-i partman/confirm boolean true
+d-i partman/confirm_nooverwrite boolean true
+
+### Paquets : ceux des nœuds clonés dont les rôles supposent la présence
+d-i apt-setup/non-free-firmware boolean true
+d-i apt-setup/services-select multiselect security, updates
+tasksel tasksel/first multiselect standard, ssh-server
+d-i pkgsel/include string sudo ca-certificates curl gnupg qemu-guest-agent netplan.io chrony
+d-i pkgsel/upgrade select full-upgrade
+popularity-contest popularity-contest/participate boolean false
+
+### Chargeur d'amorçage (BIOS : la VM de l'usine est en SeaBIOS, comme les nœuds clonés)
+d-i grub-installer/only_debian boolean true
+d-i grub-installer/bootdev string default
+
+### Fin : racine de la PKI (empreinte vérifiée : l'installation s'arrête si elle diffère), clé SSH
+### PUBLIQUE d'adm01, sudo pour admin, réseau de SERVICE en netplan, résolveurs, NTP, puis ARRÊT.
+d-i preseed/late_command string \
+  test "$(sha256sum /medisphere-root-ca.crt | cut -d ' ' -f 1)" = "{{ p.empreinte_racine }}" || exit 1; \
+  cp /medisphere-root-ca.crt /target/usr/local/share/ca-certificates/medisphere-root-ca.crt; \
+  in-target update-ca-certificates; \
+  mkdir -p /target/home/admin/.ssh; \
+  echo '{{ p.cle_ssh_admin }}' > /target/home/admin/.ssh/authorized_keys; \
+  in-target chown -R admin:admin /home/admin/.ssh; \
+  chmod 700 /target/home/admin/.ssh; chmod 600 /target/home/admin/.ssh/authorized_keys; \
+  echo 'admin ALL=(ALL) NOPASSWD: ALL' > /target/etc/sudoers.d/90-admin; \
+  chmod 440 /target/etc/sudoers.d/90-admin; \
+  printf '%s\n' 'network:' '  version: 2' '  renderer: networkd' '  ethernets:' '    eth0:' \
+    '      match:' '        macaddress: "{{ m.mac }}"' '      set-name: eth0' '      dhcp4: false' \
+    '      dhcp6: false' '      accept-ra: false' '      addresses: ["{{ m.service_adresse }}"]' \
+    '      routes: [{to: default, via: {{ m.service_passerelle }}}]' \
+    '      nameservers: {addresses: [10.10.20.10, 10.10.20.16], search: [{{ p.domaine }}]}' \
+    > /target/etc/netplan/50-medisphere.yaml; \
+  chmod 600 /target/etc/netplan/50-medisphere.yaml; \
+  printf '%s\n' 'auto lo' 'iface lo inet loopback' > /target/etc/network/interfaces; \
+  in-target systemctl enable systemd-networkd; \
+  printf '%s\n' 'search {{ p.domaine }}' 'nameserver 10.10.20.10' 'nameserver 10.10.20.16' > /target/etc/resolv.conf; \
+  sed -i -E 's/^(pool|server) .*/# &/' /target/etc/chrony/chrony.conf; \
+  echo 'server {{ m.service_passerelle }} iburst' > /target/etc/chrony/sources.d/medisphere.sources; \
+  mkdir -p /target/etc/cloud/cloud.cfg.d; \
+  echo '{{ m.nom }} k8s-noeud {{ m.service_adresse }}' > /target/etc/medisphere-usine
+d-i finish-install/reboot_in_progress note
+d-i debian-installer/exit/poweroff boolean true

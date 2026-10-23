@@ -1,0 +1,4 @@
+# medivisio/gitops — services/consultation.yaml (MR ouverte par le modèle « Nouveau service » v2, F2-S04,
+# fusionnée par Inès Garnier). L'ApplicationSet « medivisio » (rendu de plateforme/equipes) en tire
+# medivisio-consultation-dev, -recette et -prod, depuis medivisio/consultation-deploiement.
+service: consultation

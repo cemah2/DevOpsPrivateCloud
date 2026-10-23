@@ -1,0 +1,49 @@
+{
+  "title": "MédiVisio — consultation",
+  "uid": "medivisio-consultation",
+  "tags": ["medivisio", "red"],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "refresh": "1m",
+  "time": {"from": "now-6h", "to": "now"},
+  "templating": {
+    "list": [
+      {
+        "name": "espace",
+        "type": "custom",
+        "query": "medivisio-prod,medivisio-recette,medivisio-dev",
+        "current": {"text": "medivisio-prod", "value": "medivisio-prod"}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1, "type": "timeseries", "title": "Requêtes par seconde (hors sondes)",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [{"refId": "A", "expr": "sum by (route) (rate(consultation_http_requests_total{namespace=\"$espace\", route!~\"/sante|/pret|/metrics\"}[5m]))"}]
+    },
+    {
+      "id": 2, "type": "timeseries", "title": "Taux d'erreurs 5xx",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "fieldConfig": {"defaults": {"unit": "percentunit"}},
+      "targets": [{"refId": "A", "expr": "sum(rate(consultation_http_requests_total{namespace=\"$espace\", code=~\"5..\", route!~\"/sante|/pret|/metrics\"}[5m])) / clamp_min(sum(rate(consultation_http_requests_total{namespace=\"$espace\", route!~\"/sante|/pret|/metrics\"}[5m])), 1e-9)"}]
+    },
+    {
+      "id": 3, "type": "timeseries", "title": "Latence p95 par route",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "targets": [{"refId": "A", "expr": "histogram_quantile(0.95, sum by (le, route) (rate(consultation_http_request_duration_seconds_bucket{namespace=\"$espace\", route!~\"/sante|/pret|/metrics\"}[5m])))"}]
+    },
+    {
+      "id": 4, "type": "stat", "title": "Réplicas prêts",
+      "gridPos": {"x": 12, "y": 8, "w": 6, "h": 8},
+      "targets": [{"refId": "A", "expr": "kube_deployment_status_replicas_available{namespace=\"$espace\", deployment=\"consultation\"}"}]
+    },
+    {
+      "id": 5, "type": "stat", "title": "Budget d'erreurs restant (SLO, prod)",
+      "gridPos": {"x": 18, "y": 8, "w": 6, "h": 8},
+      "fieldConfig": {"defaults": {"unit": "percentunit"}},
+      "targets": [{"refId": "A", "expr": "pyrra_availability{slo=\"medivisio-consultation-disponibilite\", namespace=\"medivisio-prod\"} - on (slo, namespace) pyrra_objective{slo=\"medivisio-consultation-disponibilite\", namespace=\"medivisio-prod\"}"}]
+    }
+  ]
+}

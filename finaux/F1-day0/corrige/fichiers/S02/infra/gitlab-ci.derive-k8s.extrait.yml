@@ -1,0 +1,32 @@
+# plateforme/infra — .gitlab-ci.yml, EXTRAIT F1-S02 (PLAT-3102) : la détection de dérive planifiée
+# (M05-E28, modèle .derive) couvre aussi les états ajoutés depuis le M05. À fusionner dans le fichier
+# existant : un job par configuration vivante, dans le resource_group de son apply.
+
+derive:k8s:
+  extends: .derive
+  variables:
+    DOSSIER: envs/k8s
+  resource_group: tofu-k8s
+
+derive:ceph:
+  extends: .derive
+  variables:
+    DOSSIER: envs/ceph
+  resource_group: tofu-ceph
+
+derive:provisioning:
+  extends: .derive
+  variables:
+    DOSSIER: envs/provisioning
+  resource_group: tofu-provisioning
+
+derive:registre:
+  extends: .derive
+  variables:
+    DOSSIER: registre
+  resource_group: tofu-registre
+
+# derive:alerte : ajouter ces jobs à ses « needs » (artifacts: true), sinon le ticket « derive » ne
+# reçoit pas leurs rapports.
+# Les jobs des environnements de modules détruits (lab-m05, recette-m05…) restent : un état vide est
+# conforme, et un état qui se remplit sans MR est justement une dérive.

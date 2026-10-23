@@ -1,0 +1,9 @@
+#!/bin/sh
+# /usr/local/sbin/infoger-sauvegarde-base — vidage logique de legacy_rdv (InfoGér, 2019).
+# Copie locale seulement : la copie hors site était faite par Veeam (sauvegarde de toute la VM).
+set -eu
+DEST=/var/backups/infoger
+mkdir -p "$DEST"
+chmod 700 "$DEST"
+mariadb-dump --single-transaction --routines --triggers legacy_rdv | gzip -9 > "$DEST/legacy_rdv-$(date +%F).sql.gz"
+find "$DEST" -name 'legacy_rdv-*.sql.gz' -mtime +7 -delete

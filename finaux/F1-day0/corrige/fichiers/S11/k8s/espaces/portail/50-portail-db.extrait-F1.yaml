@@ -1,0 +1,28 @@
+# plateforme/k8s — espaces/portail/50-portail-db.yaml, EXTRAIT (F1-S11, PLAT-3111).
+# Même principe que la recette : récupération depuis s3://cnpg-k8s-par1/portail-db/, archivage sous
+# portail-db-day0. ObjectStore cnpg-s3 et ScheduledBackup portail-db-nuit : 60-portail-db-sauvegarde.yaml
+# (M28-E16), inchangés (le Secret cnpg-s3 de l'espace vient d'ESO, ClusterSecretStore openbao).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: portail-db
+  namespace: portail
+spec:
+  bootstrap:
+    recovery:
+      source: portail-db-avant-day0
+      database: portail
+      owner: portail
+  externalClusters:
+    - name: portail-db-avant-day0
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: cnpg-s3
+          serverName: portail-db
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: cnpg-s3
+        serverName: portail-db-day0

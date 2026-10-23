@@ -1,0 +1,8 @@
+# plateforme/observabilite — tableaux/kustomization.yaml : AJOUT de F2-S05 (MR d'Inès Garnier, relue par
+# la Plateforme). Le dossier Grafana « MédiVisio » (UID medivisio) existe depuis F2-S02 (état
+# observabilite-grafana) : le provisionnement réutilise le dossier de même titre (M21-E17).
+configMapGenerator:
+  # --- MédiVisio ---------------------------------------------------------------------------------
+  - name: tableau-medivisio-consultation
+    files: [medivisio/medivisio-consultation.json]
+    options: {annotations: {grafana_folder: MédiVisio}}

@@ -1,0 +1,2 @@
+# terraform.tfvars (non versionné) — rien d'obligatoire : les défauts de variables.tf conviennent au lab.
+# noeud = "pve01"

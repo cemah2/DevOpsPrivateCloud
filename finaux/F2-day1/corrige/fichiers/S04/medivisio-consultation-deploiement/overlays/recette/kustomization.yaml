@@ -1,0 +1,31 @@
+# medivisio/consultation-deploiement — overlays/recette/ (F2-S04 ; secret et supervision : F2-S05)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: medivisio-recette
+resources:
+  - ../../base
+  - secret.yaml
+labels:
+  - pairs:
+      medisphere.internal/environnement: recette
+    includeSelectors: false
+    includeTemplates: true
+patches:
+  - target: {kind: HTTPRoute, name: consultation}
+    patch: |-
+      - op: replace
+        path: /spec/hostnames/0
+        value: consultation-recette.apps.par1.medisphere.internal
+  - target: {kind: Deployment, name: consultation}
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: recette
+# Promotion en recette : MR de l'équipe qui recopie l'empreinte VALIDÉE en dev (jamais une étiquette :
+# la politique de signature exige une empreinte, verifyDigest).
+images:
+  - name: registry.par1.medisphere.internal/medisphere/medivisio-consultation
+    digest: sha256:<EMPREINTE-VALIDÉE-EN-DEV>

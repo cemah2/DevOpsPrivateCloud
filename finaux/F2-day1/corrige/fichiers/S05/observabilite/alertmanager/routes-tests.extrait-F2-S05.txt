@@ -1,0 +1,10 @@
+# plateforme/observabilite — alertmanager/routes-tests.txt : LIGNES AJOUTÉES en F2-S05 (format du
+# M21-E07 : étiquettes de l'alerte -> récepteurs attendus). La configuration testée doit être celle que
+# l'opérateur a GÉNÉRÉE (AlertmanagerConfig fusionnés) : récupère-la par l'API (/api/v2/status,
+# .config.original) avant de lancer outils/tester-routes.sh. Les noms de récepteurs générés sont
+# préfixés par l'opérateur : <espace>/<nom de l'AlertmanagerConfig>/<récepteur>.
+alertname=ErrorBudgetBurn gravite=avertissement equipe=medivisio namespace=medivisio-prod -> medivisio-prod/alertes-medivisio/equipe-courriel
+alertname=ErrorBudgetBurn gravite=critique equipe=medivisio namespace=medivisio-prod -> medivisio-prod/alertes-medivisio/equipe-courriel,astreinte-mail
+alertname=ErrorBudgetBurn gravite=avertissement equipe=medivisio namespace=medivisio-recette -> medivisio-recette/alertes-medivisio/equipe-courriel
+# Une alerte d'un AUTRE espace qui se dirait de l'équipe medivisio n'arrive PAS chez elle :
+alertname=Essai gravite=avertissement equipe=medivisio namespace=mediagenda-prod -> plateforme-mail

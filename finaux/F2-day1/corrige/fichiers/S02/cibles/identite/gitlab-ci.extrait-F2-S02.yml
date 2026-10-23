@@ -1,0 +1,68 @@
+# plateforme/identite — .gitlab-ci.yml : CHANGEMENT de F2-S02 (PLAT-3202, ADR-0320).
+# Une MR de propagation (auteur svc-equipes, étiquette equipe-en-code) a déjà été relue dans
+# plateforme/equipes : une fois fusionnée, son application est AUTOMATIQUE (changement standard
+# pré-approuvé), à deux conditions vérifiées par le job lui-même :
+#   - le commit ne touche QUE des fichiers rendus (annuaire/equipes/, outils/synchro-gitlab.d/,
+#     tofu/equipes.auto.tfvars.json) — sinon : manuel, comme avant ;
+#   - l'aperçu (--check --diff) ne SUPPRIME aucune personne ni aucun groupe (les modules ne suppriment
+#     rien ici : un départ est « disabled », M24-E03) — garde-fou contre un rendu inattendu.
+# Les règles existantes d'annuaire:appliquer (manuel sur main) restent pour tout autre commit.
+
+annuaire:appliquer:
+  # … extends, stage, interruptible, resource_group, script et artifacts de M24-E03 inchangés …
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    # Rendu de plateforme/equipes fusionné : automatique.
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_MESSAGE =~ /rendu de plateforme\/equipes@/
+      changes:
+        paths:
+          - annuaire/equipes/**/*
+          - outils/synchro-gitlab.d/**/*
+      when: on_success
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      when: manual
+
+# Le même commit déclenche la synchronisation GitLab (sans attendre l'heure suivante), APRÈS l'annuaire.
+synchro:gitlab:
+  # … reste inchangé (M24-E11) …
+  needs:
+    - job: annuaire:appliquer
+      optional: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SYNCHRO == "gitlab" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_MESSAGE =~ /rendu de plateforme\/equipes@/
+      changes:
+        paths:
+          - annuaire/equipes/**/*
+          - outils/synchro-gitlab.d/**/*
+      when: on_success
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - annuaire/personnes.yml
+        - annuaire/groupes.yml
+        - outils/synchro-gitlab.*
+      when: manual
+      allow_failure: true
+
+# Le message testé est présent dans le commit de propagation ET dans le commit de fusion (modèle de
+# message de fusion par défaut de GitLab : titre de la MR inclus) ; l'auteur du commit de fusion est
+# celui qui a posé la fusion automatique, svc-equipes.
+# Garde-fou « rien d'autre n'a changé » : le message de commit ne suffit pas (n'importe qui peut
+# l'écrire). Ce job échoue si le commit de propagation touche un fichier hors des chemins rendus, ou s'il
+# n'est pas l'œuvre de svc-equipes : annuaire:appliquer, qui en dépend, ne part alors pas.
+equipes:garde-fou:
+  stage: verifier
+  tags: [shell]
+  script:
+    - test "$CI_COMMIT_AUTHOR" = "svc-equipes <svc-equipes@medisphere.internal>"
+    - |
+      hors="$(git diff --name-only "$CI_COMMIT_BEFORE_SHA" "$CI_COMMIT_SHA" \
+        | grep -Ev '^(annuaire/equipes/|outils/synchro-gitlab\.d/|tofu/equipes\.auto\.tfvars\.json$)' || true)"
+      if [ -n "$hors" ]; then echo "Fichiers hors du rendu : $hors"; exit 1; fi
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_MESSAGE =~ /rendu de plateforme\/equipes@/
+# … et dans annuaire:appliquer : « needs: [equipes:garde-fou] » (optional: true pour les autres commits).
+# Le même schéma (garde-fou + application automatique sans destruction) vaut pour tofu:apply dans
+# plateforme/identite, plateforme/secrets et plateforme/infra (observabilite-grafana) : voir
+# secrets/gitlab-ci.extrait-F2-S02.yml.

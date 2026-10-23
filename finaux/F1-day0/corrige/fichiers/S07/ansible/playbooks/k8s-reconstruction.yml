@@ -1,0 +1,57 @@
+---
+# playbooks/k8s-reconstruction.yml — reconstruction des nœuds de k8s-par1 (F1-S07, CHG-3107).
+# N'invente rien : enchaîne, dans l'ordre que leurs en-têtes imposent, les playbooks des modules 14,
+# 24 et 26. Lancé par plateforme/k8s/outils/day0/20-noeuds.sh (ou à la main, depuis adm01) :
+#   uv run ansible-playbook playbooks/k8s-reconstruction.yml --limit k8s_par1 \
+#     -e k8s_plan_controle_amorcage_auto=true \
+#     -e k8s_plan_controle_fichier_cluster=$HOME/src/k8s/cluster/kubeadm-config.yaml
+#
+# Ordre et raisons :
+#   1. k8s-noeuds.yml        containerd et paquets kubeadm/kubelet (M14-E02) ;
+#   2. durcissement.yml      vague 6 limitée aux nœuds (M26), un nœud à la fois : AVANT kubeadm, pour que
+#                            les exceptions du durcissement (sysctl, modules, swap) soient éprouvées sur
+#                            un nœud neuf et non découvertes sur un cluster en service ;
+#   3. k8s-api-fichiers.yml  audit, chiffrement des Secrets, authentification structurée (M14-E27/E28,
+#                            M24-E16) : un serveur d'API dont une option vise un fichier absent ne démarre
+#                            pas, donc AVANT l'amorçage ;
+#   4. k8s-cluster.yml       VIP (keepalived + HAProxy), amorçage par k8s-cp01 (variable explicite),
+#                            jonction des deux autres nœuds de contrôle puis des travailleurs ;
+#   5. k8s-etcd-instantane.yml  instantané horaire chiffré vers s3-01 (M14-E24).
+# --limit k8s_par1 est OBLIGATOIRE : la vague 6 du durcissement contient aussi ceph01-03 et adm01.
+# L'inscription FreeIPA (inscription-ipa.yml) exige --limit et un nœud de contrôle à la fois : elle
+# est lancée nœud par nœud par 20-noeuds.sh, AVANT ce playbook (le client FreeIPA n'a besoin de rien
+# d'autre que du réseau et du DNS). La carte VLAN 30 des
+# travailleurs (k8s-reseau-stockage.yml) attend des nœuds Ready : elle vient en F1-S08, après Cilium.
+
+- name: Garde-fous — reconstruction explicite, nœuds de k8s-par1 seulement
+  hosts: k8s_par1
+  gather_facts: false
+  tasks:
+    - name: Amorçage demandé explicitement et passage limité aux six nœuds
+      ansible.builtin.assert:
+        that:
+          - k8s_plan_controle_amorcage_auto | default(false) | bool
+          - ansible_limit is defined
+          - ansible_play_hosts_all | difference(groups['k8s_par1']) | length == 0
+        fail_msg: >-
+          Reconstruction : passe --limit k8s_par1 et -e k8s_plan_controle_amorcage_auto=true
+          (geste explicite, CHG-3107).
+        quiet: true
+      run_once: true
+
+- name: Nœuds (containerd, kubeadm, kubelet)
+  ansible.builtin.import_playbook: k8s-noeuds.yml
+
+- name: Durcissement des nœuds (vague 6, nœuds de k8s-par1 seulement)
+  ansible.builtin.import_playbook: durcissement.yml
+  vars:
+    vague: 6
+
+- name: Fichiers du serveur d'API (audit, chiffrement, OIDC)
+  ansible.builtin.import_playbook: k8s-api-fichiers.yml
+
+- name: Cluster (VIP, amorçage, jonctions)
+  ansible.builtin.import_playbook: k8s-cluster.yml
+
+- name: Instantanés etcd
+  ansible.builtin.import_playbook: k8s-etcd-instantane.yml

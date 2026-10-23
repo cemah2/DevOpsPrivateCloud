@@ -1,0 +1,65 @@
+# GÉNÉRÉ par plateforme/equipes (outils/rendre.py) depuis equipes/data.yaml — NE PAS MODIFIER ICI.
+#
+# Une Application par service ET par environnement, sans MR à la plateforme : l'équipe déclare un
+# service en ajoutant services/<service>.yaml (« service: <service> ») dans SON dépôt data/gitops ;
+# le service est livré depuis data/<service>-deploiement, overlays/<environnement>.
+# Ce que l'équipe NE contrôle PAS : le projet Argo CD (écrit en dur : « data », jamais une valeur
+# du générateur), les destinations (l'AppProject n'accepte que ses espaces), la politique de
+# synchronisation de chaque environnement.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: data
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: data
+    medisphere.internal/origine: plateforme-equipes
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  # Si un service disparaît du générateur (fichier supprimé, dépôt illisible), son Application est
+  # supprimée mais PAS les objets qu'elle a déployés : le retrait d'un service reste un geste explicite
+  # (RB-320). (« applicationsSync » ferait plus, mais exige l'option --enable-policy-override du
+  # contrôleur d'ApplicationSet : non activée chez MédiSphère.)
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+  generators:
+    - matrix:
+        generators:
+          - git:
+              repoURL: https://git01.par1.medisphere.internal/data/gitops.git
+              revision: main
+              files:
+                - path: "services/*.yaml"
+          - list:
+              elements:
+                - environnement: traitements
+                  synchronisation: automatique
+  template:
+    metadata:
+      name: 'data-{{ .service }}-{{ .environnement }}'
+      labels:
+        medisphere.internal/equipe: data
+        medisphere.internal/environnement: '{{ .environnement }}'
+    spec:
+      project: data
+      source:
+        repoURL: 'https://git01.par1.medisphere.internal/data/{{ .service }}-deploiement.git'
+        targetRevision: main
+        path: 'overlays/{{ .environnement }}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: 'data-{{ .environnement }}'
+  # Synchronisation automatique (prune, selfHeal) sauf pour les environnements « manuelle » (production) :
+  # là, un humain synchronise, dans la fenêtre de l'AppProject.
+  templatePatch: |
+    spec:
+      syncPolicy:
+    {{- if eq .synchronisation "automatique" }}
+        automated:
+          prune: true
+          selfHeal: true
+    {{- end }}
+        syncOptions:
+          - ServerSideApply=true
+          - CreateNamespace=false

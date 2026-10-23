@@ -1,0 +1,143 @@
+# plateforme/k8s — locataires/rattachement.yaml (F2-S02, PLAT-3202) — Application « locataires ».
+# Ajouté à locataires/kustomization.yaml (resources). Généralise outils/rattacher-locataires.sh du M28-E05
+# aux espaces des équipes en code : toutes les 5 minutes, chaque espace étiqueté
+#   capsule.clastix.io/tenant=<t>, medisphere.internal/environnement=<env>,
+#   medisphere.internal/origine=plateforme-equipes
+# SANS référence de propriétaire reçoit celle de son Tenant, si (et seulement si) ce Tenant est protégé
+# (spec.preventDeletion ET annotation Argo CD Delete=false). Un espace qui a déjà un propriétaire n'est
+# jamais modifié. Les espaces historiques (mediagenda-*, medidoc-*, medinotif-*) ne portent pas
+# l'étiquette d'origine : le script du M28 reste leur outil.
+#
+# Droits : lire espaces et Tenants, patcher les espaces, et « update » sur tenants/finalizers (exigé par
+# l'apiserver pour poser blockOwnerDeletion vers un Tenant). Rien d'autre ; pas un utilisateur Capsule.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rattacher-locataires
+  namespace: capsule-system
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rattacher-locataires
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, list, patch]
+  - apiGroups: [capsule.clastix.io]
+    resources: [tenants]
+    verbs: [get, list]
+  - apiGroups: [capsule.clastix.io]
+    resources: [tenants/finalizers]
+    verbs: [update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rattacher-locataires
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rattacher-locataires
+subjects:
+  - kind: ServiceAccount
+    name: rattacher-locataires
+    namespace: capsule-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rattacher-locataires
+  namespace: capsule-system
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+data:
+  rattacher.sh: |
+    #!/bin/sh
+    # Rattache les espaces des équipes en code à leur Tenant (F2-S02). POSIX sh + kubectl seulement.
+    set -eu
+    liste="$(kubectl get namespaces \
+      -l 'capsule.clastix.io/tenant,medisphere.internal/environnement,medisphere.internal/origine=plateforme-equipes' \
+      -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.metadata.labels.capsule\.clastix\.io/tenant}{" "}{.metadata.ownerReferences[*].kind}{"\n"}{end}')"
+    # Le corps de la boucle tourne dans le même sous-shell que « exit » : le code d'erreur sort bien.
+    printf '%s\n' "$liste" | {
+    erreur=0
+    while read -r ns tenant proprietaires; do
+      [ -n "$ns" ] || continue
+      if [ -n "${proprietaires:-}" ]; then
+        continue
+      fi
+      prot="$(kubectl get tenants.capsule.clastix.io "$tenant" -o jsonpath='{.spec.preventDeletion}' 2>/dev/null || true)"
+      opts="$(kubectl get tenants.capsule.clastix.io "$tenant" -o jsonpath='{.metadata.annotations.argocd\.argoproj\.io/sync-options}' 2>/dev/null || true)"
+      uid="$(kubectl get tenants.capsule.clastix.io "$tenant" -o jsonpath='{.metadata.uid}' 2>/dev/null || true)"
+      case "$opts" in *Delete=false*) ;; *) prot="non" ;; esac
+      if [ "$prot" != "true" ] || [ -z "$uid" ]; then
+        echo "KO  $ns : Tenant $tenant absent ou non protégé — rien n'est fait"
+        erreur=1
+        continue
+      fi
+      if kubectl patch namespace "$ns" --type=merge -p \
+        "{\"metadata\":{\"ownerReferences\":[{\"apiVersion\":\"capsule.clastix.io/v1beta2\",\"kind\":\"Tenant\",\"name\":\"$tenant\",\"uid\":\"$uid\",\"controller\":true,\"blockOwnerDeletion\":true}]}}" \
+        >/dev/null; then
+        echo "OK  $ns : rattaché à $tenant"
+      else
+        echo "KO  $ns : le patch a été refusé"
+        erreur=1
+      fi
+    done
+    exit "$erreur"
+    }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: rattacher-locataires
+  namespace: capsule-system
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 240
+      template:
+        spec:
+          serviceAccountName: rattacher-locataires
+          automountServiceAccountToken: true
+          restartPolicy: Never
+          priorityClassName: medisphere-standard
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: rattacher
+              # Même image que les jobs du chart Capsule (valeurs/capsule/values.yaml, M28-E05), par le
+              # cache Harbor et par empreinte. Vérifie qu'elle fournit /bin/sh (image kubectl de Clastix).
+              image: registry.par1.medisphere.internal/dockerhub/clastix/kubectl:v1.36.5@sha256:<DIGEST-KUBECTL>
+              command: ["/bin/sh", "/script/rattacher.sh"]
+              resources:
+                requests: {cpu: 10m, memory: 32Mi}
+                limits: {memory: 64Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: ["ALL"]}
+              volumeMounts:
+                - {name: script, mountPath: /script, readOnly: true}
+          volumes:
+            - name: script
+              configMap:
+                name: rattacher-locataires

@@ -1,0 +1,21 @@
+# group_vars/role_lb/haproxy.yml (plateforme/ansible) — EXTRAIT à intégrer (F4-S10, CHG-3410).
+# Base : la version de M15-E20 + M24-E04 (aiguillage par SNI, terminaison TLS locale dans fe_publication).
+# rdv.par1.medisphere.internal n'est pas un nom du cluster : il tombe dans be_terminaison_locale, donc
+# dans fe_publication, comme sso, GitLab et NetBox. Un répartiteur à la fois : --limit lb02, contrôle,
+# puis --limit lb01.
+#
+# 1) Dans fe_publication, AVANT les « use_backend » existants :
+      # --- (F4-S10) rdv : Legacy-RDV, nom des cabinets ---------------------------------------------
+      - acl rdv_hote var(txn.hote) -m str rdv.par1.medisphere.internal
+      # La page de disponibilité (F4-S12) donne un nombre de rendez-vous : jamais hors du lab.
+      - http-request deny deny_status 404 if rdv_hote { path_beg /pret.php }
+      - use_backend be_legacy_rdv if rdv_hote
+#
+# 2) Nouvelle section, après be_sso : le contenu dépend de legacy_rdv_cible (legacy-rdv.yml).
+  - type: backend
+    nom: be_legacy_rdv
+    lignes: "{{ legacy_rdv_backends[legacy_rdv_cible] }}"
+#
+# 3) haproxy_verifications : ajoute (après la vague 2 de CHG-3410)
+#  - url: "https://rdv.par1.medisphere.internal/"
+#    tls: true

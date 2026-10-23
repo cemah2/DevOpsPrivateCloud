@@ -1,0 +1,10 @@
+# /etc/mysql/mariadb.conf.d/60-infoger.cnf — réglages InfoGér de legacy-rdv01 (2021).
+[mysqld]
+# Écoute sur toutes les interfaces : stats01 (192.168.50.40) lit la base à distance.
+bind-address           = 0.0.0.0
+character-set-server   = utf8mb4
+collation-server       = utf8mb4_unicode_ci
+# Fuseau : celui du système (Europe/Paris), comme le code PHP.
+default-time-zone      = SYSTEM
+innodb_buffer_pool_size = 256M
+max_connections        = 60

@@ -1,0 +1,40 @@
+# plateforme/identite — annuaire/annuaire.yml : CHANGEMENTS de F2-S02 (PLAT-3202), une fois pour toutes.
+# Le playbook lit en plus les fichiers RENDUS par plateforme/equipes (annuaire/equipes/, possédé par le
+# générateur) et traite personnes et groupes des équipes comme les autres. Le reste du fichier (M24-E03,
+# E19 : HBAC, sudo) est inchangé. Les équipes n'ont AUCUNE règle HBAC ni sudo : avec allow_all désactivé
+# (M24-E19), leurs membres n'entrent sur aucune machine (refus par défaut, vérifié en S02).
+#
+# 1. vars_files : ajouter, après comptes-systeme.yml (avant hbac.yml) :
+#      - equipes/personnes.yml      # annuaire_personnes_equipes (rendu)
+#      - equipes/groupes.yml        # annuaire_groupes_equipes (rendu)
+#
+# 2. Ajouter au niveau du play (après vars_files) les listes fusionnées, et remplacer PARTOUT
+#    « annuaire_personnes » par « _personnes » et « annuaire_groupes » par « _groupes » dans pre_tasks et
+#    tasks (assert, ipauser ×2, ipagroup). (Fragments séparés par « --- » : chacun se colle à son niveau.)
+---
+vars:
+  _personnes: "{{ annuaire_personnes + annuaire_personnes_equipes }}"
+  _groupes: "{{ annuaire_groupes + annuaire_groupes_equipes }}"
+
+# 3. pre_tasks — l'assertion existante vérifie déjà l'unicité des identifiants : sur _personnes, elle
+#    refuse une personne décrite à la fois dans personnes.yml et dans une équipe (une seule source par
+#    personne). Ajouter :
+---
+- name: Aucun groupe d'équipe ne porte le nom d'un groupe de l'annuaire (plateforme, securite…)
+  ansible.builtin.assert:
+    that:
+      - (annuaire_groupes | map(attribute='nom') | intersect(annuaire_groupes_equipes | map(attribute='nom'))) | length == 0
+    fail_msg: "groupe d'équipe homonyme d'un groupe existant : à corriger dans plateforme/equipes"
+    quiet: true
+
+# 4. tasks — après « Personnes actives ou désactivées », ajouter l'expiration (prestataires, F2-S10) :
+#    format accepté par ipauser : « AAAA-MM-JJ HH:MM:SSZ » (documentation du module, principalexpiration).
+---
+- name: Expiration du principal Kerberos (personnes datées, F2-S10)
+  freeipa.ansible_freeipa.ipauser:
+    name: "{{ item.identifiant }}"
+    principalexpiration: "{{ item.expiration }} 23:59:59Z"
+    state: present
+  loop: "{{ _personnes | selectattr('expiration', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.identifiant }} → {{ item.expiration }}"

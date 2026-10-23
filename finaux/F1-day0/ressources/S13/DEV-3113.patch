@@ -1,0 +1,81 @@
+diff --git a/src/mediagenda/modeles.py b/src/mediagenda/modeles.py
+index bd9cb7a..9e79fc8 100644
+--- a/src/mediagenda/modeles.py
++++ b/src/mediagenda/modeles.py
+@@ -4,7 +4,7 @@ from __future__ import annotations
+ 
+ from datetime import date, datetime
+ 
+-from pydantic import AwareDatetime, BaseModel, Field
++from pydantic import AwareDatetime, BaseModel, Field, computed_field
+ 
+ 
+ class RendezVousCreation(BaseModel):
+@@ -26,3 +26,11 @@ class Creneaux(BaseModel):
+     praticien: str
+     fuseau: str
+     libres: list[datetime]
++
++    # DEV-3113 : nombre de créneaux libres, calculé (jamais stocké ni lu en entrée). Une réponse
++    # mise en cache par une version précédente (sans ce champ) reste lisible : il est recalculé ;
++    # une réponse qui le contiendrait déjà l'ignore à la lecture (champ calculé, pas d'entrée).
++    @computed_field  # type: ignore[prop-decorator]
++    @property
++    def nombre(self) -> int:
++        return len(self.libres)
+diff --git a/tests/test_creneaux_nombre.py b/tests/test_creneaux_nombre.py
+new file mode 100644
+index 0000000..49c3f07
+--- /dev/null
++++ b/tests/test_creneaux_nombre.py
+@@ -0,0 +1,50 @@
++"""DEV-3113 : nombre de créneaux libres dans la réponse de /api/v1/creneaux."""
++
++from __future__ import annotations
++
++from mediagenda.modeles import Creneaux
++
++RDV = {
++    "patient": "Jeanne Dupont",
++    "praticien": "dr-morel",
++    "debut": "2026-11-02T09:00:00+01:00",
++    "motif": "Contrôle annuel",
++}
++PARAMS = {"date": "2026-11-02", "praticien": "dr-morel"}
++
++
++def test_nombre_egal_a_la_liste(client):
++    corps = client.get("/api/v1/creneaux", params=PARAMS).json()
++    assert corps["nombre"] == len(corps["libres"]) == 16
++
++
++def test_nombre_suit_les_reservations(client):
++    client.get("/api/v1/creneaux", params=PARAMS)
++    client.post("/api/v1/rendez-vous", json=RDV)
++    corps = client.get("/api/v1/creneaux", params=PARAMS).json()
++    assert corps["nombre"] == 15
++
++
++def test_reponse_en_cache_d_une_version_precedente(client, cache):
++    # Valeur écrite en cache par la version N-1 (sans « nombre ») : toujours servie, champ ajouté.
++    ancienne = (
++        '{"date":"2026-11-02","praticien":"dr-morel","fuseau":"Europe/Paris",'
++        '"libres":["2026-11-02T08:00:00+01:00","2026-11-02T08:30:00+01:00"]}'
++    )
++    cache.donnees["mediagenda:creneaux:dr-morel:2026-11-02"] = ancienne
++    corps = client.get("/api/v1/creneaux", params=PARAMS).json()
++    assert corps["nombre"] == 2
++
++
++def test_nombre_n_est_pas_une_entree():
++    # Un client (ou un cache) qui enverrait « nombre » ne peut pas l'imposer.
++    c = Creneaux.model_validate(
++        {
++            "date": "2026-11-02",
++            "praticien": "x",
++            "fuseau": "Europe/Paris",
++            "libres": [],
++            "nombre": 99,
++        }
++    )
++    assert c.nombre == 0

@@ -1,0 +1,10 @@
+#!/bin/bash
+# Faux kubectl des tests de ms-verif-equipe : objets figés de l'équipe « data » ; tout le reste échoue.
+case "$*" in
+  *"get tenants.capsule.clastix.io data"*) echo '{"spec":{"owners":[{"kind":"Group","name":"oidc:data"}],"priorityClasses":{"allowed":["medisphere-lot"]}},"status":{"namespaces":["data-traitements"]}}';;
+  *"get resourcequotas -n data-traitements"*) echo '{"items":[{}]}';;
+  *"get limitranges -n data-traitements"*) echo '{"items":[{}]}';;
+  *"get namespace data-traitements"*) echo '{"metadata":{"labels":{"pod-security.kubernetes.io/enforce":"restricted","medisphere.internal/environnement":"traitements"}}}';;
+  *"get appprojects.argoproj.io -n argocd data"*) echo '{"spec":{"destinations":[{"namespace":"data-traitements"}],"sourceRepos":["https://git01/data/*"]}}';;
+  *) exit 1;;
+esac

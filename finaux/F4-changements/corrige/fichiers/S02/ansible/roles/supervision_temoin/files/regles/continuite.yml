@@ -1,0 +1,16 @@
+# plateforme/ansible — roles/supervision_temoin/files/regles/continuite.yml (F4-S02, CHG-3402)
+# Règles d'enregistrement de la MESURE D'INTERRUPTION sur le témoin de mon01, déposées comme goss.yml
+# (M29-E07). Elles restent évaluées quand k8s-par1 est arrêté (F4-S08) : c'est la source « temoin ».
+# L'étiquette job="blackbox" est CONSERVÉE : les séries sont fédérées vers le cluster par
+# federation-mon01 (match[] {job=~"pve|hyperviseurs|blackbox"}, M21-E12) sans rien y changer.
+# Test : promtool test rules continuite.test.yml
+groups:
+  - name: continuite
+    interval: 15s
+    rules:
+      # 1 si la sonde échoue, 0 si elle réussit ; une sonde absente (cible retirée) n'existe plus.
+      - record: continuite:sonde_en_erreur
+        expr: 1 - probe_success{job="blackbox", groupe=~"continuite-.+"}
+      # 1 si AU MOINS une sonde de continuité échoue. « by (job) » garde job="blackbox" (fédération).
+      - record: continuite:sondes_en_erreur:max
+        expr: max by (job) (continuite:sonde_en_erreur)

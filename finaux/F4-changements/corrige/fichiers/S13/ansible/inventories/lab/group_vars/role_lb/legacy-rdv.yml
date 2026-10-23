@@ -1,0 +1,37 @@
+---
+# group_vars/role_lb/legacy-rdv.yml (plateforme/ansible) — publication de Legacy-RDV aux cabinets
+# (F4-S10, CHG-3410 ; version F4-S13, CHG-3413 : cible « maintenance » ajoutée, cible finale k8s). Lu par la section be_legacy_rdv de haproxy.yml.
+#
+# legacy_rdv_cible : QUI sert rdv.par1.medisphere.internal.
+#   vm   legacy-rdv01 (10.10.20.44:80, HTTP : exception EXC-H déclarée jusqu'à la bascule)
+#   maintenance  page 503 « maintenance programmée » servie par les répartiteurs (gel de la bascule :
+#                plus aucune écriture n'atteint l'ancienne application)
+#   k8s  Legacy-RDV dans legacy-rdv-prod, par la Gateway gw-par1 (TLS re-chiffré, Host réécrit)
+# Bascule : vm → maintenance → k8s ; retour arrière : k8s → maintenance → vm. Une variable, un
+# répartiteur à la fois (lb02 puis lb01), par MR pré-approuvée dans la fiche CHG-3413 (RB-346).
+legacy_rdv_cible: k8s
+
+legacy_rdv_backends:
+  vm:
+    - option httpchk
+    # Pas de page de santé sur la VM : la page d'accueil (elle interroge la base : un serveur dont la
+    # base est arrêtée est retiré, c'est voulu).
+    - http-check send meth GET uri / ver HTTP/1.1 hdr Host rdv.par1.medisphere.internal
+    - http-check expect status 200
+    - server legacy-rdv01 10.10.20.44:80 check inter 5s fall 3 rise 2
+  maintenance:
+    - >-
+      http-request return status 503 content-type "text/html; charset=utf-8"
+      string "<!DOCTYPE html><html lang=fr><meta charset=utf-8><title>Maintenance - MédiSphère RDV</title><h1>Maintenance programmée</h1><p>La prise de rendez-vous est en maintenance jusqu'à 07:30. Merci de réessayer dans quelques minutes.</p></html>"
+      hdr Retry-After 900
+  k8s:
+    - option httpchk
+    - http-check send meth GET uri /pret.php ver HTTP/1.1 hdr Host legacy-rdv.apps.par1.medisphere.internal
+    - http-check expect status 200
+    # La Gateway n'a pas de route pour rdv.par1… (écouteur *.apps.par1…) : on présente le nom interne.
+    - http-request set-header Host legacy-rdv.apps.par1.medisphere.internal
+    - >-
+      server gw-par1 10.10.41.10:443 ssl verify required
+      ca-file /usr/local/share/ca-certificates/medisphere-root-ca.crt
+      sni str(legacy-rdv.apps.par1.medisphere.internal) verifyhost legacy-rdv.apps.par1.medisphere.internal
+      check check-sni legacy-rdv.apps.par1.medisphere.internal inter 5s fall 3 rise 2

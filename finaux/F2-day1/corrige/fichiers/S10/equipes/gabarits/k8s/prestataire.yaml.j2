@@ -1,0 +1,119 @@
+{#- gabarits/k8s/prestataire.yaml.j2 — espace d'un PRESTATAIRE hébergé chez une autre équipe (F2-S10).
+    Rendu dans plateforme/k8s : equipes/<equipe>/espaces/<espace>.yaml (Application equipes-k8s).
+    Variables : e (équipe, type prestataire), h (e.hebergement), lecteur (vrai si role == prestataire-lecteur). -#}
+# GÉNÉRÉ par plateforme/equipes (outils/rendre.py) depuis equipes/{{ e.nom }}.yaml — NE PAS MODIFIER ICI.
+# Espace du prestataire {{ e.nom }} dans le locataire {{ h.locataire }} (propriétaires : oidc:{{ h.locataire }},
+# en lecture, M28-E05). Environnement « dev » sans donnée réelle ni secret de production.
+# ⚠️ CONTRAIREMENT aux espaces des équipes internes, cet espace N'EST PAS protégé de l'élagage
+#    (pas de Prune=false) : « etat: retiree » ou la fin du bloc hebergement le SUPPRIME avec tout son
+#    contenu à la synchronisation suivante (départ du prestataire « par le code », F2-S12). Décision
+#    écrite dans RB-329 : rien de ce qui vit ici ne doit survivre au contrat.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ h.espace }}
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    capsule.clastix.io/tenant: {{ h.locataire }}
+    medisphere.internal/equipe: {{ h.locataire }}
+    medisphere.internal/proprietaire: {{ h.locataire }}
+    medisphere.internal/prestataire: {{ e.nom }}
+    medisphere.internal/environnement: dev
+    medisphere.internal/origine: plateforme-equipes
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    medisphere.internal/ticket: "{{ e.ticket }}"
+    medisphere.internal/expiration: "{{ e.expiration }}"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota
+  namespace: {{ h.espace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  hard:
+{%- for k, v in h.quota.items() %}
+    {{ k }}: "{{ v }}"
+{%- endfor %}
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limites
+  namespace: {{ h.espace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  limits:
+    - type: Container
+      defaultRequest: {cpu: 50m, memory: 64Mi}
+      default: {memory: 256Mi}
+      max: {cpu: "1", memory: 1Gi}
+---
+# Pourquoi pas « edit » : edit lit les Secrets de l'espace, autorise exec et attach, crée des comptes de
+# service dont les jetons survivraient au départ. Le prestataire déploie et observe SA version, rien de plus.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ h.role }}
+  namespace: {{ h.espace }}
+  labels:
+    medisphere.internal/prestataire: {{ e.nom }}
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/log, events, services, endpoints, configmaps, persistentvolumeclaims, resourcequotas, limitranges]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets, statefulsets]
+    verbs: [get, list, watch]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [get, list, watch]
+  - apiGroups: [events.k8s.io]
+    resources: [events]
+    verbs: [get, list, watch]
+{%- if not lecteur %}
+  - apiGroups: [""]
+    resources: [services, configmaps, persistentvolumeclaims]
+    verbs: [create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [delete]
+  - apiGroups: [""]
+    resources: [pods/portforward]
+    verbs: [create]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets]
+    verbs: [create, update, patch, delete]
+  - apiGroups: [apps]
+    resources: [deployments/scale]
+    verbs: [get, update, patch]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [create, update, patch, delete]
+{%- endif %}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ h.role }}
+  namespace: {{ h.espace }}
+  labels:
+    medisphere.internal/prestataire: {{ e.nom }}
+  annotations:
+    medisphere.internal/expiration: "{{ e.expiration }}"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ h.role }}
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "oidc:{{ e.nom }}"

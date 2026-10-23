@@ -1,0 +1,82 @@
+# plateforme/observabilite — tests/notifications-astreinte.test.yaml (F3-S13) : promtool test rules
+# (règles extraites par outils/extraire-regles.sh dans build/regles/).
+rule_files:
+  - ../build/regles/notifications-astreinte.yml
+evaluation_interval: 1m
+tests:
+  - name: plafond abaissé à 2 et file qui grossit (INC-5913, variante 2)
+    interval: 1m
+    input_series:
+      - series: 'kube_horizontalpodautoscaler_status_current_replicas{namespace="medinotif-prod", horizontalpodautoscaler="keda-hpa-medinotif"}'
+        values: '2x30'
+      - series: 'kube_horizontalpodautoscaler_status_desired_replicas{namespace="medinotif-prod", horizontalpodautoscaler="keda-hpa-medinotif"}'
+        values: '2x30'
+      - series: 'kube_horizontalpodautoscaler_spec_max_replicas{namespace="medinotif-prod", horizontalpodautoscaler="keda-hpa-medinotif"}'
+        values: '2x30'
+      # 300 messages au départ, +70 par minute.
+      - series: 'rabbitmq_detailed_queue_messages_ready{vhost="medinotif-prod", queue="notifications", pod="rabbitmq-server-1"}'
+        values: '300+70x30'
+    alert_rule_test:
+      # 500 dépassé à 3 min, alerte à 13 min (for: 10m).
+      - eval_time: 10m
+        alertname: MedinotifAuPlafondEnRetard
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: MedinotifAuPlafondEnRetard
+        exp_alerts:
+          - exp_labels: {gravite: critique, equipe: plateforme}
+            exp_annotations:
+              resume: "MédiNotif (prod) au plafond et la file notifications dépasse 500 messages"
+              description: "Depuis 10 min, MédiNotif ne peut plus monter (maximum atteint ou pods demandés non créés) et la file notifications de medinotif-prod dépasse 500 messages : les rappels partent en retard. Vérifier le repli de KEDA, le maximum du ScaledObject (comparé au dépôt) et les consommateurs. RB-338."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/exploitation/runbooks/RB-338-notifications-en-retard.md
+  - name: campagne absorbée normalement (aucune alerte)
+    interval: 1m
+    input_series:
+      # Le plafond est atteint un moment, mais la file reste sous 500 : rien à signaler.
+      - series: 'kube_horizontalpodautoscaler_status_current_replicas{namespace="medinotif-prod", horizontalpodautoscaler="keda-hpa-medinotif"}'
+        values: '8x30'
+      - series: 'kube_horizontalpodautoscaler_status_desired_replicas{namespace="medinotif-prod", horizontalpodautoscaler="keda-hpa-medinotif"}'
+        values: '8x30'
+      - series: 'kube_horizontalpodautoscaler_spec_max_replicas{namespace="medinotif-prod", horizontalpodautoscaler="keda-hpa-medinotif"}'
+        values: '8x30'
+      - series: 'rabbitmq_detailed_queue_messages_ready{vhost="medinotif-prod", queue="notifications", pod="rabbitmq-server-0"}'
+        values: '400x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: MedinotifAuPlafondEnRetard
+        exp_alerts: []
+  - name: consommateurs en CrashLoopBackOff (message empoisonné, variante 3)
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_restarts_total{namespace="medinotif-prod", pod="medinotif-7d9f-abcde", container="medinotif"}'
+        values: '0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20'
+      - series: 'kube_pod_container_status_restarts_total{namespace="medinotif-prod", pod="medinotif-7d9f-fghij", container="medinotif"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: MedinotifRedemarreEnBoucle
+        exp_alerts:
+          - exp_labels: {gravite: critique, equipe: plateforme}
+            exp_annotations:
+              resume: "Les consommateurs MédiNotif de prod redémarrent en boucle"
+              description: "Plus de 3 redémarrages de conteneurs MédiNotif en 15 min dans medinotif-prod : message empoisonné probable (RB-277), ou configuration cassée. Ne PAS purger la file. RB-338."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/exploitation/runbooks/RB-338-notifications-en-retard.md
+  - name: dérive de la production (ScaledObject modifié en direct)
+    interval: 1m
+    input_series:
+      - series: 'argocd_app_info{name="medinotif-prod", namespace="argocd", dest_namespace="medinotif-prod", sync_status="OutOfSync", health_status="Healthy"}'
+        values: '1x200'
+      - series: 'argocd_app_info{name="mediagenda-recette", namespace="argocd", dest_namespace="mediagenda-recette", sync_status="OutOfSync", health_status="Healthy"}'
+        values: '1x200'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: ArgoCDProductionDerive
+        exp_alerts: []
+      - eval_time: 150m
+        alertname: ArgoCDProductionDerive
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme, name: medinotif-prod, dest_namespace: medinotif-prod}
+            exp_annotations:
+              resume: "Application medinotif-prod (medinotif-prod) désynchronisée depuis plus de 2 h"
+              description: "La production ne correspond plus au dépôt depuis 2 h : modification en direct d'un objet, ou MR fusionnée jamais synchronisée. Regarder le différentiel dans Argo CD avant toute synchronisation."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/exploitation/runbooks/RB-338-notifications-en-retard.md

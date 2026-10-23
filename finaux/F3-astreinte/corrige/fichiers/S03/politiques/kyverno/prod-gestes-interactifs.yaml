@@ -1,0 +1,45 @@
+# plateforme/politiques — kyverno/prod-gestes-interactifs.yaml (F3-S03, INC-5903, PLAT-3303)
+# Dans les espaces de PRODUCTION (étiquette medisphere.internal/environnement=prod, posée par
+# plateforme/k8s/espaces/, M26-E16), plus de geste interactif sur les pods :
+#   - pods/exec et pods/attach (sessions lancées « à la main » dans un pod de base ou d'application) ;
+#   - pods/resize (redimensionnement en place hors gabarit).
+# Exceptions : le bris de glace (admin.conf, groupe system:masters, RB-240 : usage tracé et alerté),
+# l'updater du VPA (redimensionnement automatique, s'il passe un jour en InPlaceOrRecreate en prod),
+# l'opérateur CloudNativePG (il exécute des commandes dans ses instances).
+# Les diagnostics en lecture restent possibles : kubectl cnpg psql passe par exec → en production,
+# il se fait sous bris de glace, consigné ; les requêtes de rapport vont sur mediagenda-db-ro.
+# ⚠️ À vérifier sur ta version (Kyverno 1.19) : interception de l'opération CONNECT (pods/exec) par
+# une ValidatingPolicy ; si elle n'est pas prise en charge, garder la règle resize et retirer l'exec
+# des ClusterRoles humaines en production (RBAC) à la place.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: prod-gestes-interactifs
+  annotations:
+    policies.kyverno.io/title: Pas de geste interactif sur les pods de production
+    policies.kyverno.io/description: >-
+      Refuse exec, attach et le redimensionnement en place des pods dans les espaces de production,
+      sauf bris de glace, VPA et opérateur CloudNativePG.
+spec:
+  validationActions: [Deny]
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CONNECT"]
+        resources: ["pods/exec", "pods/attach"]
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["pods/resize"]
+    namespaceSelector:
+      matchLabels:
+        medisphere.internal/environnement: prod
+  validations:
+    - expression: >-
+        'system:masters' in request.userInfo.groups
+        || request.userInfo.username == 'system:serviceaccount:vpa:vpa-updater'
+        || request.userInfo.username.startsWith('system:serviceaccount:cnpg-system:')
+      message: >-
+        Production : exec, attach et redimensionnement en place interdits hors bris de glace (RB-240).
+        Rapports : mediagenda-db-ro ; ressources : par MR dans le dépôt de déploiement (RB-330).

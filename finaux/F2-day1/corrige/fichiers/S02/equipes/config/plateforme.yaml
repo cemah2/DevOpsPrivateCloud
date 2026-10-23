@@ -1,0 +1,95 @@
+# plateforme/equipes — config/plateforme.yaml (F2-S02, PLAT-3202)
+# Ce que le générateur doit savoir de la plateforme et qui ne dépend d'aucune équipe. Modifié par la
+# Plateforme seulement (relecture Karim Benali).
+
+# Noms interdits comme équipe : préfixes d'espaces déjà utilisés, groupes de l'annuaire existants.
+noms_reserves:
+  - plateforme
+  - plateforme-admins
+  - mediagenda
+  - medidoc
+  - medinotif
+  - legacy
+  - securite
+  - support
+  - direction
+  - formation
+  - kube
+  - wb
+  - argocd
+  - capsule
+  - portail
+
+# Utilisateurs Capsule qui ne sont pas (encore) décrits ici : recopiés tels quels dans la liste complète
+# rendue pour le chart Capsule (valeurs/capsule/utilisateurs-equipes.yaml de plateforme/gitops). Helm
+# REMPLACE les listes : le fichier rendu doit contenir tout le monde.
+capsule_utilisateurs_existants:
+  - oidc:mediagenda
+  - oidc:medidoc
+
+# Bilan de capacité (outils/capacite.py) : allouable des travailleurs relevé en S02 (kubectl describe
+# nodes, docs/accueil/capacite.md) et ce que la plateforme et les équipes existantes réservent déjà
+# (somme des requests au relevé). Mis à jour à chaque relevé, par MR.
+capacite:
+  releve: "<AAAA-MM-JJ>"
+  allouable:
+    requests.cpu: "11400m"     # 3 travailleurs × ≈ 3,8 CPU allouables
+    requests.memory: 27Gi      # 3 travailleurs × ≈ 9,1 Gi allouables (10 Go de VM)
+  deja_reserve:
+    requests.cpu: "7800m"      # <RELEVÉ> somme des requests de tous les pods des travailleurs
+    requests.memory: 19Gi      # <RELEVÉ>
+  # Part de l'allouable restant que les budgets des équipes décrites ici peuvent engager, par
+  # ressource. 1.0 = on promet tout ce qui reste ; > 1 = surengagement. Le CPU est compressible (un
+  # conteneur en manque est ralenti, pas tué) : surengagement accepté. La mémoire ne l'est pas (OOM,
+  # éviction) : jamais au-delà de 1.0. Décision écrite dans ADR-0320 et capacite.md.
+  ratio_engagement_max:
+    requests.cpu: 1.5
+    requests.memory: 1.0
+  # Marge gardée pour perdre un travailleur sans évincer la production (N-1) : retirée du reste.
+  reserve_perte_noeud:
+    requests.cpu: "0m"         # <DÉCISION> 0 dans le lab (3 travailleurs, aucune marge N-1 réaliste)
+    requests.memory: 0Gi
+
+# Cibles de la propagation : projet GitLab qui APPLIQUE, et chemins que le générateur POSSÈDE dans ce
+# projet (il y crée, modifie et supprime des fichiers ; il ne touche jamais au reste).
+cibles:
+  identite:
+    projet: plateforme/identite
+    chemins:
+      - annuaire/equipes/
+      - outils/synchro-gitlab.d/equipes.yml
+      - tofu/equipes.auto.tfvars.json
+  secrets:
+    projet: plateforme/secrets
+    chemins:
+      - tofu/equipes.auto.tfvars.json
+  grafana:
+    projet: plateforme/infra
+    chemins:
+      - observabilite-grafana/equipes.auto.tfvars.json
+  k8s:
+    projet: plateforme/k8s
+    chemins:
+      - equipes/
+  gitops:
+    projet: plateforme/gitops
+    chemins:
+      - equipes/
+      - valeurs/capsule/utilisateurs-equipes.yaml
+
+gitlab:
+  url: https://git01.par1.medisphere.internal
+  # Groupes d'équipe : privés (le code d'une équipe n'est pas lisible par les autres par défaut).
+  visibilite: private
+  # Jeton d'accès de groupe pour la promotion (MR dans <equipe>/<service>-deploiement) : durée max.
+  jeton_promotion_jours: 180
+  jeton_deploiement_jours: 365
+  # Comptes de service membres de chaque groupe d'équipe (niveau GitLab : 30 = Developer). svc-portail :
+  # découverte du catalogue (lecture) et modèles du portail (création de projets, MR), M28-E07/E08.
+  comptes_service_groupe:
+    svc-portail: 30
+
+openbao:
+  url: https://openbao.par1.medisphere.internal:8200
+  # Racine « MédiSphère Root CA » encodée en base64 (caBundle des SecretStore, comme au M25-E13).
+  racine_base64: "<RACINE-MEDISPHERE-EN-BASE64>"

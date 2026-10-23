@@ -1,0 +1,31 @@
+{#- gabarits/gitops/depot.yaml.j2 — identifiants de dépôt du groupe d'une équipe pour Argo CD (F2-S02).
+    Modèle : secrets/argocd/repo-creds-medidoc.yaml (M25-E13). Rendu dans equipes/<equipe>/depot.yaml. -#}
+# GÉNÉRÉ par plateforme/equipes (outils/rendre.py) depuis equipes/{{ e.nom }}.yaml — NE PAS MODIFIER ICI.
+# Jeton de déploiement du GROUPE {{ e.groupe_gitlab }} (portée read_repository), créé par le job gitlab:equipes de
+# plateforme/equipes et rangé dans kv/plateforme/argocd/depot-{{ e.nom }} (url, username, password).
+# Argo CD l'utilise pour tout dépôt dont l'URL commence par https://git01.par1.medisphere.internal/{{ e.groupe_gitlab }}.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: repo-creds-{{ e.nom }}
+  namespace: argocd
+  labels:
+    medisphere.internal/origine: plateforme-equipes
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: repo-creds-{{ e.nom }}
+    creationPolicy: Owner
+    deletionPolicy: Retain
+    template:
+      mergePolicy: Merge
+      metadata:
+        labels:
+          medisphere.internal/source: openbao
+          argocd.argoproj.io/secret-type: repo-creds
+  dataFrom:
+    - extract:
+        key: plateforme/argocd/depot-{{ e.nom }}
