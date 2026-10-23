@@ -3,19 +3,23 @@
 # binaire bao dans l'image outillée), elle-même issue de la v2.8.0 (M19-E29).
 #   - la clé de signature n'est plus un FICHIER monté par le runner : Cosign signe par la clé de
 #     transit cosign-medisphere d'OpenBao (« hashivault:// »), avec un jeton de 10 minutes obtenu par
-#     le jeton d'identité du job (rôle ci-signature) ;
-#   - entrées cle_cosign et mot_de_passe_cosign supprimées ; entrées cle_signature, role_openbao,
-#     adresse_openbao ajoutées ;
+#     le jeton d'identité du job (rôle ci-signature, entrée role_signature) ;
+#   - entrées cle_cosign et mot_de_passe_cosign supprimées ; entrées cle_signature, role_signature,
+#     adresse_openbao ajoutées. L'entrée role_openbao de la v2.9.0 ne change NI de sens NI de défaut
+#     (vide : ci-<groupe>-<projet>) : .openbao-connexion, securite:verification et le robot Harbor
+#     restent sur le rôle du projet ; ci-signature (politique cosign-signature seule) ne lit pas le
+#     robot, il ne sert qu'à signer ;
 #   - image outillée 1.x+1 : /etc/medisphere/cosign.pub contient la NOUVELLE clé publique (vérification).
 # Pour un projet consommateur : passer à @v2.10.0, rien d'autre (les jobs gardent leurs noms).
 spec:
   inputs:
-    # … entrées de la v2.9.0 inchangées, SAUF cle_cosign et mot_de_passe_cosign, supprimées …
+    # … entrées de la v2.9.0 inchangées (dont role_openbao, défaut vide, et chemin_robot_harbor),
+    #   SAUF cle_cosign et mot_de_passe_cosign, supprimées …
     cle_signature:
       description: "Référence KMS de la clé de signature (Cosign) : la clé reste dans OpenBao"
       default: hashivault://cosign-medisphere
-    role_openbao:
-      description: "Rôle de la méthode jwt « gitlab » d'OpenBao qui donne le droit de signer"
+    role_signature:
+      description: "Rôle de la méthode jwt « gitlab » d'OpenBao qui donne le droit de signer (securite:signature seul)"
       default: ci-signature
     adresse_openbao:
       default: https://openbao.par1.medisphere.internal:8200
@@ -25,10 +29,14 @@ spec:
       regex: ^registry\.par1\.medisphere\.internal/.+@sha256:.+$
 ---
 # … securite:semgrep, securite:gitleaks, .securite-v2-base, .securite-v2-toujours, .securite-v2-publiee,
-#   securite:trivy, securite:sbom (v2.8.0) et securite:verification inchangés …
+#   securite:trivy, securite:sbom (v2.8.0), .openbao-connexion et securite:verification (v2.9.0)
+#   inchangés : ils se connectent au rôle du projet (entrée role_openbao), seule la variable BAO_ADDR
+#   de .openbao-connexion prend la valeur de adresse_openbao …
 
 securite:signature:
-  extends: [.securite-v2-base, .securite-v2-publiee]
+  # .openbao-connexion (v2.9.0) : jeton du RÔLE DU PROJET dans ~/.vault-token, pour lire le robot
+  # Harbor ; la signature prend ensuite un SECOND jeton, du rôle ci-signature, dans BAO_TOKEN.
+  extends: [.securite-v2-base, .securite-v2-publiee, .openbao-connexion]
   # Toujours le runner protégé : le rôle ci-signature exige SON identifiant (runner_id).
   tags: ["$[[ inputs.runner_protege ]]"]
   stage: $[[ inputs.stage ]]
@@ -40,10 +48,9 @@ securite:signature:
       artifacts: true
     - job: securite:sbom
       artifacts: true
-  # Jeton d'identité signé par GitLab, destiné au coffre (audience fixée au M19-E25), valable 5 min.
-  id_tokens:
-    OPENBAO_ID_TOKEN:
-      aud: openbao.medisphere.internal
+  # id_tokens (OPENBAO_ID_TOKEN, audience openbao.medisphere.internal fixée au M19-E25) vient de
+  # .openbao-connexion ; le même jeton d'identité sert aux deux connexions. Il reste valide jusqu'à la
+  # fin du timeout du job (1 h par défaut) : il n'est jamais affiché ni écrit.
   variables:
     DOCKER_CONFIG: /tmp/auth-registre
     BAO_ADDR: $[[ inputs.adresse_openbao ]]
@@ -51,15 +58,21 @@ securite:signature:
     - echo "composant securite $[[ component.version ]] sur $CI_RUNNER_DESCRIPTION"
     - case "${IMAGE_REF:-}" in *@sha256:*) ;; *) echo "IMAGE_REF doit désigner une empreinte (reçu « ${IMAGE_REF:-} »)"; exit 1 ;; esac
     - test "${IMAGE_REF#*@}" = "$IMAGE_EMPREINTE" || { echo "IMAGE_REF ne désigne pas l'image construite"; exit 1; }
-    # Connexion au coffre : le JWT passe par l'ENTRÉE STANDARD (printf est interne au shell : il
-    # n'apparaît pas dans « ps »), jamais en argument ; le jeton obtenu n'est jamais affiché.
-    - |
-      BAO_TOKEN="$(printf '{"role":"%s","jwt":"%s"}' "$[[ inputs.role_openbao ]]" "$OPENBAO_ID_TOKEN" \
-        | bao write -field=token auth/gitlab/login -)" || { echo "connexion au coffre refusée (rôle $[[ inputs.role_openbao ]])"; exit 1; }
-      export BAO_TOKEN
     - mkdir -p "$DOCKER_CONFIG" && chmod 700 "$DOCKER_CONFIG"
+    # Robot Harbor lu par le jeton du rôle du projet (~/.vault-token, BAO_TOKEN encore vide), comme
+    # en v2.9.0 : variables du SHELL, jamais affichées ; la boucle d'attente de l'analyse de Harbor
+    # (v2.3.0) les lit aussi.
+    - HARBOR_ROBOT_USER="$(bao kv get -mount=kv -field=utilisateur "$[[ inputs.chemin_robot_harbor ]]")"
+    - HARBOR_ROBOT_TOKEN="$(bao kv get -mount=kv -field=jeton "$[[ inputs.chemin_robot_harbor ]]")"
     - printf '%s' "$HARBOR_ROBOT_TOKEN" | cosign login "${IMAGE_REF%%/*}" -u "$HARBOR_ROBOT_USER" --password-stdin > /dev/null
     # … boucle d'attente de l'analyse de Harbor de la v2.3.0, inchangée …
+    # Second jeton, rôle ci-signature : le JWT passe par l'ENTRÉE STANDARD (printf est interne au
+    # shell : il n'apparaît pas dans « ps »), jamais en argument ; le jeton obtenu n'est jamais affiché.
+    # BAO_TOKEN l'emporte sur ~/.vault-token pour Cosign et pour bao.
+    - |
+      BAO_TOKEN="$(printf '{"role":"%s","jwt":"%s"}' "$[[ inputs.role_signature ]]" "$OPENBAO_ID_TOKEN" \
+        | bao write -field=token auth/gitlab/login -)" || { echo "connexion au coffre refusée (rôle $[[ inputs.role_signature ]])"; exit 1; }
+      export BAO_TOKEN
     # Cosign (sigstore 1.11) lit BAO_ADDR et BAO_TOKEN pour « hashivault:// » (après VAULT_ADDR et
     # VAULT_TOKEN, absents ici) ; la racine MédiSphère vient de SSL_CERT_DIR (runner, M19-E07).
     - SIGNER=(--key "$[[ inputs.cle_signature ]]" --signing-config /etc/medisphere/signing-config.json)
@@ -72,7 +85,9 @@ securite:signature:
       done
     - cosign attest "${SIGNER[@]}" --type spdxjson --predicate sbom.spdx.json "$IMAGE_REF"
     - cosign attest "${SIGNER[@]}" --type slsaprovenance1 --predicate provenance.json "$IMAGE_REF"
-    # Le jeton ne sert plus : révoqué tout de suite (sinon il vivrait encore jusqu'à 10 min).
+    # Le jeton de signature ne sert plus : révoqué tout de suite (sinon il vivrait encore jusqu'à
+    # 10 min). Celui du rôle du projet est révoqué par l'after_script de .openbao-connexion.
     - bao token revoke -self > /dev/null
   after_script:
+    - !reference [.openbao-connexion, after_script]
     - rm -rf /tmp/auth-registre

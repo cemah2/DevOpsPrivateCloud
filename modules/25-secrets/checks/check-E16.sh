@@ -15,7 +15,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_m25-operationnel.sh"
 title "M25-E16 — PKI de services : « MédiSphère Services CA » et cert-manager"
 require_cmd jq kubectl curl openssl
 
-_m25o_e16_racine="${WB_RACINE_MEDISPHERE:-/usr/local/share/ca-certificates/medisphere-root-ca.crt}"
+_m25o_e16_racine="${WB_RACINE_PKI:-/usr/local/share/ca-certificates/medisphere-root-ca.crt}"
 _m25o_e16_tmp="$(mktemp -d)"
 trap 'rm -rf "$_m25o_e16_tmp"' EXIT
 curl -s --max-time "$WB_TIMEOUT" "$_M25O_BAO/v1/pki-services/ca/pem" -o "$_m25o_e16_tmp/ca.pem" 2>/dev/null || true

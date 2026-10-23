@@ -213,7 +213,7 @@ Une maintenance des nœuds du coffre suit un ticket de changement : MR relue, un
 
 **Démarche de diagnostic**
 
-*Symptômes* : `securite:verification` (le job du composant qui passe par `.openbao-connexion` avec le rôle `ci-mediagenda-api` pour lire le robot Harbor) échoue sur `main` de `mediagenda/api`, à l'étape OpenBao. Le dépôt et le composant n'ont pas changé.
+*Symptômes* : `securite:verification` (le job du composant qui passe par `.openbao-connexion` avec le rôle du projet, `ci-mediagenda-api` — entrée `role_openbao` laissée vide, la v2.10.0 n'y a pas touché : seule la signature a son rôle, `role_signature` — pour lire le robot Harbor) échoue sur `main` de `mediagenda/api`, à l'étape OpenBao. Le dépôt et le composant n'ont pas changé.
 
 *Hypothèses*, dans l'ordre de la chaîne : (a) coffre scellé ou injoignable ; (b) la méthode ne peut plus vérifier la **signature** (source des clés, autorité TLS, `git01`) ; (c) l'**émetteur** ou l'**audience** ne correspondent plus ; (d) une **revendication liée** ne correspond plus (projet, protection, référence, ou type de la valeur) ; (e) la connexion réussit mais le jeton n'a plus la bonne **politique** ; (f) côté GitLab, `main` n'est plus protégée ou l'`id_tokens` a changé.
 
@@ -324,7 +324,7 @@ La connexion a réussi : signature, audience et revendications sont bonnes. Le j
 Chaque maillon a son message, et sa portée : les clés touchent la **méthode**, donc tous les rôles ; l'audience et les revendications touchent **un rôle** ; les politiques laissent passer la connexion et refusent la lecture. Lire le message du job, puis vérifier si les autres projets passent, suffit à situer la panne avant d'ouvrir la configuration.
 
 **Alternatives**
-- Diagnostiquer en rejouant la connexion à la main avec un jeton d'identité copié depuis un job : possible en théorie (le jeton vit 5 min), à proscrire en pratique (un jeton d'identité est une preuve d'identité, et il finit dans un historique ou un ticket). Le journal du job, la configuration en JSON et l'audit suffisent.
+- Diagnostiquer en rejouant la connexion à la main avec un jeton d'identité copié depuis un job : possible en théorie (le jeton reste valide jusqu'à la fin du *timeout* du job, 1 h par défaut), à proscrire en pratique (un jeton d'identité est une preuve d'identité, et il finit dans un historique ou un ticket). Le journal du job, la configuration en JSON et l'audit suffisent.
 - `jwks_url` au lieu de la découverte : équivalent pour la signature quand l'URL est la bonne (`/oauth/discovery/keys`), mais un réglage de plus à maintenir. La découverte suit d'elle-même l'URL annoncée par GitLab.
 - `bound_claims_type = "string"` avec la liste exacte des références : possible, mais il faut énumérer les étiquettes. `glob` est le choix d'E10. Dans les deux cas, les valeurs sont des **chaînes**.
 
