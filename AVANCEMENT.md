@@ -9,7 +9,7 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 | PLAN.md | rédigé | Versions des outils hors bloc A à figer au démarrage de chaque bloc |
 | CONVENTIONS.md | rédigé | À ajuster après les retours sur le module 00 |
 | lab/ (check, break, check-lib, lab.env.example) | rédigé (bloc C : `kube`, `harbor_api`, `wb_kubectl`, `wb_k8s_sauver`, `wb_k8s_restaurer` ; blocs D et E : `mailpit_api`, `prom_api`, `prom_requete`, `am_api`, `grafana_api`, `loki_api`, `loki_requete` ; bloc F : `keycloak_api`, `ipa_ldap`, `bao_api` (sans secret en argument)) | Bloc A : `lab/lib/pannes-lib.sh` (pannes des modules 01+), fonctions `gitlab_api`/`netbox_api`, variables du bloc A dans `lab.env.example` |
-| annexes/ | rédigé (blocs A à F) | `versions-bloc-A.md`, `versions-bloc-B.md`, `versions-bloc-C.md`, `versions-bloc-DE.md`, `versions-bloc-F.md`, `prerequis.md` (graphe 00-29/F1-F7, état laissé par chaque module des blocs A à F), `certifications.md` (LFCS, RHCSA, RHCE, Terraform Associate, GitLab, COA, CCNA, Ceph, Proxmox, CKA, CKAD, CKS, KCNA/KCSA, DCA, PCA, OTCA, CAPA partiel, CGOA, Vault Associate en équivalence OpenBao), `glossaire.md` (718 termes) : à compléter à la fin de chaque bloc |
+| annexes/ | rédigé (blocs A à G) | `versions-bloc-A.md`, `versions-bloc-B.md`, `versions-bloc-C.md`, `versions-bloc-DE.md`, `versions-bloc-F.md`, `versions-bloc-G.md`, `prerequis.md` (graphe 00-29/F1-F7, état laissé par chaque module des blocs A à G), `certifications.md` (LFCS, RHCSA, RHCE, Terraform Associate, GitLab, COA, CCNA, Ceph, Proxmox, CKA, CKAD, CKS, KCNA/KCSA, DCA, PCA, OTCA, CAPA partiel, CGOA, Vault Associate en équivalence OpenBao), `glossaire.md` (811 termes), `decouverte/` (NATS, Crossplane, Tilt/Skaffold, LitmusChaos) : à compléter à la fin de chaque bloc |
 
 ## Modules
 
@@ -80,6 +80,15 @@ E14 → E20 et E15 → E22 sans détruire les bancs entre les deux ; restauratio
 - **M15** : M26-E26 active `nodeEncryption` (WireGuard entre pods actif depuis M15-E24) ; M26-E27 active le pare-feu d'hôte de Cilium.
 - **M00-M23** : rôle `durcissement` appliqué à tout le socle (M26-E14), `UMASK 027` sur Debian (rôles sans `mode:` explicite à surveiller), `rp_filter=1` sur les VMs à plusieurs cartes à confirmer.
 
+## Effets du bloc G sur les modules précédents (à surveiller)
+
+- **M25** : le quota de `mediagenda-recette` et `mediagenda-prod` interdisait le Service `LoadBalancer` de `mediagenda-db` pour OpenBao (M25-E14) ; corrigé dans le corrigé M25-E14 (`services.loadbalancers: "1"`, MR préalable), relevé par la relecture du M27.
+- **M16/M17/M20** : le Valkey du component `dependances` de `mediagenda/deploiement` est remplacé par un component `valkey` (ACL, TLS, 9.1) au M27-E07 ; MédiAgenda passe par le pooler `mediagenda-db-pooler-rw` ; les migrations passent de `python -m mediagenda.migrate` à Flyway (`baseline` en version 2).
+- **M20** : ApplicationSet `medinotif` ajoutée ; `ignoreDifferences` sur `replicas` (HPA du M28) dans les ApplicationSets `mediagenda` et `medinotif`.
+- **M26** : exceptions PSA/Falco/Kyverno ajoutées au registre (Chaos Mesh privilégié, CNPG) ; la GeneratingPolicy `networkpolicy-par-defaut` voit sa condition élargie au M28-E15 ; `exiger-limites` exige des requests > 0 après M28-E23.
+- **M19** : composant `validation` v2.11.0 de `plateforme/ci-templates` (M29-E10) ; `runner01` reçoit Go 1.26, `tofu`, conftest et OPA.
+- **Applications** : correctifs fournis dans les corrigés, `apps/` inchangé : publication AMQP et préférences de rappel de MédiAgenda (M27-E06, E08), backend Kafka de MédiNotif (M27-E10, retiré avec Kafka), consommateur protégé contre un message empoisonné (M27), `/pret` de MédiAgenda (M29-E23, DEV-3013).
+
 ## Retours de l'apprenant en attente
 
 | Module | Exercice | Problème | Statut |
@@ -104,6 +113,8 @@ E14 → E20 et E15 → E22 sans détruire les bancs entre les deux ; restauratio
 | 2026-10-22/23 | 5 (blocs D+E) | Rédaction des modules 19 à 23 (16 rédacteurs sur un brief commun et des fiches de module), harmonisation (5 agents : composants CI/CD en `@vX.Y.Z`, comptes Argo CD à tirets, supervision témoin par sondes, runbooks sans collision, chaîne de correctifs d'application rejouée), relecture indépendante (8 relecteurs, ~570 vérifications sur la documentation, le code et des exécutions réelles d'outils ; défauts bloquants corrigés : quota GitLab, porte `skopeo`, sauvegarde d'Argo CD, rôle de découverte de l'opérateur, panne de cardinalité bornée, E39 sans perte de blocs, journalisation de dev, organisation Grafana, Pyroscope). 292 scripts : `bash -n` et `shellcheck -x` propres. Annexes, topologie, `lab.env.example`, PLAN (détails et points de relecture des blocs D et E), README, REPRISE mis à jour. **Blocs D+E terminés**, tâche planifiée créée pour lancer le bloc F |
 | 2026-10-23 | 6 (bloc F) | Lancée par la tâche planifiée. Versions du bloc F figées (recherche web, `annexes/versions-bloc-F.md`), décisions structurantes en PLAN §4.12 et journal (`ipa01`, `kms01`, OpenBao, Teleport écarté), fonctions de check `keycloak_api`, `ipa_ldap`, `bao_api`, cartes des exercices des modules 24 à 26 |
 | 2026-10-23 | 6 (bloc F) | Rédaction des modules 24 à 26 (~29 rédacteurs et reprises sur un brief commun et des fiches de module ; palier 4 des M24 et M25 repris en plusieurs fois après des interruptions de rédacteurs), harmonisation (3 agents), relecture indépendante (6 relecteurs, ~360 vérifications sur la documentation, le code et des exécutions réelles : Keycloak, OpenBao, Vault, kube-apiserver 1.36.5, ComplianceAsCode, Kyverno, Falco ; défauts bloquants corrigés : phase 2 de FreeIPA `--external-ca`, secrets des clients lisibles par `wb-checks`, jeton du seal jamais renouvelé, pare-feu d'hôte qui pouvait isoler etcd, garde-fou SSH, plusieurs pannes sans effet) et correctifs transverses (`bao_api` sans secret en argument, PLAN §4.12 complété). 3 modules, 209 scripts du bloc F (1 715 dans le dépôt) : `bash -n` et `shellcheck -x` propres (hors 5 scripts volontairement fautifs des exercices M02-E04, M02-E22, M06-E22). Annexes (prérequis, certifications, glossaire), topologie, README, REPRISE mis à jour. **Bloc F terminé**, prochain bloc : G |
+| 2026-10-23 | 7 (bloc G) | Lancée par la tâche planifiée. Versions du bloc G figées (recherche web, `annexes/versions-bloc-G.md`), décisions structurantes en PLAN §4.13 et journal (aucun hôte permanent, RabbitMQ par opérateurs, Flyway, Capsule, Backstage, Chaos Mesh limité à la recette), fonctions de check `rabbitmq_api`, `backstage_api`, cartes des exercices des modules 27 à 29 |
+| 2026-10-23 | 7 (bloc G) | Rédaction des modules 27 à 29 (6 rédacteurs sur un brief commun, un relancé deux fois), harmonisation (3 agents + une correction ciblée), relecture indépendante (6 relecteurs, ~310 vérifications dont de nombreuses exécutions réelles : correctifs d'applications testés, RabbitMQ/Kafka/Valkey/Flyway réels, charts rendus, CRD, OPA/conftest, k6, promtool). Correction du M25 (quota LoadBalancer). Annexes (prérequis, certifications, 811 termes au glossaire, fiches de découverte), topologie, README. **Bloc G terminé** ; tâche planifiée créée pour lancer les finaux F1 à F4 |
 
 ## Choix faits en l'absence de l'apprenant (bloc A)
 
@@ -168,3 +179,13 @@ E14 → E20 et E15 → E22 sans détruire les bancs entre les deux ; restauratio
 - **kube-bench forcé sur `cis-1.12`** : aucun référentiel CIS n'existe encore pour Kubernetes 1.36 ; on mesure contre le plus récent (`cis-1.12`, prévu pour 1.32 à 1.34) et on documente les écarts de version.
 - **Rédaction du palier 4 des M24 et M25 en plusieurs reprises** : des rédacteurs ont été interrompus ; les exercices ont été repris un par un sur leur contexte, sans perte, puis harmonisés et relus comme le reste.
 
+## Choix faits en l'absence de l'apprenant (bloc G)
+
+- **Aucun hôte permanent ajouté** : mémoire du bloc F (≈ 111 Go) ; Kafka, les VMs Patroni, le vCluster et les VMs de Terratest sont temporaires et jamais simultanés.
+- **RabbitMQ retenu** pour MédiNotif (files quorum, rebut, accusés), par ses deux opérateurs en manifestes amont (pas de chart officiel, Bitnami exclu) ; **Kafka** (Strimzi 1.3, Kafka 4.3.1 car Strimzi ne gère pas 4.4) pratiqué puis retiré ; NATS en fiche (ADR-0270). La montée vers RabbitMQ 4.4 (sortie trois jours avant le relevé) est répétée puis décidée par l'apprenant ; les checks acceptent 4.3 ou 4.4.
+- **Flyway 13 Community** (Apache 2.0) plutôt que Liquibase 5 (licence FSL) ou Atlas (édition standard propriétaire).
+- **Valkey reste un cache** (MédiAgenda ne sait pas parler à Sentinel) ; montée 8.1 → 9.1.
+- **MédiAgenda publie les notifications** après validation de la transaction (correctif dans le corrigé) ; l'*outbox* est discutée, pas implémentée.
+- **Capsule plutôt qu'un vCluster par équipe** ; vCluster OSS pratiqué puis retiré ; Backstage construit et hébergé par MédiSphère (`plateforme/portail`) ; Crossplane et Tilt/Skaffold en fiches.
+- **Chaos Mesh limité aux espaces de recette annotés** (jamais `messagerie` ni `*-prod`) ; LitmusChaos en fiche (ChaosCenter exige MongoDB par un sous-chart Bitnami) ; la perte d'un nœud RabbitMQ est une opération manuelle annoncée.
+- **Pannes refusées par un rédacteur** : le rédacteur des paliers 3-5 du M28 a refusé d'écrire des pannes touchant un secret OpenBao réel ou l'opérateur KEDA partagé, puis une saturation réelle du cluster ; E19 garde deux variantes, E22 aucune modification de secret, E23 a été réécrite sous une forme bornée (requests nulles en `medisphere-lot`, sans préemption possible) par l'harmonisation.

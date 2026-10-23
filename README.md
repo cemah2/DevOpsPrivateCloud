@@ -24,7 +24,7 @@ Types d'exercices : labs guidés et libres, break & fix (pannes injectées par `
 
 ## État
 
-Voir [`AVANCEMENT.md`](AVANCEMENT.md). Les **blocs A** (fondations automatisées, modules 00 à 06), **B** (infrastructure cloud privé, modules 07 à 11), **C** (conteneurs et Kubernetes, modules 12 à 18), **D** (livraison, modules 19 et 20), **E** (observabilité, modules 21 à 23) et **F** (sécurité, modules 24 à 26) sont disponibles.
+Voir [`AVANCEMENT.md`](AVANCEMENT.md). Les **blocs A** (fondations automatisées, modules 00 à 06), **B** (infrastructure cloud privé, modules 07 à 11), **C** (conteneurs et Kubernetes, modules 12 à 18), **D** (livraison, modules 19 et 20), **E** (observabilité, modules 21 à 23), **F** (sécurité, modules 24 à 26) et **G** (services de plateforme, modules 27 à 29) sont disponibles.
 
 | # | Module | Exercices |
 |---|---|---|
@@ -55,13 +55,17 @@ Voir [`AVANCEMENT.md`](AVANCEMENT.md). Les **blocs A** (fondations automatisées
 | 24 | [Identité et accès](modules/24-identite/README.md) | 45 + mini-projet |
 | 25 | [Secrets](modules/25-secrets/README.md) | 45 + mini-projet |
 | 26 | [Durcissement et sécurité à l'exécution](modules/26-durcissement/README.md) | 45 + mini-projet |
+| 27 | [Données et messagerie](modules/27-donnees-messaging/README.md) | 24 + mini-projet |
+| 28 | [Plateforme développeurs](modules/28-plateforme-dev/README.md) | 24 + mini-projet |
+| 29 | [Tests et résilience](modules/29-tests-resilience/README.md) | 24 + mini-projet |
 
-Les applications métier de MédiSphère (MédiAgenda, MédiDoc, MédiNotif, Legacy-RDV) sont dans [`apps/`](apps/README.md) à partir du module 12. Les blocs suivants (G, puis les finaux) sont produits bloc par bloc.
+Les applications métier de MédiSphère (MédiAgenda, MédiDoc, MédiNotif, Legacy-RDV) sont dans [`apps/`](apps/README.md) à partir du module 12. Les workbooks finaux (F1 à F7) sont produits ensuite.
 
 Annexes :
 - [`annexes/prerequis.md`](annexes/prerequis.md) — graphe des dépendances entre modules, ce que chaque module suppose et laisse en place ;
-- [`annexes/certifications.md`](annexes/certifications.md) — exercices utiles pour préparer LFCS/RHCSA, RHCE, Terraform Associate, GitLab, CKA, CKAD, CKS, KCSA, PCA, OTCA, CAPA, CGOA, Vault Associate (équivalence OpenBao)… ;
+- [`annexes/certifications.md`](annexes/certifications.md) — exercices utiles pour préparer LFCS/RHCSA, RHCE, Terraform Associate, GitLab, CKA, CKAD, CKS, KCSA, PCA, OTCA, CAPA, CGOA, Vault Associate (équivalence OpenBao), CBA, CNPA, CNPE… ;
 - [`annexes/glossaire.md`](annexes/glossaire.md) — termes du workbook, avec l'exercice qui les introduit ;
-- [`annexes/versions-bloc-A.md`](annexes/versions-bloc-A.md) [`annexes/versions-bloc-B.md`](annexes/versions-bloc-B.md), [`annexes/versions-bloc-C.md`](annexes/versions-bloc-C.md), [`annexes/versions-bloc-DE.md`](annexes/versions-bloc-DE.md) et [`annexes/versions-bloc-F.md`](annexes/versions-bloc-F.md) — versions de référence des blocs A à F et changements de comportement à connaître.
+- [`annexes/decouverte/`](annexes/decouverte/README.md) — fiches « découverte » des outils étudiés sans être déployés (NATS, Crossplane, Tilt et Skaffold, LitmusChaos) ;
+- [`annexes/versions-bloc-A.md`](annexes/versions-bloc-A.md) [`annexes/versions-bloc-B.md`](annexes/versions-bloc-B.md), [`annexes/versions-bloc-C.md`](annexes/versions-bloc-C.md), [`annexes/versions-bloc-DE.md`](annexes/versions-bloc-DE.md) [`annexes/versions-bloc-F.md`](annexes/versions-bloc-F.md) et [`annexes/versions-bloc-G.md`](annexes/versions-bloc-G.md) — versions de référence des blocs A à G et changements de comportement à connaître.
 
 Tu rencontres une erreur dans un exercice ? Note l'exercice, ce que tu as fait et le message d'erreur, et utilise le message « Corriger après tes tests » de [`REPRISE.md`](REPRISE.md).

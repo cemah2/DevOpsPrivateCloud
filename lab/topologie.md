@@ -1,6 +1,6 @@
 # Topologie de référence du lab
 
-> Vue d'ensemble de l'état attendu du lab **à la fin du bloc F** (module 26 ; étiquettes `socle-v2`, `stockage-v1`, `virtualisation-v1`, `cloud-v1`, `provisioning-v1`, puis `conteneurs-v1`, `registre-v1`, `k8s-v1`, `k8s-reseau-v1`, `k8s-stockage-v1`, `packaging-v1`, `distributions-v1`, puis `ci-v1`, `gitops-v1`, `metriques-v1`, `journaux-v1`, `traces-v1`, puis `identite-v1`, `secrets-v1`, `durcissement-v1` du dépôt `plateforme/medisphere`). La source de vérité des adresses, VMID et noms reste [`PLAN.md`](../PLAN.md) §4 (bloc B : §4.9 ; bloc C : §4.10 ; blocs D et E : §4.11 ; bloc F : §4.12) ; l'inventaire vivant est dans **NetBox** (`nbx01`).
+> Vue d'ensemble de l'état attendu du lab **à la fin du bloc G** (module 29 ; étiquettes `socle-v2`, `stockage-v1`, `virtualisation-v1`, `cloud-v1`, `provisioning-v1`, puis `conteneurs-v1`, `registre-v1`, `k8s-v1`, `k8s-reseau-v1`, `k8s-stockage-v1`, `packaging-v1`, `distributions-v1`, puis `ci-v1`, `gitops-v1`, `metriques-v1`, `journaux-v1`, `traces-v1`, puis `identite-v1`, `secrets-v1`, `durcissement-v1`, puis `donnees-v1`, `plateforme-dev-v1`, `resilience-v1` du dépôt `plateforme/medisphere`). La source de vérité des adresses, VMID et noms reste [`PLAN.md`](../PLAN.md) §4 (bloc B : §4.9 ; bloc C : §4.10 ; blocs D et E : §4.11 ; bloc F : §4.12 ; bloc G : §4.13) ; l'inventaire vivant est dans **NetBox** (`nbx01`).
 
 ## Schéma
 
@@ -56,6 +56,8 @@
                          │                    .60 prometheus.apps… :9090 (Thanos Query) · .61 alertmanager.apps… :9093
                          │                    .62 loki.apps… :3100 · .63 otlp.apps… :4317/4318 (MGMT, mon01, réseaux du lab)
                          │                    .64 / .65 PostgreSQL de MédiAgenda recette / prod :5432 (vault01-03 seulement, M25)
+                         │                    par gw-par1 (.10) : rabbitmq.apps… (gestion RabbitMQ, SSO, M27),
+                         │                    portail.apps… (Backstage, SSO, M28)
                          ├── VLAN 50 OS-API   osctl01 (2101) .51 · oscmp01-02 (2102-2103) .52-.53
                          │                    VIP interne .200 (openstack-int…), externe .201 (openstack…), VRID 150
                          ├── VLAN 51 OS-TUN   Geneve .51-.53 (MTU 9000, non routé)
@@ -68,7 +70,9 @@
                                               .31 reg02, .51 m15-essai, .85-.87 talos-01..03,
                                               .61 lyo-k3s01 (2201), .62 flux01 (2202), .42 idp-resto (2242),
                                               .51 bao-essai (2251), .52 bao-restauration (2252) ;
-                                              durci-deb (2261), durci-rocky (2262) en DHCP (tous détruits)
+                                              durci-deb (2261), durci-rocky (2262) en DHCP,
+                                              .71-.73 pg-patroni01..03 (2271-2273), tt-<suffixe> (2290-2299,
+                                              adresse allouée par NetBox) (tous détruits)
    Templates : 9000 tpl-debian13, 9001/9002 bases Packer, 9010-9049 images dorées (étiquette current),
                9050 tpl-ubuntu2404 (selon M11-E25), 9060/9061 tpl-capi-ubuntu2404-k136(-2) (selon l'ADR-0180)
 ```
@@ -81,6 +85,15 @@ Reportés dans `group_vars/role_routeur/pare_feu.yml` et `docs/socle/matrice-flu
 - **Annuaire** : `idp01` → `ipa01` 636 ; VMs inscrites (INFRA, MGMT, VLAN 40) → `ipa01` 88, 464 (TCP/UDP), 389, 636, 443 ; MGMT → `ipa01` 443.
 - **Coffre** : `K8S_TRAV`, `runner01`, `runner02`, MGMT → `openbao` 10.10.20.200:8200 ; `vault01-03` ↔ 8200-8201 et → `kms01` 8200 (même VLAN, pare-feu local) ; `vault01-03` → 10.10.41.64-65:5432 (PostgreSQL) et → 10.10.40.200:8443 (TokenReview) ; `vault01-03`, `kms01` → `s3-01` 8333 (instantanés).
 - **Conformité** : VMs → `s3-01` 8333 (rapports OpenSCAP).
+
+### Flux ajoutés au bloc G
+
+Reportés dans `group_vars/role_routeur/pare_feu.yml` et `docs/socle/matrice-flux.md` (PLAN §4.13) :
+
+- **Essai Patroni** (M27-E13, retirés avec les VMs) : `K8S_TRAV` → `pg-patroni01..03` 5432 ; `vsandbox` 10.10.99.71-73 ↔ 2379-2380 (etcd) et 8008 (API de Patroni), même VLAN.
+- **Tests** : `runner01` → VMs du socle 22 (Testinfra : déjà ouvert pour Ansible) ; `mon01` → VMs essayées 8099 (Goss) ; `adm01` → `pve01` 8006 (Terratest : déjà ouvert) ; les VMs de Terratest n'ont pas besoin de `s3-01` (état local du test).
+- **Sauvegardes et documentation** (flux `K8S_TRAV` → `s3-01` 8333 déjà ouvert) : `messagerie/export-definitions` → compartiment `messagerie-definitions` ; jobs de CI des projets → `portail-techdocs`.
+- **Dans le cluster** (CiliumNetworkPolicy par espace) : `medinotif-*` et `mediagenda-*` → `messagerie` 5671 (AMQPS) ; `keda` → `messagerie` 15671 (API de gestion en HTTPS) ; `k6` → Prometheus 9090 (écriture distante, seul espace autorisé) ; `portail` → `git01` 443 et `ipa01` 636.
 
 ## Le cluster `k8s-par1` (bloc C)
 
@@ -134,16 +147,36 @@ L'authentification de l'API passe par **OIDC** (`AuthenticationConfiguration` `a
 | `kubelet-csr-approver` | kubelet-csr-approver 1.2 (CSR des certificats de service des kubelets) | Argo CD | M26 |
 | retirés | comparaisons SOPS, Sealed Secrets (`sealed-secrets`), Secrets Store CSI (M25, dans `wb-essais`) ; `plateforme/k8s/outils/secrets-k8s.sh` retiré (amorçage seulement) | — | M25 |
 
+### Ajouts du bloc G
+
+Aucun hôte permanent ajouté : les services du bloc vivent dans les travailleurs (bilan de capacité en tête de chaque module). Classes de priorité `medisphere-critique` (100000, production), `medisphere-standard` (10000), `medisphere-lot` (100, `preemptionPolicy: Never`) et `medisphere-ci`, sans `globalDefault`. Les espaces `mediagenda-*`, `medidoc-*` et `medinotif-*` sont rattachés à leur **locataire Capsule** (`mediagenda`, `medidoc`, `medinotif`, définitions dans `plateforme/k8s/locataires/`) ; les équipes créent des espaces préfixés `<locataire>-` en libre-service. Seuls `mediagenda-recette`, `medinotif-recette` et `wb-essais` portent l'annotation `chaos-mesh.org/inject=enabled`.
+
+| Espace | Composants | Géré par | Module |
+|---|---|---|---|
+| `mediagenda-recette`, `mediagenda-prod` | Pooler PgBouncer `mediagenda-db-pooler-rw` devant `mediagenda-db` ; StatefulSet Valkey 9.1 (ACL, TLS, exportateur) ; Job de migration Flyway `mediagenda-migrations` (hook Sync, vague −1) ; HPA `mediagenda` sur le Rollout | Argo CD | M27, M28 |
+| `mediagenda-secours` | cluster réplica `mediagenda-db-secours` (alimenté depuis `cnpg-k8s-par1` sur `s3-01`) | `plateforme/k8s` | M27 |
+| `rabbitmq-system` | Cluster Operator 2.23, Messaging Topology Operator 1.20 (manifestes amont de `plateforme/donnees/vendor/`) | Argo CD (`rabbitmq-operateurs`) | M27 |
+| `messagerie` | grappe RabbitMQ 4.3 `rabbitmq` (3 nœuds, `ceph-rbd`, files quorum, Khepri, TLS par `openbao-services`) ; vhosts `medinotif-recette`, `medinotif-prod` ; interface **`rabbitmq.apps.par1.medisphere.internal`** (HTTPRoute sur `gw-par1`, client Keycloak `rabbitmq`) ; CronJob `export-definitions` | Argo CD (`rabbitmq`, `rabbitmq-topologie`) | M27 |
+| `medinotif-recette`, `medinotif-prod` | MédiNotif (Deployment `medinotif`, ExternalSecret `medinotif-amqp`) ; `ScaledObject` et `TriggerAuthentication` de KEDA (minimum 0 en recette, ≥ 1 en prod) | Argo CD (ApplicationSet `medinotif`) | M27, M28 |
+| `keda` | KEDA 2.21 (opérateur, serveur de métriques externes, webhooks) | Argo CD | M28 |
+| `vpa` | VPA 1.7.1 (recommandeur, *updater*, contrôleur d'admission) ; VPA en `Off` sur toutes les charges | Argo CD | M28 |
+| `capsule-system` | Capsule 0.15 ; locataires `mediagenda`, `medidoc`, `medinotif` | Argo CD (`capsule`, `locataires`) | M28 |
+| `portail` | Backstage 1.56 (deux réplicas, image `plateforme/portail` signée), base CNPG `portail-db` ; **`portail.apps.par1.medisphere.internal`** (client Keycloak `backstage`) ; TechDocs dans `portail-techdocs` de `s3-01` | Argo CD | M28 |
+| `k6` | k6-operator 1.7 (`TestRun`) ; écriture distante vers Prometheus réservée aux exécuteurs de cet espace | Argo CD | M29 |
+| `chaos-mesh` | Chaos Mesh 2.8 (contrôleur, `chaos-daemon` en DaemonSet privilégié, exception PSA écrite ; tableau de bord non publié ; `enableFilterNamespace: true`) | Argo CD | M29 |
+| `chaos-experiences` | objets de chaos créés depuis `adm01` (bibliothèque `plateforme/resilience/chaos/` ; seule exception à « tout par Argo CD », ADR-0290 ; politique d'admission `medisphere-chaos-espaces`) | `adm01` | M29 |
+| retirés | `kafka-essai` (Strimzi 1.3, Kafka 4.3.1, M27-E10) ; `vc-essai` (vCluster 0.37, fin du palier 2 du M28) ; `medidoc-essai-isolation`, `medidoc-chemin-balise` (M28-E25) | — | M27, M28 |
+
 Ordre d'arrêt : `k8s-par1` (travailleurs 2146, 2145, 2144, puis nœuds de contrôle 2143, 2142, 2141), **puis** `ceph-par1` ; démarrage dans l'ordre inverse (`ceph-par1` jusqu'à `HEALTH_OK`, nœuds de contrôle, travailleurs).
 
-## Environnements à la fin du bloc F
+## Environnements à la fin du bloc G
 
 Règle du PLAN §3.3 : le socle est permanent, **un seul profil lourd** tourne à la fois en plus de lui. Tout ce qui n'est pas permanent se recrée par le code.
 
 | Environnement | VMID | État fin de bloc | Mémoire | Recréé par |
 |---|---|---|---|---|
 | Socle v5 (socle v4 : `gw01`, `gw02`, `adm01`, `dns01`, `dns02`, `ca01`, `git01`, `nbx01`, `s3-01`, `runner01`, `lb01`, `lb02`, `runner02`, `reg01`, `mon01` ; + `vault01-03`, `kms01`, `idp01`, `ipa01`) | 1000-1014, 1021-1024, 1030-1031 | permanent, allumé ; durci par le rôle `durcissement` (M26) | ≈ 51 Go (`idp01` 3 Go, `ipa01` 4 Go, `vault01-03` 3 × 1 Go, `kms01` 1 Go) | état `socle` de `plateforme/infra`, `plateforme/ansible` (rôles `freeipa_serveur`, `keycloak`, `openbao`, `openbao_kms`…) ; contenu : `plateforme/identite`, `plateforme/secrets` ; objets de Harbor : état `registre` |
-| Profil **k8s** : cluster `k8s-par1` | 2141-2146 | **conservé**, arrêtable (procédure du M14) ; consommé par les modules 19 à 29 et les finaux ; avec `ceph-par1` et le socle v5, profil de travail du bloc F ≈ 111 Go (marge faible sur 128 Go) | 42 Go (travailleurs à 10 Go depuis M19-E02) | état `envs/k8s`, rôles `k8s_*`, `plateforme/k8s` (`task appliquer`, `helmfile apply`), instantané etcd sur `s3-01` |
+| Profil **k8s** : cluster `k8s-par1` | 2141-2146 | **conservé**, arrêtable (procédure du M14) ; consommé par les modules 19 à 29 et les finaux ; avec `ceph-par1` et le socle v5, profil de travail des blocs F et G ≈ 111 Go (marge faible sur 128 Go) | 42 Go (travailleurs à 10 Go depuis M19-E02) | état `envs/k8s`, rôles `k8s_*`, `plateforme/k8s` (`task appliquer`, `helmfile apply`), instantané etcd sur `s3-01` |
 | `ceph-par1` (`ceph01-03`) et client `cephcli01` | 2081-2083, 2085 | **conservé**, arrêtable (procédure du M08) ; consommé par OpenStack (M10) et par `k8s-par1` (M16 : à démarrer avant lui) | 18 Go (+ 2 Go) | état `ceph`, `plateforme/ceph` |
 | Profil **openstack** (`osctl01`, `oscmp01-02`) | 2101-2103 | arrêté ou détruit après la recette `cloud-v1` | 32 Go (+ `ceph-par1`) | état `openstack`, `plateforme/openstack` (`outils/deployer.sh`), sauvegarde de la base sur PBS `par1/openstack` |
 | Profil **infra** (cluster `hv-par1`, `hv01-03`) | 2091-2093 | **détruit** après la recette `virtualisation-v1` ; QDevice et `corosync-qnetd` retirés de `pbs01` | 36 Go | état `hv`, Taskfile de reconstruction (`infra/envs/hv/`), rôles `pve_*` ; espace PBS `par1/hv` selon la décision écrite au M09-E46 |
@@ -162,15 +195,18 @@ Règle du PLAN §3.3 : le socle est permanent, **un seul profil lourd** tourne �
 | Second nœud Keycloak (`idp02`) et restauration de l'identité (`idp-resto`) | 2241, 2242 | **détruits** (M24-E24, E25) | 2 Go | état `envs/m24` (vide après usage), rôle `keycloak` |
 | Comparaison HashiCorp Vault (`bao-essai`) et restauration du coffre (`bao-restauration`) | 2251, 2252 | **détruits** (M25-E30, E26) | 2 Go | état `envs/m25`, rôle `openbao`, instantanés de `openbao-instantanes` |
 | VMs d'essai du durcissement (`durci-deb`, `durci-rocky`) | 2261, 2262 | **détruites** en fin de palier 2 du M26 | 2 Go chacune | état `envs/m26`, rôle `durcissement` |
+| Comparaison Patroni (`pg-patroni01..03`) | 2271-2273 | **détruites** en fin de M27-E13 (état `m27` vide, conservé) | 1 Go chacune | état `m27` (`envs/m27/`) |
+| VMs de Terratest (`tt-<suffixe>`, sous-pool `lab/terratest`) | 2290-2299 | **détruites** par chaque test ; nettoyeur nocturne en simulation | 1 Go chacune | `plateforme/tofu-modules` (`vm-debian/test/`, état local du test) |
+| Composants temporaires dans `k8s-par1` : Kafka `kafka-essai` (M27), vCluster `vc-essai` (M28) | — | **retirés** en fin d'essai | ≈ 4,5 Gi ; ≈ 1 Gi | Applications d'essai (code conservé dans les corrigés) |
 | Maquette réseau du M07 | 2070-2079 | **détruite** (état `m07-maquette` vide, conservé) | — | `tofu apply` de `envs/m07-maquette/` |
 | `ceph04` (essai d'extension) | 2084 | **détruit** au M08-E46 | — | — |
 | Instances Molecule | 2046, 2047 (M12), 2149 (M14) | jetables | — | scénarios Molecule des rôles |
 
-## Qui gère quoi (fin du bloc F)
+## Qui gère quoi (fin du bloc G)
 
 | Couche | Outil | Où |
 |---|---|---|
-| Création des VMs | OpenTofu (`bpg/proxmox`), état chiffré sur `s3-01`, un état par environnement (`socle`, `m07-maquette`, `ceph`, `hv`, `openstack`, `provisioning`, `m12-conteneurs`, `m13-registre`, `registre-reg02`, `k8s`, `m15-essai`, `m18`, `m20`, `m24`, `m25`, `m26` ; dossiers et équipes de Grafana : `observabilite-grafana` ; royaume Keycloak : `identite` ; configuration d'OpenBao : `secrets`) | `plateforme/infra`, modules `vm-debian` (disques de données) et `vm-noeud` (v2.4, carte DHCP) de `plateforme/tofu-modules` |
+| Création des VMs | OpenTofu (`bpg/proxmox`), état chiffré sur `s3-01`, un état par environnement (`socle`, `m07-maquette`, `ceph`, `hv`, `openstack`, `provisioning`, `m12-conteneurs`, `m13-registre`, `registre-reg02`, `k8s`, `m15-essai`, `m18`, `m20`, `m24`, `m25`, `m26`, `m27` ; dossiers et équipes de Grafana : `observabilite-grafana` ; royaume Keycloak : `identite` ; configuration d'OpenBao : `secrets`) | `plateforme/infra`, modules `vm-debian` (disques de données) et `vm-noeud` (v2.4, carte DHCP) de `plateforme/tofu-modules` |
 | Images | Packer ; image-builder pour les nœuds Cluster API | `plateforme/images` |
 | Configuration | Ansible (inventaire NetBox ; mots de passe des Vault `lab` et `critique` lus dans OpenBao par `outils/vault-pass-client.sh`, lookups `community.hashi_vault`) | `plateforme/ansible`, appliqué par la CI |
 | Bordure redondante | rôles `keepalived`, `conntrackd`, `frr`, `wireguard`, `pare_feu`, `relais_dhcp` ; une seule matrice des flux | `group_vars/role_routeur/` (`pare_feu.yml`) ; `docs/socle/matrice-flux.md` générée par `ms-matrice-flux` |
@@ -181,19 +217,23 @@ Règle du PLAN §3.3 : le socle est permanent, **un seul profil lourd** tourne �
 | Identité et accès | FreeIPA (personnes, groupes, HBAC, sudo ; SSSD sur les VMs inscrites sauf `gw01`/`gw02`) ; Keycloak (royaume `medisphere` fédéré depuis `ipa01`, OTP des administrateurs) ; SSO de GitLab, Grafana, Argo CD, Harbor, Proxmox VE, PBS, NetBox, Kubernetes, OAuth2 Proxy ; comptes de bris de glace (RB-240) | `plateforme/identite` (`annuaire/` Ansible, `tofu/` OpenTofu `keycloak/keycloak`) ; `ipa01`, `idp01` |
 | Secrets | OpenBao (KV v2, `db-mediagenda`, `transit`, `pki-services` ; méthodes `oidc`, `gitlab` (JWT), `k8s-par1`, `approle`) ; External Secrets Operator ; signature Cosign par `transit/cosign-medisphere` ; instantanés Raft horaires | `plateforme/secrets` (OpenTofu `hashicorp/vault`) ; `vault01-03`, `kms01` ; `ExternalSecret` dans les dépôts de déploiement |
 | Durcissement et sécurité à l'exécution | rôle `durcissement` (CIS, ANSSI-BP-028, exceptions déclarées), OpenSCAP hebdomadaire (rapports vers `s3-01` `conformite`, score à node_exporter) ; PSA, Kyverno, politiques d'admission natives ; Falco, Tetragon ; pare-feu d'hôte et WireGuard de Cilium | `plateforme/ansible` ; `plateforme/politiques` (Application `politiques`) ; `plateforme/k8s` (`espaces/`, `composants/cilium/hote/`) ; registre `docs/securite/durcissement/exceptions.md` |
+| Données et messagerie | CloudNativePG (rôles et bases déclaratifs, Pooler, réplica de secours) ; Flyway (migrations en hook d'Argo CD) ; Valkey ; opérateurs RabbitMQ (grappe, topologie déclarative) | `plateforme/donnees` ; `mediagenda/deploiement`, `medinotif/deploiement` ; `plateforme/k8s` (`espaces/`) |
+| Autoscaling et locataires | HPA, KEDA, VPA, PriorityClasses ; Capsule (locataires, quotas, libre-service) | `plateforme/gitops` ; `plateforme/k8s` (`locataires/`) ; dépôts de déploiement |
+| Portail développeurs | Backstage (catalogue, TechDocs, *scaffolder*, plugin Kubernetes) ; modèle « nouveau service » | `plateforme/portail`, `plateforme/portail-modeles` ; `catalog-info.yaml` des projets |
+| Tests et résilience | composant CI/CD `validation` (kubeconform, conftest/OPA, Testinfra) ; Terratest ; k6 et k6-operator ; Chaos Mesh, journées de jeu | `plateforme/ci-templates` ; `plateforme/politiques` (`rego/`) ; `plateforme/ansible` (`tests/infra/`) ; `plateforme/tofu-modules` ; `plateforme/resilience` |
 | Stockage distribué | cephadm (spécifications, registre des allocations, `outils/appliquer.sh`) | `plateforme/ceph` ; `ceph01-03` |
 | Cluster de virtualisation | installateur automatique, rôles `pve_noeud`, `pve_cluster`, `pve_pare_feu`, Taskfile de reconstruction | `plateforme/infra` (`envs/hv/`), `plateforme/ansible` |
 | Cloud IaaS | Kolla-Ansible 22 (déploiement depuis `adm01` par `outils/deployer.sh`, étiquettes `deploye-*`) ; objets par OpenTofu (provider OpenStack) et Heat | `plateforme/openstack` ; dépôts des équipes (`mediagenda/recette-infra`) |
 | Provisioning | pipeline NetBox → rendu (preseed, kickstart, iPXE) → `pxe01` → alimentation par API | `plateforme/provisioning` ; `pxe01` |
-| Intégration continue | GitLab CE 19.5, runners `k8s-par1` et `k8s-par1-protege` (exécuteur `kubernetes`), `runner02` pour l'étiquette `docker` ; composants CI/CD v2 (`construction-image`, `qualite`, `securite`, `promotion`, `deploiement`) ; BuildKit *rootless* partagé ; promotion des images par MR (`ci-promotion`) | `plateforme/ci-templates` (catalogue) ; `plateforme/k8s` ; projets des applications |
-| Déploiement continu | Argo CD (*App of Apps*, AppProjects, ApplicationSets, `prod` synchronisée à la main, fenêtres de synchronisation) ; Argo Rollouts (canary par la Gateway API, analyses Prometheus) ; Secrets par `ExternalSecret` (OpenBao) | `plateforme/gitops` ; `mediagenda/deploiement`, `medidoc/deploiement` ; `plateforme/charts-miroir` |
+| Intégration continue | GitLab CE 19.5, runners `k8s-par1` et `k8s-par1-protege` (exécuteur `kubernetes`), `runner02` pour l'étiquette `docker` ; composants CI/CD v2 (`construction-image`, `qualite`, `securite`, `promotion`, `deploiement`, `validation`) ; BuildKit *rootless* partagé ; promotion des images par MR (`ci-promotion`) | `plateforme/ci-templates` (catalogue) ; `plateforme/k8s` ; projets des applications |
+| Déploiement continu | Argo CD (*App of Apps*, AppProjects, ApplicationSets, `prod` synchronisée à la main, fenêtres de synchronisation) ; Argo Rollouts (canary par la Gateway API, analyses Prometheus) ; Secrets par `ExternalSecret` (OpenBao) | `plateforme/gitops` ; `mediagenda/deploiement`, `medidoc/deploiement`, `medinotif/deploiement` ; `plateforme/charts-miroir` |
 | Observabilité | Prometheus, Alertmanager, Grafana, Thanos, Pyrra (M21) ; Loki et Alloy (M22) ; OpenTelemetry, Tempo, Pyroscope (M23) ; supervision témoin et *dead man's switch* sur `mon01` ; alertes par courriel (Mailpit) | `plateforme/observabilite` (règles, tableaux, routes, SLO, valeurs) ; rôles `node_exporter`, `alloy`, `supervision_temoin`, `mailpit` |
 | Registre et confiance des images | Harbor 2.15 (projets, robots, caches, politiques), Cosign 3 (clé MédiSphère, sans Rekor public), Trivy, Syft ; Renovate planifié | `reg01` ; état `registre` ; `docs/registre/` ; `plateforme/renovate` |
 | Cluster Kubernetes | kubeadm (configuration v1beta4), rôles `containerd`, `k8s_noeud`, `k8s_plan_controle`, `k8s_travailleur` ; objets du cluster (`task appliquer`) | `plateforme/k8s` ; `plateforme/ansible` |
 | Composants de plateforme | couche de base : Helmfile 1.8 et Helm 4 (neuf releases du M17, `gitlab-runner`, `buildkitd`, `gitlab-agent`, `argocd`) ; le reste par Argo CD | `plateforme/k8s` (`helmfile.yaml`, `releases/`) ; `plateforme/gitops` (`plateforme/`) |
 | Applications sur Kubernetes | chart signé (Helm 4, OCI dans Harbor `charts`), rendu vérifié décliné par Kustomize, synchronisé par Argo CD | `mediagenda/chart`, `mediagenda/deploiement`, `medidoc/deploiement` |
 | Outils d'exploitation | `medictl`, scripts `ms-*` (`ms-verif-reseau`, `ms-verif-services`, `ms-verif-ceph`, `ms-verif-cluster`, `ms-verif-openstack`, `ms-verif-conteneurs`, `ms-verif-registre`, `ms-verif-k8s-reseau`, `ms-verif-k8s-stockage`, `ms-capacite-*`) | `plateforme/outils` |
-| Documentation | runbooks, ADR, post-mortems, fiches de changement | `plateforme/medisphere` : `docs/socle/`, `docs/stockage/`, `docs/virtualisation/`, `docs/cloud/`, `docs/provisioning/`, `docs/conteneurs/`, `docs/registre/`, `docs/kubernetes/`, `docs/livraison/` (`ci/`, `gitops/`), `docs/observabilite/` (`metriques/`, `journaux/`, `traces/`), `docs/securite/` (`identite/`, `secrets/`, `durcissement/`) |
-| Sauvegarde | PBS (VMs du pool `lab`, sauvegardes applicatives, Ceph, base d'OpenStack, invités du cluster, conteneurs, Harbor, nœuds Kubernetes) ; S3 de `s3-01` pour etcd, Velero et CloudNativePG | `pbs01`, datastore `ds-lab`, espaces `par1`, `par1/ceph`, `par1/openstack`, `par1/hv`, `par1/conteneurs`, `par1/registre`, `par1/k8s` ; `s3-01` (`etcd-k8s-par1`, `velero-k8s-par1`, `cnpg-k8s-par1`), `argocd-sauvegardes` (M20-E28), `identite-sauvegardes` (M24), `openbao-instantanes` (chiffrés `age`, M25), `incidents` (M25), `conformite` et `preuves` (M26) ; PBS `par1/identite`, `par1/secrets` ; données d'observabilité sur le RGW (`thanos-`, `loki-`, `tempo-`, `pyroscope-k8s-par1`) |
+| Documentation | runbooks, ADR, post-mortems, fiches de changement | `plateforme/medisphere` : `docs/socle/`, `docs/stockage/`, `docs/virtualisation/`, `docs/cloud/`, `docs/provisioning/`, `docs/conteneurs/`, `docs/registre/`, `docs/kubernetes/`, `docs/livraison/` (`ci/`, `gitops/`), `docs/observabilite/` (`metriques/`, `journaux/`, `traces/`), `docs/securite/` (`identite/`, `secrets/`, `durcissement/`), `docs/donnees/`, `docs/plateforme-dev/`, `docs/qualite/` |
+| Sauvegarde | PBS (VMs du pool `lab`, sauvegardes applicatives, Ceph, base d'OpenStack, invités du cluster, conteneurs, Harbor, nœuds Kubernetes) ; S3 de `s3-01` pour etcd, Velero et CloudNativePG | `pbs01`, datastore `ds-lab`, espaces `par1`, `par1/ceph`, `par1/openstack`, `par1/hv`, `par1/conteneurs`, `par1/registre`, `par1/k8s` ; `s3-01` (`etcd-k8s-par1`, `velero-k8s-par1`, `cnpg-k8s-par1`), `argocd-sauvegardes` (M20-E28), `identite-sauvegardes` (M24), `openbao-instantanes` (chiffrés `age`, M25), `incidents` (M25), `conformite` et `preuves` (M26), `messagerie-definitions` (M27), `portail-techdocs` (M28) ; réplica de secours `mediagenda-db-secours` depuis `cnpg-k8s-par1` (M27) ; PBS `par1/identite`, `par1/secrets` ; données d'observabilité sur le RGW (`thanos-`, `loki-`, `tempo-`, `pyroscope-k8s-par1`) |
 
 Pour les dépendances entre modules, voir [`annexes/prerequis.md`](../annexes/prerequis.md).

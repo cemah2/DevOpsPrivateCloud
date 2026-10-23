@@ -4,7 +4,7 @@
 >
 > Domaines relevés le 7 octobre 2026 sur les pages officielles des éditeurs (liens en fin de section). Ils changent régulièrement : vérifie la version en vigueur avant de t'inscrire. Les correspondances sont **indicatives** : un exercice « couvre » un domaine quand il y fait pratiquer un geste de l'examen, pas quand il en parle. Les examens pratiques (LFCS, RHCSA, RHCE, CKA) demandent en plus de la **vitesse** : refais les exercices `CHRONO` et les `BF` sans indice.
 
-État : **blocs A à F** (modules 00 à 26) renseignés ; bloc G et finaux à compléter. Domaines des certifications ajoutées au bloc B (COA, CCNA, Ceph) relevés le 8 octobre 2026 ; ceux des certifications Kubernetes (CKA, CKAD, CKS, KCNA, KCSA) le 15 octobre 2026 sur les programmes publiés par la CNCF ([cncf/curriculum](https://github.com/cncf/curriculum)) ; ceux des certifications des blocs D et E (PCA, OTCA, CAPA, CGOA) le 22 octobre 2026 sur les pages officielles de la CNCF et de la Linux Foundation ; ceux du HashiCorp Vault Associate (003) le 23 octobre 2026 sur la page officielle de HashiCorp.
+État : **blocs A à G** (modules 00 à 29) renseignés ; finaux à compléter. Domaines des certifications ajoutées au bloc B (COA, CCNA, Ceph) relevés le 8 octobre 2026 ; ceux des certifications Kubernetes (CKA, CKAD, CKS, KCNA, KCSA) le 15 octobre 2026 sur les programmes publiés par la CNCF ([cncf/curriculum](https://github.com/cncf/curriculum)) ; ceux des certifications des blocs D et E (PCA, OTCA, CAPA, CGOA) le 22 octobre 2026 sur les pages officielles de la CNCF et de la Linux Foundation ; ceux du HashiCorp Vault Associate (003) le 23 octobre 2026 sur la page officielle de HashiCorp ; ceux des certifications du bloc G (CBA, CNPA, CNPE, Confluent, EDB) le 23 octobre 2026 sur les pages officielles de la Linux Foundation, de Confluent et d'EDB.
 
 ## Vue d'ensemble
 
@@ -19,8 +19,8 @@
 | CCNA (200-301) | Cisco | QCM et simulations | partielle : les concepts L2/L3 et FHRP (M07), sur Linux et non sur IOS | §7 |
 | Ceph : Red Hat Certified Specialist in Ceph Cloud Storage (EX260) | Red Hat | pratique | **examen retiré** ; programme couvert par M08 | §8 |
 | Proxmox VE | Proxmox Server Solutions | formation avec attestation, sans examen | M00, M09 | §8 |
-| CKA — Certified Kubernetes Administrator (programme v1.35) | CNCF / Linux Foundation | pratique, en ligne (2 h) | large : installation kubeadm, cycle de vie, réseau, stockage et dépannage (M14 à M17) ; l'autoscaling seulement au M28 | §9 |
-| CKAD — Certified Kubernetes Application Developer (programme v1.37) | CNCF / Linux Foundation | pratique, en ligne (2 h) | large pour la conception, la configuration et le déploiement (M12, M14, M15, M17) | §10 |
+| CKA — Certified Kubernetes Administrator (programme v1.35) | CNCF / Linux Foundation | pratique, en ligne (2 h) | large : installation kubeadm, cycle de vie, réseau, stockage et dépannage (M14 à M17) ; autoscaling, priorités et quotas au M28 | §9, §23 |
+| CKAD — Certified Kubernetes Application Developer (programme v1.37) | CNCF / Linux Foundation | pratique, en ligne (2 h) | large pour la conception, la configuration et le déploiement (M12, M14, M15, M17) ; Jobs, ressources et quotas complétés au bloc G | §10, §23 |
 | CKS — Certified Kubernetes Security Specialist (programme v1.34) | CNCF / Linux Foundation | pratique, en ligne (2 h) ; CKA en cours de validité exigée | **large** : chaîne d'approvisionnement (M12, M13), RBAC, admission, audit, chiffrement (M14), politiques réseau (M15) ; OIDC et RBAC par groupes (M24), Secrets par coffre (M25), CIS, PSA, Kyverno, Falco, Tetragon, chiffrement et pare-feu des nœuds (M26) ; conteneurs isolés (gVisor, Kata) seulement discutés | §11, §21 |
 | KCNA et KCSA — Kubernetes and Cloud Native (Security) Associate | CNCF / Linux Foundation | QCM en ligne | KCNA : largement couvert par le bloc C ; KCSA : largement couvert avec le bloc F | §12, §21 |
 | DCA — Docker Certified Associate | Mirantis | QCM | partielle : M12, M13 ; Swarm et produits d'entreprise de Mirantis non couverts | §13 |
@@ -28,6 +28,11 @@
 | OTCA — OpenTelemetry Certified Associate | CNCF / Linux Foundation | QCM en ligne | large pour le Collector et les SDK (M23) | §16 |
 | CAPA — Certified Argo Project Associate | CNCF / Linux Foundation | QCM en ligne | Argo CD et Argo Rollouts (M20) ; **Argo Workflows et Argo Events non couverts** (près de la moitié de l'examen) | §17 |
 | CGOA — GitOps Certified Associate | CNCF / Linux Foundation | QCM en ligne | large (M20, avec Flux en comparaison) | §18 |
+| CBA — Certified Backstage Associate | CNCF / Linux Foundation | QCM en ligne (90 min) | partielle : installation, configuration, catalogue, TechDocs, modèles (M28) ; développement de plugins en React peu pratiqué | §24 |
+| CNPA — Certified Cloud Native Platform Engineering Associate | CNCF / Linux Foundation | QCM en ligne (120 min) | large pour les notions (blocs D à G, M28 en tête) ; indicateurs DORA et IA seulement évoqués | §25 |
+| CNPE — Certified Cloud Native Platform Engineer | CNCF / Linux Foundation | pratique, en ligne (2 h) | partielle : GitOps, observabilité, politiques, multi-locataire (blocs D à G) ; API de plateforme par CRD maison et cadres d'automatisation (Crossplane) non pratiqués | §25 |
+| CCDAK et CCAAK — Confluent Certified Developer / Administrator for Apache Kafka | Confluent | QCM en ligne (90 min) | **faible** : Kafka n'est qu'un essai (M27-E09, E10) | §26 |
+| EDB : Essentials for CloudNativePG, Essentials / Advanced for PostgreSQL | EDB | examen associé à une formation EDB | partielle : CloudNativePG (M16, M27) ; l'administration de PostgreSQL elle-même n'est pas le sujet du workbook | §26 |
 | HashiCorp Certified: Vault Associate (003) | HashiCorp | QCM en ligne | **équivalence seulement** : le workbook pratique **OpenBao** (fork MPL 2.0 de Vault), pas Vault ; concepts, CLI et API quasi identiques, mais l'examen porte sur Vault et ses fonctions Enterprise/HCP (M25 ; Vault 2.2 en comparaison au M25-E30) | §22 |
 
 ---
@@ -333,10 +338,8 @@ Les certifications Kubernetes (§9 à §12) gagnent quelques exercices avec les 
 
 | Certification | Domaines officiels | Bloc concerné |
 |---|---|---|
-| **CKA** (complément) | autoscaling des charges (HPA) | G (28) |
 | **KCSA** (complément) | conformité (HDS, ISO 27001) | finaux F6 |
 | **LFCS** (compléments) | swap, automontage, ACL POSIX | non prévus (révision personnelle) |
-| **Certified Backstage Associate (CBA)** | à relever si pertinent | G (28) |
 | **Kyverno Certified Associate (KCA)** | non relevé au bloc F : le M26 n'utilise que les politiques CEL de Kyverno 1.19 (`ClusterPolicy` dépréciée), à vérifier contre le programme de l'examen si l'apprenant le vise | — |
 
 ## 21. Kubernetes, LFCS, RHCSA et RHCE : compléments du bloc F
@@ -378,3 +381,66 @@ Restent hors du workbook : pour la CKS, les conteneurs isolés (gVisor, Kata) en
 | **Access management architecture** | modèle d'accès au coffre : M25-E05 · groupes externes tirés de l'annuaire : M25-E06, M25-E08 · ADR du coffre : M25-E31 |
 
 Sources : [Vault Associate (003), revue des objectifs (HashiCorp)](https://developer.hashicorp.com/vault/tutorials/associate-cert-003/associate-review-003) ; [page de la certification](https://developer.hashicorp.com/certifications/vault-associate).
+
+## 23. Kubernetes : compléments du bloc G
+
+Le bloc G apporte à la CKA et à la CKAD ce qui leur manquait (autoscaling, priorités), et quelques gestes aux autres programmes Kubernetes. Les domaines sont ceux des programmes cités aux §9 à §12.
+
+| Certification | Domaine | Exercices du bloc G |
+|---|---|---|
+| **CKA** | Workloads and Scheduling : autoscaling ; admission et ordonnancement | **HPA** `autoscaling/v2` (cible Rollout, `behavior`) : M28-E02 · KEDA (file, cron, Prometheus, zéro) : M28-E03, M28-E13 · VPA et redimensionnement en place : M28-E04 · boucle de l'HPA et métriques externes : M28-E24 · PriorityClass, préemption, quotas par locataire : M28-E14 · PDB et bascules sous drainage : M27-E02 |
+| **CKA** | Troubleshooting : charges et ressources | autoscaling muet : M28-E19 · pods qui oscillent : M28-E20 · locataire qui sature le cluster : M28-E23 · écritures bloquées, consommateur arrêté : M27-E19, M27-E20 |
+| **CKA** | Cluster Architecture : CRD et opérateurs | opérateurs RabbitMQ (Cluster Operator, Messaging Topology Operator) : M27-E03, M27-E04 · Strimzi : M27-E09 · Capsule et ses webhooks : M28-E05, M28-E24 · schémas des CRD pour la validation : M29-E02 |
+| **CKAD** | Application Design and Build : choisir la ressource (Job, CronJob, StatefulSet) | Job de migration en hook : M27-E05 · CronJob d'export des définitions : M27-E15 · StatefulSet de Valkey : M27-E07 |
+| **CKAD** | Application Environment, Configuration and Security : demandes, limites, quotas ; CRD | recommandations VPA : M28-E04 · quotas, LimitRange et priorités : M28-E14, M28-E23 · objets d'opérateurs (Pooler, `Database`, `Queue`, `ScaledObject`) : M27-E02, M27-E04, M28-E03 |
+| **CKAD** | Application Observability and Maintenance : sondes et contrôles de santé ; débogage | sondes de CloudNativePG : M27-E24 · sonde `/pret` révélée par le chaos : M29-E23 · migrations qui ne cassent pas N−1 : M27-E06 |
+| **KCNA** | Cloud Native Architecture : autoscaling, *serverless* ; Container Orchestration : ordonnancement | M28-E02, M28-E03 (mise à zéro), M28-E14 ; questionnaires M28-E01, M28-E18 |
+| **CKS** | Minimize Microservice Vulnerabilities : isolation multi-locataire | M28-E05, M28-E15 (tentatives d'évasion d'un locataire), M28-E09 (vCluster) |
+| **CKS** | Supply Chain Security : analyse statique des manifestes | kubeconform et conftest sur les manifestes rendus : M29-E02, M29-E03, M29-E10 |
+
+## 24. CBA — Certified Backstage Associate
+
+QCM en ligne de 90 minutes. Le module 28 construit et exploite un portail Backstage complet, mais du point de vue de la plateforme : le domaine le plus lourd de l'examen, **Customizing Backstage** (32 %), porte sur le développement de plugins (React, Material UI), que le module ne fait qu'effleurer en intégrant des plugins existants. Compte une préparation propre à ce domaine.
+
+| Domaine (poids) | Exercices du module 28 |
+|---|---|
+| **Backstage Development Workflow** (24 %) : projet local, TypeScript, dépendances (Yarn), image de conteneur | application créée par `@backstage/create-app`, image construite par la CI : M28-E06 · montée de version : M28-E16 |
+| **Backstage Infrastructure** (22 %) : cadre, configuration, déploiement en production, architecture client-serveur | `app-config`, chart, base CNPG `portail-db`, connexion OIDC : M28-E06 · production (mise à jour, sauvegarde, supervision) : M28-E16 · panne : M28-E22 |
+| **Backstage Catalog** (22 %) : alimenter le catalogue, annotations, emplacements enregistrés à la main, ingestion automatique, dépannage de l'ingestion | découverte GitLab, organisation par LDAP, `catalog-info.yaml`, propriétaires : M28-E07 · annotations Kubernetes et TechDocs : M28-E10 · catalogue complet à la livraison : M28-E25 |
+| **Customizing Backstage** (32 %) : plugins frontaux et dorsaux, personnalisation de plugins, code React, Material UI | plugins Kubernetes et TechDocs ajoutés à l'application : M28-E10 · modèles du *scaffolder* : M28-E08 · **développement de plugins non pratiqué** |
+
+Source : [page de la certification CBA (Linux Foundation)](https://training.linuxfoundation.org/certification/certified-backstage-associate-cba/).
+
+## 25. CNPA et CNPE — ingénierie de plateforme
+
+Deux certifications de la CNCF sur l'ingénierie de plateforme. Le workbook entier en est une mise en pratique (livraison, observabilité, sécurité, libre-service) ; le bloc G en ferme la boucle avec le portail, les locataires et les tests.
+
+**CNPA** (*Certified Cloud Native Platform Engineering Associate*) : QCM en ligne de 120 minutes.
+
+| Domaine (poids) | Exercices du workbook |
+|---|---|
+| **Platform Engineering Core Fundamentals** (36 %) : gestion déclarative, environnements, architecture de plateforme, CI, CD et GitOps | M17, M19, M20 · ADR de la plateforme développeurs : M28-E17 |
+| **Platform Observability, Security, and Conformance** (20 %) : observabilité, communication sécurisée, moteurs de politiques, sécurité de Kubernetes et des pipelines | M21-M23 · M24-M26 · politiques Rego en CI : M29-E03, M29-E10 |
+| **Continuous Delivery & Platform Engineering** (16 %) : pipelines, réponse à incident, GitOps | M19, M20 · astreintes `BF` des modules 27 à 29 (M27-E23, M28-E23, M29-E23) |
+| **Platform APIs and Provisioning Infrastructure** (12 %) : boucle de réconciliation, API de libre-service (CRD), provisionnement par Kubernetes, opérateurs | opérateurs RabbitMQ et Strimzi : M27-E03, M27-E09 · locataires en libre-service : M28-E05 · Crossplane en fiche ([`decouverte/crossplane.md`](decouverte/crossplane.md)) |
+| **IDPs and Developer Experience** (8 %) : accès simplifié, catalogues, portails | M28-E06, M28-E07, M28-E08, M28-E12 (guide d'accueil) |
+| **Measuring your Platform** (8 %) : efficacité, productivité, indicateurs DORA | DORA : M19-E28 · temps du chemin balisé mesuré : M28-E25 |
+
+**CNPE** (*Certified Cloud Native Platform Engineer*) : examen **pratique** de 2 heures.
+
+| Domaine (poids) | Exercices du workbook |
+|---|---|
+| **Platform Architecture and Infrastructure** (15 %) : bonnes pratiques réseau, stockage, calcul ; dimensionnement ; ressources multi-locataires | M15, M16 · VPA, quotas, priorités : M28-E04, M28-E14 · dimensionnement des données : M27-E16 |
+| **GitOps and Continuous Delivery** (25 %) : GitOps, pipelines intégrés à Kubernetes, livraison progressive | M19, M20 (canary d'Argo Rollouts) · MédiNotif livré par ApplicationSet : M27-E04, M27-E08 |
+| **Platform APIs and Self-Service Capabilities** (25 %) : CRD de services de plateforme, libre-service, opérateurs, cadres d'automatisation | opérateurs : M27-E03, M27-E09 · locataires : M28-E05 · modèle « nouveau service » par MR : M28-E08 · **CRD maison et Crossplane non pratiqués** |
+| **Observability and Operations** (20 %) : supervision, alertes, journaux, traces ; indicateurs ; diagnostic | M21-M23 · supervision des données : M27-E14 · pannes des modules 27 à 29 |
+| **Security and Policy Enforcement** (15 %) : communication sécurisée, RBAC, traces d'audit et conformité, moteurs de politiques, analyses en pipeline | M24-M26 · politiques Rego et composant `validation` : M29-E03, M29-E10 |
+
+Sources : [CNPA (Linux Foundation)](https://training.linuxfoundation.org/certification/certified-cloud-native-platform-engineering-associate-cnpa/), [CNPE (Linux Foundation)](https://training.linuxfoundation.org/certification/certified-cloud-native-platform-engineer-cnpe/).
+
+## 26. Données et messagerie : Kafka, PostgreSQL, RabbitMQ
+
+- **Kafka** : Confluent propose le **CCDAK** (*Confluent Certified Developer for Apache Kafka*) et le **CCAAK** (*Confluent Certified Administrator for Apache Kafka*), QCM surveillés de 90 minutes. Le workbook n'en couvre qu'une petite part : Kafka y est un **essai** de deux exercices (KRaft, `KafkaNodePool`, *topics*, utilisateurs SCRAM, offsets et groupes de consommateurs : M27-E09, M27-E10), retiré ensuite (ADR-0270). Le CCAAK suppose l'exploitation durable d'une grappe, le CCDAK les API clientes (producteurs, consommateurs, Streams, Connect) : préparation propre indispensable. Source : [certifications Confluent](https://www.confluent.io/certification/).
+- **PostgreSQL et CloudNativePG** : EDB publie un catalogue d'examens, dont **EDB Essentials for CloudNativePG** (version 1.25, examen inclus dans la formation EDB du même nom : architecture, installation, configuration, sécurité et supervision, sauvegarde et restauration, réplication et haute disponibilité, montées de version) et **EDB Essentials / Advanced for PostgreSQL**. Le premier recoupe M16 (installation, sauvegardes Barman Cloud, PITR) et M27 (rôles et bases déclaratifs, *pooler*, switchover, fencing, réplica de secours, supervision, mise à jour mineure : M27-E02, M27-E14, M27-E15, M27-E24) ; la version de l'examen (1.25) est antérieure à celle du workbook (1.30). Les seconds portent sur l'administration de PostgreSQL elle-même, que le workbook ne traite que par CloudNativePG et Patroni (M27-E13). Sources : [catalogue des examens EDB](https://enterprisedb.com/training/certification-exams), [fiche EDB Essentials for CloudNativePG](https://www.enterprisedb.com/sites/default/files/pdf/EDB_Essentials_for_CloudNativePG_Datasheet.pdf).
+- **RabbitMQ** : aucune certification officielle relevée (l'éditeur propose des formations, pas d'examen).
+- **Sans certification** : OPA et Rego (aucune certification officielle de la CNCF ni du projet), k6, Chaos Mesh, LitmusChaos, Terratest, Testinfra, Goss, KEDA, Capsule, vCluster : le module 29 et le module 28 les pratiquent sans grille d'examen.
