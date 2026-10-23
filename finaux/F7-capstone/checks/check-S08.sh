@@ -56,6 +56,16 @@ if [[ -n "$_f7_s08_idp_json" ]]; then
       and (.storeToken // false) == false' >/dev/null 2>&1 <<<"$_f7_s08_idp_json"
   }
   check_cmd "fournisseur $_f7l_idp : actif, caché sur la page de connexion, signatures vérifiées, jetons non conservés" _f7_s08_idp_ok
+  # « Caché » n'interdit pas l'adresse directe du courtier (/broker/<alias>/login) avec la session d'un
+  # client interne ; le retour du courtier ne rejoue pas le flux du navigateur : seul un flux « après
+  # courtier » peut refuser à ce moment-là.
+  _f7_s08_apres_courtier() {
+    local f
+    f="$(jq -r '.postBrokerLoginFlowAlias // .config.postBrokerLoginFlowAlias // empty' <<<"$_f7_s08_idp_json" 2>/dev/null)"
+    [[ -n "$f" ]] && keycloak_api "authentication/flows/$(_f7c_enc "$f")/executions" 2>/dev/null |
+      jq -e 'any(.[]; (.providerId // "") == "deny-access-authenticator")' >/dev/null 2>&1
+  }
+  check_cmd "fournisseur $_f7l_idp : un flux après courtier refuse (accès direct au courtier depuis un client interne)" _f7_s08_apres_courtier
   _f7_s08_mappeur_groupe() {
     _f7l_idp_mappeurs | jq -e --arg g "$_f7l_groupe_agents" 'any(.[]; (.config.group // "") | test("(^|/)" + $g + "$"))' >/dev/null 2>&1
   }

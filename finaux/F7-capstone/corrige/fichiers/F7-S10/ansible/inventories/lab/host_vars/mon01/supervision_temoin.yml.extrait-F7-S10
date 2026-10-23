@@ -19,22 +19,37 @@
       # du jeton. Praticien et date fictifs : aucune donnée de patient lue.
       - https://ghsv.apps.par1.medisphere.internal/api/v1/creneaux?date=2030-01-07&praticien=SONDE-MON01
 
-# Module blackbox ajouté à supervision_temoin_modules (fichier blackbox.yml du rôle, M21) : la
-# configuration HTTP de Prometheus sait obtenir elle-même un jeton OAuth 2.0 « client credentials »
-# (bloc oauth2 de http_client_config). Le secret du client ghsv-sonde vient de l'Ansible Vault
-# critique (puis OpenBao, M25), jamais du dépôt ; fichier lisible par blackbox seulement.
+# Module blackbox SUPPLÉMENTAIRE. Le gabarit blackbox.yml.j2 du rôle (M21-E11) a une liste de modules
+# fixe : on lui ajoute, en fin de fichier, une boucle sur une NOUVELLE variable (défaut {} dans
+# defaults/main.yml du rôle, donc rien ne change pour les autres hôtes) :
+#   {% for nom, module in (supervision_temoin_modules_supplementaires | default({})).items() %}
+#     {{ {nom: module} | to_nice_yaml(indent=2) | indent(2) }}
+#   {% endfor %}
+# (deux espaces avant « {{ » : le module est sous « modules: » ; la tâche existante valide le fichier
+# par « blackbox_exporter --config.check »).
+# Le bloc oauth2 est celui de la configuration HTTP commune de Prometheus (http_client_config, en
+# ligne sous « http: ») : blackbox obtient lui-même un jeton « client credentials ». Le secret du
+# client ghsv-sonde vient de l'Ansible Vault critique (puis OpenBao, M25), jamais du dépôt : une tâche
+# du rôle le pose dans {{ supervision_temoin_dossier_config }}/blackbox/ghsv-sonde.secret (root:blackbox,
+# 0640, no_log) ; blackbox le relit à chaque obtention de jeton.
 supervision_temoin_modules_supplementaires:
   https_2xx_ghsv_api:
     prober: http
     timeout: 5s
     http:
       method: GET
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      fail_if_not_ssl: true
       valid_status_codes: [200]
       fail_if_body_not_matches_regexp: ['"libres"']
       tls_config:
-        ca_file: /etc/ssl/certs/ca-certificates.crt
+        ca_file: "{{ supervision_temoin_racine_ca }}"
       oauth2:
         client_id: ghsv-sonde
-        client_secret_file: /etc/prometheus/blackbox/ghsv-sonde.secret
+        client_secret_file: /etc/prometheus/blackbox/ghsv-sonde.secret   # {{ supervision_temoin_dossier_config }}/blackbox/
         token_url: https://sso.par1.medisphere.internal/realms/medisphere/protocol/openid-connect/token
         scopes: [rdv:lecture]
+        # Le jeton est demandé à Keycloak avec la même confiance TLS que la sonde.
+        tls_config:
+          ca_file: "{{ supervision_temoin_racine_ca }}"

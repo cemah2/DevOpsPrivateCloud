@@ -149,7 +149,7 @@ Pour l'identité, distingue trois populations qui n'ont ni les mêmes risques ni
 **Contexte technique**
 - Durée : cinq années de marché (mars 2027 à février 2032). Prix **hors taxes**, en euros, en ordres de grandeur d'**octobre 2026**.
 - Le bordereau de prix du GHSV est au §11.3 du CCTP (P1 à P7) ; R-04 définit le comptage des rendez-vous ; R-05 le volume de SMS.
-- Marché du matériel au relevé : les prix de la mémoire des serveurs ont fortement augmenté en 2026 (hausses trimestrielles de l'ordre de 80 à 90 % début 2026 selon les cabinets d'analyse du marché des semi-conducteurs) ; les délais de livraison s'en ressentent. Un prix de serveur relevé aujourd'hui peut être faux dans trois mois.
+- Marché du matériel au relevé : les prix de la mémoire des serveurs ont fortement augmenté en 2026 (de l'ordre de + 90 % sur le seul premier trimestre 2026 pour les prix contractuels de la mémoire des serveurs, selon le cabinet TrendForce) ; les délais de livraison s'en ressentent. Un prix de serveur relevé aujourd'hui peut être faux dans trois mois.
 - Le tableur `chiffrage.csv` est lu par le check : séparateur virgule (ou point-virgule), une ligne par poste et par scénario, colonnes **au moins** `scenario`, `poste`, `categorie` (`CAPEX` ou `OPEX`), `annee_1` à `annee_5`, `total_5_ans`, `hypothese` (identifiant d'hypothèse ou source) ; montants entiers en euros, sans séparateur de milliers. Tu peux ajouter des colonnes.
 
 **Travail demandé**

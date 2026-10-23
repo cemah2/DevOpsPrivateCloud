@@ -134,7 +134,7 @@ exporter() {
     --arg s "$(sha256sum "$TRAVAIL/export/schema.sql" | cut -d' ' -f1)" \
     --arg d "$(sha256sum "$TRAVAIL/export/dictionnaire.csv" | cut -d' ' -f1)" \
     '{format: "medisphere-reversibilite/1", client: $client, environnement: $env, date_utc: $date,
-      postgresql: $pg, version_schema: $schema, encodage: "UTF-8", separateur: ",", fuseau_dates: "UTC (ISO 8601, décalage explicite)",
+      postgresql: $pg, version_schema: $schema, encodage: "UTF-8", separateur: ",", fuseau_dates: "ISO 8601 avec décalage explicite (fuseau de la base : Europe/Paris)",
       rendez_vous: {fichiers: ["rendez-vous.jsonl", "rendez-vous.csv"], enregistrements: ([$tables[0][] | select(.table == "rendez_vous") | .lignes][0])},
       absents_de_la_preuve_de_concept: ["patients.jsonl", "pieces-jointes/", "journaux/"],
       fichiers: ([{fichier: "schema.sql", sha256: $s}, {fichier: "dictionnaire.csv", sha256: $d}] + $tables[0])}' \

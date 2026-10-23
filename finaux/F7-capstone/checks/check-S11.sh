@@ -43,12 +43,14 @@ if _f7l_api_repond; then
       | length > 0 and all(.[]; (.spec.replicas // 0) >= 1 and (.status.readyReplicas // 0) == .spec.replicas)' >/dev/null 2>&1
   }
   check_cmd "$_f7l_ns_prod : cache Valkey démarré et prêt" _f7_s11_cache
+  # Le mandataire du DPI (ConfigMap qui règle skip_jwt_bearer_tokens) accepte les jetons porteurs.
   _f7_s11_mandataire() {
     kube -n "$_f7l_ns_prod" get configmaps -o json 2>/dev/null |
-      jq -e '[.items[] | (.data // {}) | to_entries[] | select(.value | test("extra_jwt_issuers"))] as $c
-        | ($c | length) == 0 or all($c[]; .value | test("extra_jwt_issuers[^\n]*-v2\"") | not)' >/dev/null 2>&1
+      jq -e '[.items[] | (.data // {}) | to_entries[] | .value
+        | select(test("(^|\n)[ \t]*skip_jwt_bearer_tokens[ \t]*="))] as $c
+        | ($c | length) > 0 and all($c[]; test("(^|\n)[ \t]*skip_jwt_bearer_tokens[ \t]*=[ \t]*true"))' >/dev/null 2>&1
   }
-  check_cmd "mandataire du DPI : audience attendue des jetons non altérée" _f7_s11_mandataire
+  check_cmd "mandataire du DPI : jetons porteurs acceptés (skip_jwt_bearer_tokens)" _f7_s11_mandataire
 else
   _ko "contrôles Kubernetes de $_f7l_ns_prod : impossibles, l'API de k8s-par1 ne répond pas au compte des checks (kube)"
 fi
@@ -68,11 +70,16 @@ _f7_s11_mappeur() {
 check_cmd "fournisseur $_f7l_idp : le mappeur des agents attend le groupe convenu « $_f7l_groupe_idp »" _f7_s11_mappeur
 
 # --- Plus aucune injection ---------------------------------------------------------------------------
+# meneur.pid : « PID date-de-démarrage » (champ 22 de /proc/PID/stat) ; un PID repris par un autre
+# processus après un redémarrage d'adm01 ne compte pas.
 _f7_s11_meneur_arrete() {
-  local pid
+  local pid debut st
   [[ -f "$_f7_s11_etat/meneur.pid" ]] || return 0
-  pid="$(<"$_f7_s11_etat/meneur.pid")"
-  ! { [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; }
+  read -r pid debut <"$_f7_s11_etat/meneur.pid" || true
+  [[ "${pid:-}" =~ ^[0-9]+$ ]] || return 0
+  st="$(cat "/proc/$pid/stat" 2>/dev/null)" || return 0
+  st="${st##*) }"
+  [[ "$(awk '{ print $20 }' <<<"$st")" != "${debut:-}" ]]
 }
 check_cmd "aucune injection à venir (meneur de jeu de F7-S11 arrêté)" _f7_s11_meneur_arrete
 

@@ -17,7 +17,7 @@
 ## 2. Glissant ou calendaire : deux usages, deux chiffres
 
 - Le SLO de Pyrra est **glissant** (30 jours) : il sert à piloter (alertes de consommation du budget, décision de reporter un changement). Il n'exclut pas les maintenances.
-- Le chiffre du contrat est **calendaire** (mois de Paris) et **exclut** les maintenances conformes : il est calculé une fois, après la fin du mois, par `ms-rapport-client`, sur les données brutes de Thanos (30 jours de données brutes : le rapport doit être produit **avant le 30 du mois suivant**, sinon les données sous-échantillonnées à 5 min font perdre la précision de la sonde de 30 s).
+- Le chiffre du contrat est **calendaire** (mois de Paris) et **exclut** les maintenances conformes : il est calculé une fois, après la fin du mois, par `ms-rapport-client`, sur les données brutes de Thanos (30 jours de données brutes, comptés depuis le moment du calcul : le rapport est produit **le 1er à 06:15**, et toute heure du mois de plus de 30 jours n'existe plus qu'en données sous-échantillonnées à 5 min. Un mois de 31 jours dépasse déjà la rétention de près de 31 h au moment du rapport : rétention brute de Thanos portée à **35 jours** (MR `plateforme/observabilite`) ; un rapport refait plus tard est marqué « recalculé sur données sous-échantillonnées »).
 - Les deux peuvent diverger : un mois avec une maintenance conforme de 2 h a un SLO glissant à 99,7 % et une disponibilité contractuelle à 100 %.
 
 ## 3. Ce que la mesure ne règle pas

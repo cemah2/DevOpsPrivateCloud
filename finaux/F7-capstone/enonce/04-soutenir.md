@@ -132,7 +132,7 @@ Les pièges ont un présupposé faux (souveraineté « totale », chiffrement au
 
 **Contexte technique**
 - Projets concernés : `plateforme/equipes`, `plateforme/identite` (royaume `medisphere` et état séparé de `ghsv-idp`), `plateforme/secrets`, `plateforme/k8s`, `plateforme/gitops`, `plateforme/observabilite`, `plateforme/outils`, `mediagenda/api`, `mediagenda/deploiement`, `plateforme/medisphere`.
-- `ms-preuves` (F6) collecte, horodate, signe et dépose ses preuves dans `preuves-conformite` ; ajoute-lui ce que la capstone doit prouver, selon le mode d'emploi que tu lui as donné au F6.
+- `ms-preuves` (F6) collecte, horodate, signe et dépose ses preuves dans `preuves-conformite` ; ajoute-lui ce que la capstone doit prouver, selon le mode d'emploi que tu lui as donné au F6, dans un domaine d'identifiants propre : **`P-CAP-nn`** (convention reprise par le check).
 - La recette `ghsv-recette` ne contient que des données fictives ; sa reconstruction à vide est permise, celle de `ghsv-prod` ne l'est **pas** dans ce scénario.
 - Étiquette finale **`capstone-v1`** sur `plateforme/medisphere`.
 

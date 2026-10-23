@@ -76,6 +76,12 @@ resource "keycloak_oidc_identity_provider" "ghsv" {
   # préfixé « ghsv. » (mappeur plus bas) écarte toute collision avec un compte de l'annuaire, donc
   # toute proposition de liaison. Voir les pièges du corrigé.
   first_broker_login_flow_alias = "first broker login"
+  # Après CHAQUE passage par ce fournisseur : refus si le client demandé n'est pas un client du GHSV
+  # (flux plus bas). Indispensable : « caché sur la page de connexion » n'interdit pas d'appeler
+  # directement /realms/medisphere/broker/ghsv-idp/login avec la session d'authentification d'un
+  # client interne, et le retour du courtier ne rejoue PAS le flux du navigateur (donc pas le refus
+  # de navigateur-medisphere).
+  post_broker_login_flow_alias = keycloak_authentication_flow.apres_courtier_ghsv.alias
 
   extra_config = {
     clientAuthMethod = "client_secret_post"
@@ -122,7 +128,7 @@ resource "keycloak_group" "ghsv_agents" {
 
 # Appartenance à ghsv-agents dérivée du SEUL groupe convenu chez le GHSV (« Advanced Claim to Group »).
 # FORCE (hérité du fournisseur) : retiré du groupe à la connexion où la revendication ne correspond plus.
-resource "keycloak_custom_identity_provider_mapping" "agents" {
+resource "keycloak_custom_identity_provider_mapper" "agents" {
   realm                    = keycloak_realm.medisphere.id
   name                     = "ghsv-agents-secretariat"
   identity_provider_alias  = keycloak_oidc_identity_provider.ghsv.alias
@@ -163,6 +169,73 @@ resource "keycloak_authentication_execution_config" "redirection_ghsv" {
   }
 }
 
+# --- Après le courtier : seuls les clients du GHSV acceptent un utilisateur venu de ghsv-idp ------
+# Portée « marqueur » sans mappeur, portée par défaut des SEULS clients du GHSV qui reçoivent des
+# agents par le navigateur (ghsv-agents). « Condition - client scope » la cherche dans la session
+# d'authentification (portées par défaut du client + portées demandées).
+resource "keycloak_openid_client_scope" "client_ghsv" {
+  realm_id               = keycloak_realm.medisphere.id
+  name                   = "client-ghsv"
+  description            = "Marqueur des clients du GHSV (flux apres-courtier-ghsv, F7-S08) ; aucun mappeur"
+  include_in_token_scope = false
+}
+
+#   apres-courtier-ghsv
+#   ├── apres-courtier-ghsv-hors-client                CONDITIONAL
+#   │   ├── Condition - client scope (client-ghsv, negate)   REQUIRED
+#   │   └── Deny access                                      REQUIRED
+#   └── Allow access                                         REQUIRED   (un flux sans exécution
+#                                                                        réussie échoue)
+resource "keycloak_authentication_flow" "apres_courtier_ghsv" {
+  realm_id    = keycloak_realm.medisphere.id
+  alias       = "apres-courtier-ghsv"
+  description = "Après le courtier ghsv-idp : refus hors des clients du GHSV (F7-S08)"
+  provider_id = "basic-flow"
+}
+
+resource "keycloak_authentication_subflow" "hors_client_ghsv" {
+  realm_id          = keycloak_realm.medisphere.id
+  parent_flow_alias = keycloak_authentication_flow.apres_courtier_ghsv.alias
+  alias             = "apres-courtier-ghsv-hors-client"
+  provider_id       = "basic-flow"
+  requirement       = "CONDITIONAL"
+  priority          = 10
+}
+
+resource "keycloak_authentication_execution" "hors_client_condition" {
+  realm_id          = keycloak_realm.medisphere.id
+  parent_flow_alias = keycloak_authentication_subflow.hors_client_ghsv.alias
+  authenticator     = "conditional-client-scope"
+  requirement       = "REQUIRED"
+  priority          = 10
+}
+
+resource "keycloak_authentication_execution_config" "hors_client_condition" {
+  realm_id     = keycloak_realm.medisphere.id
+  execution_id = keycloak_authentication_execution.hors_client_condition.id
+  alias        = "client-sans-marqueur-ghsv"
+  config = {
+    client_scope = keycloak_openid_client_scope.client_ghsv.name
+    negate       = "true"
+  }
+}
+
+resource "keycloak_authentication_execution" "hors_client_refus" {
+  realm_id          = keycloak_realm.medisphere.id
+  parent_flow_alias = keycloak_authentication_subflow.hors_client_ghsv.alias
+  authenticator     = "deny-access-authenticator"
+  requirement       = "REQUIRED"
+  priority          = 20
+}
+
+resource "keycloak_authentication_execution" "apres_courtier_accepte" {
+  realm_id          = keycloak_realm.medisphere.id
+  parent_flow_alias = keycloak_authentication_flow.apres_courtier_ghsv.alias
+  authenticator     = "allow-access-authenticator"
+  requirement       = "REQUIRED"
+  priority          = 20
+}
+
 # --- Clients du GHSV ------------------------------------------------------------------------------
 # OAuth2 Proxy des agents (une instance par environnement, mêmes client et secret).
 resource "keycloak_openid_client" "ghsv_agents" {
@@ -190,8 +263,10 @@ resource "keycloak_openid_client" "ghsv_agents" {
   full_scope_allowed = false
   consent_required   = false
   # Session du client courte : au plus 15 min avant de repasser par l'IdP du GHSV (ESC-04).
-  client_session_idle_timeout = "15m"
-  client_session_max_lifespan = "15m"
+  # Valeurs en SECONDES (attributs client.session.* passés tels quels à Keycloak ; « 15m » serait
+  # refusé ou ignoré, contrairement aux durées de keycloak_realm).
+  client_session_idle_timeout = "900"
+  client_session_max_lifespan = "900"
 
   authentication_flow_binding_overrides {
     browser_id = keycloak_authentication_flow.navigateur_ghsv.id
@@ -202,7 +277,20 @@ resource "keycloak_openid_client" "ghsv_agents" {
 
 # Portée « groupes » du M24 (revendication groups, noms courts) : par défaut pour ce client.
 resource "keycloak_openid_client_default_scopes" "ghsv_agents" {
-  realm_id       = keycloak_realm.medisphere.id
-  client_id      = keycloak_openid_client.ghsv_agents.id
-  default_scopes = ["basic", "profile", "email", keycloak_openid_client_scope.groupes.name]
+  realm_id  = keycloak_realm.medisphere.id
+  client_id = keycloak_openid_client.ghsv_agents.id
+  default_scopes = [
+    "basic", "profile", "email", keycloak_openid_client_scope.groupes.name,
+    keycloak_openid_client_scope.client_ghsv.name,
+  ]
+}
+
+# --- Vérifications du workbook ----------------------------------------------------------------------
+# wb-checks lit le fournisseur et ses mappeurs (check F7 8) : rôle de LECTURE view-identity-providers,
+# à côté des rôles du M24 (comptes-service.tf).
+resource "keycloak_openid_client_service_account_role" "wb_checks_fournisseurs" {
+  realm_id                = keycloak_realm.medisphere.id
+  service_account_user_id = keycloak_openid_client.wb_checks.service_account_user_id
+  client_id               = data.keycloak_openid_client.realm_management.id
+  role                    = "view-identity-providers"
 }

@@ -20,7 +20,7 @@ Le pipeline planifié de `plateforme/outils` (`RAPPORT_CLIENTS=oui`) génère `d
 ```
 admin@adm01:~/src/outils$ bin/ms-rapport-client -m <AAAA-MM> ghsv > ~/medisphere/docs/capstone/rapports/ghsv-<AAAA-MM>.md
 ```
-⚠️ Avant le 30 du mois suivant : au-delà, les données brutes ont quitté Thanos (30 jours) et la mesure perd sa précision.
+⚠️ Le plus tôt possible après la fin du mois (pipeline du 1er à 06:15) : chaque jour de retard fait sortir un jour de plus du mois de la rétention brute de Thanos (35 jours depuis F7-S10 ; 30 jours auparavant, ce qui ne couvrait déjà pas un mois de 31 jours).
 
 ## 3. Relecture (avant le 10)
 

@@ -13,6 +13,7 @@ Correctifs **additifs** : un cabinet de MédiSphère qui n'envoie ni jeton ni no
 | `tests/test_contrat_ghsv.py` | **nouveau** : tests de contrat côté producteur (complet) | S09 |
 | `contrats/ghsv/ORIGINE.md` | origine et empreinte du contrat reçu (complet) | S09 |
 | `ci/contrat.yml` | jobs `contrat:ghsv` et `contrat:compatibilite` (complet) | S09 |
+| `contrats/ghsv/oasdiff-ecarts-acceptes.txt` | différences de description acceptées par `oasdiff` (complet) | S09 |
 
 Aucune migration de schéma : le contrat v1 n'ajoute aucune donnée (le rappel existe depuis V3/V4 du M27, et l'index unique `(praticien, debut)` de V2 sert les filtres et le déplacement).
 
@@ -47,8 +48,9 @@ from fastapi import Path as ParametreChemin   # à côté des autres imports de 
 from .modeles import Deplacement               # à côté des autres modèles
 from .portees import intergiciel_portees
 
-# 1. Titre : marque blanche (S07). Rien ne change si MEDIAGENDA_TITRE est absent.
-    app = FastAPI(title=settings.titre, version=settings.version, lifespan=cycle_de_vie)
+# 1. Titre : marque blanche (S07). Rien ne change si MEDIAGENDA_TITRE est absent. Seul « title »
+#    change : les autres arguments de ton appel (version, lifespan, telemetry…) restent.
+    app = FastAPI(title=settings.titre, version=settings.version, lifespan=cycle_de_vie, ...)
 
 # 2. Portées (S09) : enregistré AVANT l'intergiciel « mesurer » — Starlette exécute en premier le
 #    dernier enregistré : « mesurer » reste à l'extérieur et compte aussi les 401 et 403.
@@ -121,8 +123,9 @@ from .portees import intergiciel_portees
         try:
             with self._pool.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
-                    "UPDATE rendez_vous SET debut = %s, duree_minutes = COALESCE(%s, duree_minutes)"
-                    f" WHERE id = %s RETURNING {_COLONNES}",  # noqa: S608
+                    # noqa sur la PREMIÈRE ligne de la chaîne concaténée (sinon ruff signale S608).
+                    "UPDATE rendez_vous SET debut = %s, duree_minutes = COALESCE(%s, duree_minutes)"  # noqa: S608
+                    f" WHERE id = %s RETURNING {_COLONNES}",
                     (debut, duree_minutes, rdv_id),
                 )
                 ligne = cur.fetchone()
@@ -151,6 +154,13 @@ from .portees import intergiciel_portees
         nouveau = rdv.model_copy(update={"debut": debut, "duree_minutes": duree_minutes or rdv.duree_minutes})
         self.rdv[rdv_id] = nouveau
         return nouveau
+```
+
+## `pyproject.toml` — le marqueur des tests de contrat
+
+```toml
+# Dans [tool.pytest.ini_options], liste « markers » :
+    "contrat: tests de contrat (F7-S09)",
 ```
 
 Puis :

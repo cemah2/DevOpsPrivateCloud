@@ -27,7 +27,9 @@ else
   check_cmd "dimensionnement chiffré en calcul (vCPU ou cœurs), mémoire (Go) et stockage (To)" \
     _f7c_doc_contient architecture.md '[0-9][[:space:]]*(vCPU|c(œ|oe)urs)' '[0-9][[:space:]]*(Go|Gio|GB)' '[0-9][[:space:]]*(To|Tio|TB)'
   _f7_s03_serveurs() {
-    (($(grep -Eoi '([0-9]+|deux|trois|quatre|cinq|six|sept|huit)( \*\*| )?(hyperviseurs|serveurs|n(œ|oe)uds physiques)' <<<"$_f7_s03" | grep -c . || true) >= 2))
+    # Deux mentions DISTINCTES (une par site), hors titres (« 5.3 Serveurs ») : « 6 hyperviseurs » répété ne suffit pas.
+    (($(grep -Eoi '([0-9]+|deux|trois|quatre|cinq|six|sept|huit)( \*\*| )?(hyperviseurs|serveurs|n(œ|oe)uds physiques)' < <(grep -v '^#' <<<"$_f7_s03") |
+      tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]*]+/ /g; s/n(œ|oe)uds physiques/serveurs/; s/hyperviseurs/serveurs/' | sort -u | grep -c . || true) >= 2))
   }
   check_cmd "le nombre de serveurs (hyperviseurs) est écrit pour chaque site" _f7_s03_serveurs
   check_cmd "écarts avec le lab : exposition Internet, site de repli, fournisseur d'identité, interconnexion" \

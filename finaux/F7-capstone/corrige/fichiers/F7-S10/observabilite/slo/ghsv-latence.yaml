@@ -8,7 +8,7 @@
 # cite ENF-05 : l'écart (Gateway, mandataire, TLS) est mesuré par la charge k6 de la recette et décrit
 # dans engagements.md ; s'il dépasse 20 ms au p95, ce SLO devient trompeur.
 # « Aucune requête au-delà d'une seconde » : impossible à garantir sur un centile ; proposition au
-# GHSV (R-10) : 99,9 % des requêtes sous 1 s, mesuré par le seau le="1" (règle du rapport mensuel).
+# GHSV (R-10) : 99,9 % des requêtes sous 1 s, mesuré par le seau le="1.0" (le client Python écrit « 1.0 » ; règle du rapport mensuel).
 apiVersion: pyrra.dev/v1alpha1
 kind: ServiceLevelObjective
 metadata:

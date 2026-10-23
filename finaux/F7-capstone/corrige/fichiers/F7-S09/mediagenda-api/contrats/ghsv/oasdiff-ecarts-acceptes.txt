@@ -1,0 +1,9 @@
+GET /api/v1/rendez-vous/{id} added the new path request parameter `rdv_id`
+DELETE /api/v1/rendez-vous/{id} added the new path request parameter `rdv_id`
+PATCH /api/v1/rendez-vous/{id} added the new path request parameter `rdv_id`
+GET /api/v1/creneaux the response property `detail` became optional for the status `422`
+GET /api/v1/rendez-vous the response property `detail` became optional for the status `422`
+POST /api/v1/rendez-vous the response property `detail` became optional for the status `422`
+GET /api/v1/rendez-vous/{id} the response property `detail` became optional for the status `422`
+DELETE /api/v1/rendez-vous/{id} the response property `detail` became optional for the status `422`
+PATCH /api/v1/rendez-vous/{id} the response property `detail` became optional for the status `422`

@@ -8,9 +8,9 @@
 
 | ID | Hypothèse | Valeur | Source (relevé d'octobre 2026, à vérifier) |
 |---|---|---|---|
-| H-C01 | Serveur hyperviseur (1 × 32 cœurs, 256 à 512 Go, 4 × NVMe 7,68 To, 4 × 25 GbE, 5 ans de garantie) | **35 000 €** l'unité ; commutateur 25 GbE 12 000 € ; routeur-pare-feu 5 000 € ; maintenance 8 %/an | estimation interne ; marché de la mémoire en forte hausse en 2026 (hausses trimestrielles de 80 à 90 % début 2026 selon les analystes du marché des semi-conducteurs) : **demander des devis à validité courte** |
+| H-C01 | Serveur hyperviseur (1 × 32 cœurs, 256 à 512 Go, 4 × NVMe 7,68 To, 4 × 25 GbE, 5 ans de garantie) | **35 000 €** l'unité ; commutateur 25 GbE 12 000 € ; routeur-pare-feu 5 000 € ; maintenance 8 %/an | estimation interne ; marché de la mémoire en forte hausse en 2026 (TrendForce, février 2026 : prix contractuels de la mémoire des serveurs ≈ + 90 % sur le seul premier trimestre 2026, prévision relevée depuis + 60 % en janvier) : **demander des devis à validité courte** |
 | H-C02 | Part des investissements et coûts de PAR2 imputée au GHSV | **50 %** | PAR2 à pleine capacité est rendu nécessaire par le GHSV, mais profite au PRA de tous nos services |
-| H-C03 | Baie en centre de données certifié HDS, énergie comprise ; transit Internet avec anti-DDoS ; liaison inter-sites | baie ≈ 4 kW : **2 500 €/mois** ; transit 1 200 €/mois ; option anti-DDoS 500 €/mois ; liaison 1 500 €/mois | grilles publiques d'hébergeurs français (de l'ordre de 2 700 à 5 500 €/mois pour une baie de 3 à 10 kW chez un grand opérateur) ; ordres de grandeur |
+| H-C03 | Baie en centre de données certifié HDS, énergie comprise ; transit Internet avec anti-DDoS ; liaison inter-sites | baie ≈ 4 kW : **2 500 €/mois** ; transit 1 200 €/mois ; option anti-DDoS 500 €/mois ; liaison 1 500 €/mois | grilles publiques d'hébergeurs français (de l'ordre de 2 700 à 5 500 €/mois pour une baie de 3 à 10 kW chez un grand opérateur ; 2 500 € retenus pour 4 kW chez un hébergeur régional, bas de fourchette à confirmer par devis) ; ordres de grandeur |
 | H-C04 | SMS de rappel | 55 % des rendez-vous (R-05), **0,045 € par SMS** | tarifs publics de passerelles SMS professionnelles en France (ordre de 0,04 à 0,07 € par SMS selon le volume) |
 | H-C05 | Test d'intrusion par un prestataire PASSI | **12 000 €/an** | ordres de grandeur publiés (6 000 à 15 000 € par test selon le périmètre) |
 | H-C06 | Certifications (extension du périmètre HDS et ISO 27001, audits de surveillance) : part du GHSV | 8 000 €/an (plateforme) ; 6 000 € (nuage) ; 3 000 € (infogérance) | estimation interne ; une certification HDS initiale est de l'ordre de 25 000 à 60 000 € |
@@ -78,16 +78,16 @@ Une hypothèse à la fois, effet sur le total 5 ans :
 
 | Variable | Variation | Plateforme | Nuage | Infogérance | Ce que ça change |
 |---|---|---|---|---|---|
-| Effectif et coût des personnes | ± 30 % | ± 268 000 | ± 236 000 | ± 160 000 | la plus forte ; le classement ne change pas, la marge de la plateforme peut disparaître |
+| Effectif et coût des personnes | ± 30 % | ± 268 000 | ± 232 000 | ± 159 000 | la plus forte ; le classement ne change pas, la marge de la plateforme peut disparaître |
 | Prix du SMS | 0,045 → 0,07 € | + 148 000 | + 148 000 | + 148 000 | ne change pas le classement, **divise la marge par deux** : clause de révision du prix des SMS indispensable (ou SMS facturés au réel) |
-| Clé de répartition de la plateforme mutualisée | 8 % → 4 % | − 144 000 | — | — | la plateforme passe à ≈ 1,72 M€, au niveau du nuage |
+| Clé de répartition de la plateforme mutualisée | 8 % → 4 % | − 143 000 | — | — | la plateforme passe à ≈ 1,72 M€, au niveau du nuage |
 | Prix du nuage public | 3 000 à 9 000 €/mois | — | − 120 000 à + 240 000 | — | le nuage passe devant ou derrière la plateforme |
 | Prix de l'infogérance | 6 000 à 15 000 €/mois | — | — | − 180 000 à + 360 000 | idem |
 | Prix des serveurs (mémoire) | ± 50 % | ± 46 000 | — | — | **négligeable** sur le total ; c'est le **délai** de livraison qui compte (S06) |
-| Deuxième client partageant PAR2 | part PAR2 50 % → 25 % | − 126 000 | — | — | la plateforme devient la moins chère à partir du deuxième client |
+| Deuxième client partageant PAR2 | part PAR2 50 % → 25 % | − 126 000 | — | — | l'écart avec le nuage tombe à ≈ 150 000 € ; avec la clé de répartition divisée par deux (ligne ci-dessus), la plateforme (≈ 1,60 M€) rejoint le nuage et reste ≈ 85 000 € (moins de 6 %) au-dessus de l'infogérance |
 
 ## 6. Recommandation
 
-Répondre avec la **plateforme MédiSphère**, au prix du §4. Sur le seul coût du GHSV, l'infogérance et le nuage public sont moins chers (la plateforme coûte de 17 à 23 % de plus), mais l'écart est **à l'intérieur des incertitudes** (personnes, clé de répartition, prix des tiers) et il s'inverse dès un deuxième client ou si la clé de répartition baisse. Les arguments décisifs sont ailleurs : l'investissement dans PAR2 sert aussi le PRA de nos propres services ; le PRA, les preuves et les engagements mesurés existent déjà et se démontrent (phase 3) ; aucune dépendance à un tiers sur le chemin d'un incident P1.
+Répondre avec la **plateforme MédiSphère**, au prix du §4. Sur le seul coût du GHSV, l'infogérance et le nuage public sont moins chers (la plateforme coûte de 17 à 23 % de plus), mais l'écart est **à l'intérieur des incertitudes** (personnes, clé de répartition, prix des tiers) et il se resserre fortement dès un deuxième client : la plateforme rejoint alors le nuage et s'approche à moins de 6 % de l'infogérance (§5). Les arguments décisifs sont ailleurs : l'investissement dans PAR2 sert aussi le PRA de nos propres services ; le PRA, les preuves et les engagements mesurés existent déjà et se démontrent (phase 3) ; aucune dépendance à un tiers sur le chemin d'un incident P1.
 
 Conditions : clause de révision du prix des SMS ; devis de matériel à validité courte avant le 4 décembre ; validation de H-C07 (coût et clé de la plateforme mutualisée) par la direction financière.

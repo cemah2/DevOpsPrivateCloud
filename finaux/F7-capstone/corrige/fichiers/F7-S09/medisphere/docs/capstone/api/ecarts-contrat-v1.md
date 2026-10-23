@@ -35,6 +35,17 @@ Toutes les adaptations sont **additives** : un cabinet de MédiSphère qui n'env
 3. **Annuler n'efface pas l'historique** pour le GHSV (ERV-02 : « historique »). L'API supprime la ligne aujourd'hui. Avant la production : annulation logique (colonne `annule_le`, migration *expand*) pour les instances de clients ; lot de construction (risque à `risques.md`).
 4. **Charge du rapprochement** : 600 requêtes / 5 min = 2 req/s de lecture filtrée : négligeable devant la pointe de 150 req/s (ENF-02), mais à inclure dans le profil de charge k6 du GHSV.
 
+## Différences de description acceptées (`oasdiff`)
+
+`oasdiff breaking` (contrat en référence, description générée en révision) signale, sur l'API adaptée, neuf « ruptures » qui n'en sont pas pour le DPI ; elles sont listées au texte exact dans `contrats/ghsv/oasdiff-ecarts-acceptes.txt` de `mediagenda/api` (option `--err-ignore` du job `contrat:compatibilite:oasdiff`), et nulle part ailleurs :
+
+| Signalé par oasdiff | Pourquoi c'est accepté | Ce qui le vérifie quand même |
+|---|---|---|
+| `added the new path request parameter rdv_id` (GET, PATCH, DELETE `/rendez-vous/{id}`) | Le nom d'un paramètre de chemin n'apparaît pas dans la requête du DPI ; le renommer en `id` changerait le libellé `route` des métriques et les SLO des cabinets | `test_operation_presente`, appels réels des tests de contrat |
+| `the response property detail became optional for the status 422` (six opérations) | Le schéma d'erreur généré par FastAPI déclare `detail` facultatif ; nos réponses 422 le portent toujours | validation des corps 422 contre `Erreur` du contrat dans les tests de contrat |
+
+Toute autre différence fait échouer le job. Une ligne ajoutée à ce fichier passe par une MR relue par Julien Petit et Karim Benali (RB-373), avec sa justification ici.
+
 ## MédiAgenda → MédiDoc : le même dispositif, dans l'autre sens
 
 Ici MédiAgenda est **producteur** et le contrat est écrit par son **consommateur** (le GHSV) : nous le vérifions dans notre CI. Entre MédiAgenda (consommateur) et MédiDoc (producteur, `POST /api/v1/rendez-vous/{id}/pieces-jointes`, M23 et M29-E12) :

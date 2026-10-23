@@ -32,16 +32,19 @@ Chaque geste manuel imprévu est un écart (§4).
 
 ## 3. Preuves collectées par `ms-preuves`
 
-| Preuve | Objet dans `preuves-conformite` |
-|---|---|
-| Rapport mensuel du client | `capstone/<…>/rapport-ghsv-<AAAA-MM>.md` |
-| Essai de réversibilité (compte rendu, empreinte) | `capstone/<…>/reversibilite-<AAAA-MM-JJ>.md` |
-| Compte rendu de la journée de jeu | `capstone/<…>/journee-de-jeu-<AAAA-MM-JJ>.md` |
-| Essai de reprise de PAR2 | `capstone/<…>/essai-reprise-ghsv.txt` |
-| Constat de cloisonnement des identités | `capstone/<…>/cloisonnement/` |
-| Pipelines du contrat (rapport JUnit) | `capstone/<…>/contrat-ghsv-junit.xml` |
-| Configuration des clés `transit/ghsv-*` (métadonnées) | `capstone/<…>/cles-transit-ghsv.json` |
+Ajoutées au catalogue de `ms-preuves` (`preuves/catalogue.yaml` de `plateforme/outils`, F6-S02) dans un domaine propre, `CAP`, chacune avec son collecteur (qui lit l'objet à sa source : fichier de `plateforme/medisphere` sur `main`, artefact JUnit du dernier pipeline de `main`, métadonnées des clés par l'API d'OpenBao) ; fréquence mensuelle ; dépôt par le pipeline de `ms-preuves`, jamais à la main. Emplacement de chaque preuve : `preuves-conformite/lots/<AAAA>/<MM>/<JJ>/<LOT>/preuves/<ID>.<format>`.
 
+| ID | Preuve | Format |
+|---|---|---|
+| P-CAP-01 | Rapport mensuel du client (`docs/capstone/rapports/ghsv-<AAAA-MM>.md`) | md |
+| P-CAP-02 | Essai de réversibilité (compte rendu, empreinte de l'archive) | md |
+| P-CAP-03 | Compte rendu de la journée de jeu | md |
+| P-CAP-04 | Essai de reprise de PAR2 (`pra-ghsv.md` §2) | md |
+| P-CAP-05 | Constat de cloisonnement des identités (`identite-federee.md` §3) | md |
+| P-CAP-06 | Pipelines du contrat (rapport JUnit de `contrat:ghsv`) | xml |
+| P-CAP-07 | Configuration des clés `transit/ghsv-*` (métadonnées, aucune clé) | json |
+
+Lot : `<LOT>` (vérifié par `ms-preuves verifier s3://preuves-conformite/lots/…/<LOT>/`).
 Identifiants reportés dans `soutenance/annexes-preuves.md`.
 
 ## 4. Écarts restants et suite

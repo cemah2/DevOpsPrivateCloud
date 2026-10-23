@@ -51,7 +51,7 @@ resource "keycloak_openid_client_default_scopes" "ghsv_dpi" {
   ]
 }
 
-# Audience « ghsv-api » : celle qu'exige oauth2-proxy-dpi (extra_jwt_issuers).
+# Audience « ghsv-api » : celle qu'exige oauth2-proxy-dpi (son client_id : vérificateur de son fournisseur).
 resource "keycloak_openid_audience_protocol_mapper" "ghsv_dpi_audience" {
   realm_id                 = keycloak_realm.medisphere.id
   client_id                = keycloak_openid_client.ghsv_dpi.id

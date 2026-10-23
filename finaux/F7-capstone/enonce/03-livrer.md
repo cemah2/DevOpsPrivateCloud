@@ -45,7 +45,7 @@ Les réponses du GHSV aux candidats ([`ressources/S02/reponses-aux-candidats.md`
 - MédiAgenda n'a ni interface d'administration ni authentification (voir `apps/mediagenda/README.md`) : la « marque blanche » se joue dans ce que voit l'utilisateur (adresse, réponses, description OpenAPI servie sur `/openapi.json`), pas dans du code de présentation. Le titre de cette description est aujourd'hui écrit en dur : un correctif de `mediagenda/api` est permis (`apps/` reste inchangé), à condition de ne rien changer pour les cabinets existants.
 - Données du locataire : **fictives** (patients et praticiens de démonstration) en recette **et** en production de démonstration. La production `ghsv-prod` est néanmoins traitée comme une production (synchronisation manuelle, fenêtres, signatures, alertes).
 - Budget du locataire : voir l'avertissement en tête de phase.
-- Les checks lisent la **configuration** des clés (jamais les clés) avec l'identité AppRole `wb-checks` d'OpenBao (M25) : donne-lui `list` sur `transit/keys` et `read` sur `transit/keys/ghsv-*`, dans `plateforme/secrets`.
+- Les checks lisent la **configuration** des clés (jamais les clés) avec l'identité AppRole `wb-checks` d'OpenBao (M25) : elle doit avoir `list` sur `transit/keys` et `read` sur les clés `transit/keys/ghsv-*` (vérifie sa politique dans `plateforme/secrets` ; complète-la si besoin).
 
 **Travail demandé**
 
@@ -110,6 +110,7 @@ Une clé `transit` qui n'est utilisée que pour **envelopper** les clés de chif
 - Le royaume `medisphere` est décrit dans `plateforme/identite/tofu/` ; le client d'OpenTofu `svc-tofu-keycloak` n'administre **que** ce royaume (il ne peut pas créer de royaume). Le royaume `ghsv-idp` simule un système **qui n'est pas le nôtre** : son code et son état sont séparés de ceux de `medisphere`, et son identité d'administration aussi.
 - `sso.par1.medisphere.internal` est publié par `lb01`/`lb02` ; seuls `/admin` et `/realms/master` y sont restreints. Le courtier (Keycloak sur `idp01`) appelle l'IdP du client **côté serveur** (jetons, clés) par son adresse publique, comme il le ferait pour un IdP sur Internet : vérifie que ce chemin réseau existe dans la matrice des flux.
 - Keycloak n'a pas de condition « membre du groupe » dans ses flux (M24-E21) ; il a une condition sur un rôle.
+- « Caché sur la page de connexion » n'est qu'un affichage : l'adresse du courtier (`/realms/medisphere/broker/<alias>/login`) reste appelable directement avec la session d'authentification ouverte pour **n'importe quel** client du royaume, et le retour du courtier ne rejoue pas le flux du navigateur.
 - Les agents du GHSV ne figurent pas dans l'annuaire FreeIPA : ce sont des utilisateurs **fédérés par le courtier**, créés dans Keycloak à leur premier passage.
 - MédiAgenda n'a aucune authentification : la route « agents » (lecture, déplacement et annulation de tous les rendez-vous du locataire) ne doit être joignable qu'à travers le mandataire ; la route publique est celle du DPI (son authentification arrive en S09) et ne doit rien laisser passer d'anonyme hormis la sonde de disponibilité et la description de l'API.
 - Comptes de démonstration du GHSV (dans `ghsv-idp`) : au moins deux agents du secrétariat médical et une personne d'un autre service qui **ne doit pas** obtenir l'accès.
@@ -132,7 +133,7 @@ Contraintes :
 
 **Critères de réussite**
 - [ ] `https://sso.par1.medisphere.internal/realms/ghsv-idp/.well-known/openid-configuration` répond ; le royaume est décrit en code dans un état distinct de celui de `medisphere`.
-- [ ] Dans `medisphere`, le fournisseur `ghsv-idp` est actif, caché sur la page de connexion, signatures vérifiées, sans conservation des jetons ; ses mappeurs placent dans `ghsv-agents`.
+- [ ] Dans `medisphere`, le fournisseur `ghsv-idp` est actif, caché sur la page de connexion, signatures vérifiées, sans conservation des jetons ; ses mappeurs placent dans `ghsv-agents` ; un passage par le courtier pour un client interne est refusé, même par l'adresse directe du courtier.
 - [ ] Un agent du secrétariat (avec son second facteur) ouvre `https://ghsv-agents.apps.par1.medisphere.internal/api/v1/rendez-vous` ; la personne d'un autre service est refusée ; une requête sans session est redirigée vers l'authentification.
 - [ ] Un agent connecté est refusé par GitLab, Argo CD et Grafana (constat écrit dans `identite-federee.md`).
 - [ ] Sur la route publique `https://ghsv.apps.par1.medisphere.internal`, la liste des rendez-vous (`GET /api/v1/rendez-vous`) et l'annulation ne sont pas joignables **sans authentification** (réponse 401, 403 ou 404, jamais 200 ni 204).

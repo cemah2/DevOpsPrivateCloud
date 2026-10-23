@@ -120,17 +120,22 @@ resource "vault_policy" "client_dechiffrement" {
 resource "vault_policy" "client_destruction" {
   for_each = var.clients_en_code
 
-  name   = "${each.key}-destruction"
+  name = "${each.key}-destruction"
+  # Chemins ÉNUMÉRÉS clé par clé : dans une politique, « + » ne remplace qu'un segment ENTIER
+  # (« ghsv-+ » serait lu littéralement) et « * » n'est permis qu'en fin de chemin ; un
+  # « transit/keys/ghsv-* » en update ouvrirait aussi rotate et trim.
   policy = <<-EOT
     # ${each.key}-destruction — effacement cryptographique (fin de contrat, révocation). Attachée à
     # AUCUN groupe ; jeton enfant à usage limité (RB-371 §5). Lire la configuration, autoriser la
     # suppression, supprimer.
-    path "transit/keys/${each.key}-*" {
+    %{~for k in each.value.cles}
+    path "transit/keys/${each.key}-${k}" {
       capabilities = ["read", "delete"]
     }
-    path "transit/keys/${each.key}-+/config" {
+    path "transit/keys/${each.key}-${k}/config" {
       capabilities = ["update"]
     }
+    %{~endfor}
   EOT
 }
 

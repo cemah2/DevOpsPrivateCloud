@@ -27,7 +27,7 @@
 | lun. 12 avr. | Vague 2 : GHSV-06, 07, 08 | engagé | lot 2 (établissements, spécialités, plages) |
 | avril (8 à 12 semaines après commande) | Livraison du matériel de PAR2 | interne | fournisseur (RSQ-05) |
 | ven. 30 avr. | PAR2 à pleine capacité (NF-08), essai de capacité à 300 req/s | engagé (réserve levée) | matériel |
-| lun. 17 mai | Vague 3 : GHSV-09, 10 | engagé | — |
+| mar. 18 mai | Vague 3 : GHSV-09, 10 (le lundi 17 mai 2027 est le lundi de Pentecôte) | engagé | — |
 | sam. 5 juin, 22 h | **Premier test de PRA** en présence du GHSV (ENF-08) ; rapport avant le 21 juin | engagé | PAR2 complet |
 | lun. 14 juin | Vague 4 : GHSV-11, 12 (EHPAD Les Tilleuls hors DPI : agendas tenus dans l'interface des agents) | engagé | — |
 | mer. 30 juin 2027 | **Fin du déploiement** ; comité de pilotage de clôture du projet | engagé | — |
@@ -67,12 +67,12 @@ R : réalise · A : approuve, rend compte · C : consulté · I : informé.
 | PAR2 (L6) | A | C | R | — | I | I | — | I | — |
 | Reprise des données (L3) | I | R | C | R | I | C | C | A (export, validation) | I |
 | Test d'intrusion, correction | I | R | C | R | I | A | I | I | — |
-| Go/no-go de chaque vague | A | R | C | C | C | C | I | A | I |
+| Go/no-go de chaque vague | A | R | C | C | C | C | I | C (accord écrit requis) | I |
 | Run : incidents P1-P3 | I | C | C | C | A/R | C | I | I | R (niveau 1) |
 | Rapport mensuel | A | R | C | C | R | C | I | I (destinataire) | — |
 | Test de PRA annuel | A | R | R | C | R | C | I | C (présent) | I |
 | Incident de sécurité, information du GHSV | I | C | C | C | R | A | C | I (puis A de ses déclarations) | I |
-| Réversibilité, destruction | A | R | C | C | I | C | C | A | — |
+| Réversibilité, destruction | A | R | C | C | I | C | C | C (valide l'export, reçoit le procès-verbal) | — |
 
 ## 4. Critères du go/no-go de la vague 1 (26 février)
 

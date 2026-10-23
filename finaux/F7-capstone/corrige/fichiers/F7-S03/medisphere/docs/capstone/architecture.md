@@ -91,7 +91,7 @@ flowchart LR
 
 ### 4.1 Bascule du GHSV vers PAR2 et retour
 
-ADR-0373 : décision par la cellule de crise (critères du F5) ; promotion du réplica PostgreSQL (`promotionToken` si PAR1 est encore joignable, promotion forcée sinon) ; mise à l'échelle des applications du locataire ; vérifications (sondes, témoin de RPO) ; bascule du CNAME public `ghsv.clients.medisphere.example` vers l'adresse de PAR2 ; information du GHSV ; réconciliation des rendez-vous (RB-371). Retour : comme au F5 (ancien primaire reconstruit en réplica, retour contrôlé par jetons).
+ADR-0373 : décision par la cellule de crise (critères du F5) ; promotion du réplica PostgreSQL (`promotionToken` si PAR1 est encore joignable, promotion forcée sinon) ; mise à l'échelle des applications du locataire ; vérifications (sondes, témoin de RPO) ; bascule du CNAME public `ghsv.clients.medisphere.example` vers l'adresse de PAR2 ; information du GHSV ; réconciliation des rendez-vous (RB-370, runbook d'exploitation du service). Retour : comme au F5 (ancien primaire reconstruit en réplica, retour contrôlé par jetons).
 
 ## 5. Dimensionnement
 
@@ -111,24 +111,24 @@ Coût marginal `[lab de référence]` : API ≈ **0,72 vCPU** et PostgreSQL ≈ 
 | Étape | Facteur | Justification |
 |---|---|---|
 | Capacité à tenir | 300 req/s | NF-07 (pointe d'octobre de l'année 5) |
-| Mélange de requêtes | × 1,0 | le parcours du M29 écrit à 50 % (création + annulation sur ≈ 4 requêtes) ; le GHSV ≈ 15 % (H-01) : on garde le parcours, plus lourd, comme borne haute |
+| Mélange de requêtes | × 1,0 | le parcours du M29 écrit à 40 % (création et annulation sur les 5 requêtes d'une itération) ; le GHSV ≈ 15 % (H-01) : on garde le parcours, plus lourd, comme borne haute |
 | Processeurs de production / lab | × 1,3 | le Xeon E-2378G du lab a une fréquence élevée ; un processeur serveur à 32 cœurs est plus lent par cœur (prudence, à remesurer sur le matériel livré) |
 | Utilisation cible | ÷ 0,5 | HPA à 70 % des `requests`, marge pour un nœud perdu et les pics de quelques secondes |
 
 | Composant du locataire | Calcul | PAR1 (réservé) | PAR2 (réservé) |
 |---|---|---|---|
-| API MédiAgenda | 0,72 × 3 × 1,3 ÷ 0,5 ≈ 5,6 | 6 vCPU (HPA 4 à 10 pods de 1 vCPU, 512 Mio) | 6 vCPU (0 réplica en veille) |
+| API MédiAgenda | 0,72 × 3 × 1,3 ÷ 0,5 ≈ 5,6 | 6 vCPU (HPA 3 à 6 pods, 1 vCPU et 512 Mio de `requests` chacun) | 6 vCPU (0 réplica en veille) |
 | PostgreSQL | 0,23 × 3 × 1,3 ÷ 0,5 ≈ 1,8 par instance | 3 instances × 2 vCPU, 8 Gio, 50 Gio | 2 × 2 vCPU, 8 Gio |
 | Pooler, Valkey | mesure + marge | 1,5 vCPU, 2 Gio | 1 vCPU, 2 Gio |
-| Pièces jointes (service et RGW) | ≈ 2,5 Mo par dépôt, < 2 dépôts/s en pointe | 1 vCPU, 2 Gio ; **3 To utiles → 9 To bruts** (réplication ×3) | `s3-02` : 3 To utiles (+ marge 50 %) |
+| Pièces jointes (service et RGW) | ≈ 2,5 Mo par dépôt, < 2 dépôts/s en pointe | 1 vCPU, 2 Gio ; **3 To utiles → 9 To bruts** (réplication ×3) | 1 vCPU, 2 Gio (0 réplica en veille) ; `s3-02` : 3 To utiles (+ marge 50 %) |
 | Keycloak (part GHSV : patients et agents) | connexions en pointe à mesurer (hachage des mots de passe coûteux) | 6 vCPU, 12 Gio (moitié de la grappe) | 4 vCPU, 8 Gio |
 | Observabilité (part) | 57 M requêtes/mois de journaux, séries du locataire | 2 vCPU, 8 Gio, 0,2 To | 1 vCPU, 4 Gio |
-| **Total GHSV** | | **≈ 23 vCPU, ≈ 60 Gio, ≈ 10 To bruts** | **≈ 19 vCPU, ≈ 45 Gio, ≈ 5 To** |
+| **Total GHSV** | | **≈ 23 vCPU, ≈ 51 Gio, ≈ 10 To bruts** | **≈ 17 vCPU, ≈ 35 Gio, ≈ 5 To** |
 
 ### 5.3 Serveurs
 
 - **PAR1** : la grappe existante (6 × 32 cœurs = 384 fils, 3 To de mémoire, ≈ 36 To Ceph utilisables à 70 % avec un hôte perdu) en a largement la place : le GHSV y représente ≈ 6 % du calcul, 2 % de la mémoire et 9 % du stockage. **Aucun serveur ajouté** ; la marge N+1 existante est vérifiée par la revue de capacité trimestrielle.
-- **PAR2** : la capacité de repli du GHSV (≈ 19 vCPU) **plus** celle des autres services couverts par le PRA du F5 (MédiAgenda, MédiDoc, Legacy-RDV, socle de repli) dépasse ce qu'offre un nœud de secours. **3 hyperviseurs** (le minimum pour une grappe Proxmox et Ceph à 3 répliques sans QDevice externe), dimensionnés à 256 Go, chacun capable de perdre un voisin pendant un PRA en mode dégradé écrit (NF-08 sans N+1).
+- **PAR2** : la capacité de repli du GHSV (≈ 17 vCPU) **plus** celle des autres services couverts par le PRA du F5 (MédiAgenda, MédiDoc, Legacy-RDV, socle de repli) dépasse ce qu'offre un nœud de secours. **3 hyperviseurs** (le minimum pour une grappe Proxmox et Ceph à 3 répliques sans QDevice externe), dimensionnés à 256 Go, chacun capable de perdre un voisin pendant un PRA en mode dégradé écrit (NF-08 sans N+1).
 - Conclusion : **ce n'est pas la charge du GHSV qui dimensionne, c'est la redondance** (PAR2 à pleine capacité, Keycloak en grappe, deux accès Internet). C'est ce que le chiffrage doit montrer (S05).
 
 ## 6. Exposition à Internet

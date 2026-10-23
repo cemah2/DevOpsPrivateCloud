@@ -16,8 +16,9 @@
 #               Service alors que la base va bien (le cache est devenu critique sans qu'on le veuille) ;
 #   identite    le mappeur de groupe du fournisseur ghsv-idp attend un groupe mal orthographié → à leur
 #               reconnexion (≤ 15 min), les agents n'ont plus ghsv-agents : 403 du mandataire ;
-#   mandataire  l'audience acceptée par le mandataire du DPI (extra_jwt_issuers) modifiée, pods
-#               redémarrés → tous les appels du DPI en 401, alors que /pret reste vert.
+#   mandataire  le mandataire du DPI n'accepte plus les jetons porteurs (skip_jwt_bearer_tokens à false
+#               dans sa ConfigMap), pods redémarrés → tous les appels du DPI en 401 (api_routes), alors
+#               que /pret reste vert.
 # Variantes (séquences) : 1 route → cache → identite ; 2 reseau → mandataire → identite ;
 #                         3 cache → route → mandataire ; 4 identite → reseau → cache.
 # Un incident « sans effet » sur ce lab (objet introuvable : ton implémentation diffère) est sauté ; le
@@ -26,8 +27,11 @@
 # Règles (CONVENTIONS §8, §11.10-11.11 ; PLAN §4.12-§4.15) : contrôle préalable (lab sain, charge de
 # démonstration en cours) ; rien hors de ghsv-prod et du fournisseur ghsv-idp ; jamais le royaume master,
 # jamais un compte ; aucune donnée supprimée (Valkey : PVC conservé ; aucune base touchée) ; chaque objet
-# est exporté avant modification ; --annuler arrête le meneur et ne défait QUE ce qui est encore dans
-# l'état injecté (une réparation de l'apprenant n'est jamais défaite).
+# est exporté avant modification ; --annuler arrête le meneur (drapeau d'arrêt, puis tout son groupe de
+# processus, attente de sa fin) AVANT de défaire, et ne défait QUE ce qui est encore dans l'état injecté
+# (une réparation de l'apprenant n'est jamais défaite). Il fonctionne aussi si le meneur a été tué ou si
+# adm01 a redémarré : l'état de chaque incident est écrit AVANT la modification.
+# Bornes : refus si l'espace visé n'est pas « ghsv-… » ou si le fournisseur n'est pas « ghsv-… ».
 # État local : ~/.local/state/workbook/F7-S11/ (700) et ~/.local/state/workbook/k8s/F7-S11/.
 # Outils sur adm01 : kubectl (WB_K8S_ADMIN_KUBECONFIG), jq, curl.
 # Variables : WB_F7_S11_DELAI_S (défaut 300), WB_F7_S11_DUREE_MAX_S (défaut 7200), WB_F7_CLIENT (ghsv),
@@ -51,6 +55,15 @@ _S11_COURRIEL="${WB_F7_S11_COURRIEL:-support@medisphere.internal}"
 _S11_API_SEL='app.kubernetes.io/name=mediagenda,app.kubernetes.io/component=api'
 _S11_CNP=protection-donnees-ghsv
 _S11_ETIQ='medisphere.internal/panne=F7-S11'
+
+# _s11_borne — la panne ne touche QUE un espace ghsv-… et un fournisseur ghsv-… (variables WB_F7_*
+# mal réglées : refus, plutôt que de casser mediagenda-prod).
+_s11_borne() {
+  [[ "$_S11_NS" =~ ^ghsv-[a-z0-9-]+$ && "$_S11_ALIAS" =~ ^ghsv-[a-z0-9-]+$ ]] && return 0
+  echo "F7-S11 ne vise que les espaces et le fournisseur du GHSV (ghsv-…) : espace « $_S11_NS », fournisseur « $_S11_ALIAS » refusés." >&2
+  return 1
+}
+_s11_arret_demande() { [[ -e "$(_s11_etat)/arret" ]]; }
 
 # ---------------------------------------------------------------------------
 # État local
@@ -139,6 +152,7 @@ _s11_charge_en_cours() {
 
 _s11_sain() {
   local c a
+  _s11_borne || return 1
   for c in kubectl jq curl; do
     command -v "$c" >/dev/null 2>&1 || { echo "outil manquant sur adm01 : $c" >&2; return 1; }
   done
@@ -193,6 +207,13 @@ spec:
         - ports: [{port: "5432", protocol: TCP}]
 EOF
   _s11_journal "reseau : CNP $_S11_NS/$_S11_CNP (egressDeny API → $grappe:5432)"
+  # Une nouvelle politique Cilium ne coupe pas forcément les connexions DÉJÀ établies (réserve de
+  # connexions de l'API) : « Lucas » redémarre les pods de l'API pour « prendre en compte » sa règle
+  # (suppression des pods, pas « rollout restart » : aucune trace dans le Deployment).
+  if ! _s11_attendre 30 _s11_reseau_actif; then
+    wb_kubectl -n "$_S11_NS" delete pods -l "$_S11_API_SEL" --wait=false >/dev/null 2>&1 || return 1
+    _s11_journal "reseau : pods de l'API supprimés (connexions établies)"
+  fi
   _s11_attendre 150 _s11_reseau_actif || return 1
 }
 _s11_reseau_actif() {
@@ -320,12 +341,13 @@ _s11_identite_defaire() {
 }
 
 # ---------------------------------------------------------------------------
-# Incident « mandataire » : audience des jetons du DPI modifiée dans le mandataire
+# Incident « mandataire » : le mandataire du DPI n'accepte plus les jetons porteurs
 # ---------------------------------------------------------------------------
-# ConfigMap de ghsv-prod dont une clé contient « extra_jwt_issuers » (mandataire du DPI).
+# ConfigMap de ghsv-prod dont une clé active « skip_jwt_bearer_tokens » (mandataire du DPI).
 _s11_cm_dpi() {
   wb_kubectl -n "$_S11_NS" get configmaps -o json 2>/dev/null |
-    jq -r '[.items[] | . as $c | (.data // {}) | to_entries[] | select(.value | test("extra_jwt_issuers"))
+    jq -r '[.items[] | . as $c | (.data // {}) | to_entries[]
+      | select(.value | test("(^|\n)[ \t]*skip_jwt_bearer_tokens[ \t]*=[ \t]*true"))
       | "\($c.metadata.name) \(.key)"][0] // empty'
 }
 _s11_deploiements_cm() {
@@ -339,34 +361,42 @@ _s11_mandataire_injecter() {
   read -r cm cle <<<"$l"
   wb_kubectl -n "$_S11_NS" get configmap "$cm" -o json >"$(_s11_etat)/cm-dpi.json" 2>/dev/null || return 1
   _s11_poser mandataire "$cm $cle"
-  jq --arg k "$cle" '.data[$k] |= sub("(?<a>extra_jwt_issuers[^\n]*=)(?<b>[A-Za-z0-9._-]+)\"";
-      "\(.a)\(.b)-v2\"")' "$(_s11_etat)/cm-dpi.json" | wb_kubectl replace -f - >/dev/null || return 1
+  jq --arg k "$cle" '.data[$k] |= sub("(?<a>(^|\n)[ \t]*skip_jwt_bearer_tokens[ \t]*=[ \t]*)true"; "\(.a)false")' \
+    "$(_s11_etat)/cm-dpi.json" | wb_kubectl replace -f - >/dev/null || return 1
   for d in $(_s11_deploiements_cm "$cm"); do
     wb_kubectl -n "$_S11_NS" rollout restart deployment "$d" >/dev/null 2>&1 || true
-    wb_kubectl -n "$_S11_NS" rollout status deployment "$d" --timeout=120s >/dev/null 2>&1 || true
   done
-  _s11_journal "mandataire : audience de extra_jwt_issuers altérée dans $cm, pods redémarrés"
-  _s11_mandataire_present
+  _s11_journal "mandataire : jetons porteurs refusés dans $cm (skip_jwt_bearer_tokens = false), pods redémarrés"
+  _s11_attendre 150 _s11_mandataire_actif
 }
 _s11_mandataire_present() {
   local cm cle
   read -r cm cle <<<"$(_s11_lire mandataire)"
   [[ -n "${cm:-}" ]] || return 1
   wb_kubectl -n "$_S11_NS" get configmap "$cm" -o json 2>/dev/null |
-    jq -e --arg k "$cle" '.data[$k] | test("extra_jwt_issuers[^\n]*-v2\"")' >/dev/null 2>&1
+    jq -e --arg k "$cle" '.data[$k] | test("(^|\n)[ \t]*skip_jwt_bearer_tokens[ \t]*=[ \t]*false")' >/dev/null 2>&1
 }
-_s11_mandataire_actif() { _s11_mandataire_present; }
+# Actif : configuration altérée ET tous les pods des mandataires concernés recréés depuis (déploiement
+# terminé : les nouveaux pods ont lu la ConfigMap altérée).
+_s11_mandataire_actif() {
+  local cm cle d
+  _s11_mandataire_present || return 1
+  read -r cm cle <<<"$(_s11_lire mandataire)"
+  for d in $(_s11_deploiements_cm "$cm"); do
+    wb_kubectl -n "$_S11_NS" rollout status deployment "$d" --timeout=5s >/dev/null 2>&1 || return 1
+  done
+}
 _s11_mandataire_defaire() {
   local cm cle d
   read -r cm cle <<<"$(_s11_lire mandataire)"
   if [[ -n "${cm:-}" ]] && _s11_mandataire_present; then
     wb_kubectl -n "$_S11_NS" get configmap "$cm" -o json 2>/dev/null |
-      jq --arg k "$cle" '.data[$k] |= sub("(?<a>extra_jwt_issuers[^\n]*=)(?<b>[A-Za-z0-9._-]+)-v2\""; "\(.a)\(.b)\"")' |
+      jq --arg k "$cle" '.data[$k] |= sub("(?<a>(^|\n)[ \t]*skip_jwt_bearer_tokens[ \t]*=[ \t]*)false"; "\(.a)true")' |
       wb_kubectl replace -f - >/dev/null 2>&1 || wb_avert "ConfigMap $cm non rétablie (copie : $(_s11_etat)/cm-dpi.json)"
     for d in $(_s11_deploiements_cm "$cm"); do
       wb_kubectl -n "$_S11_NS" rollout restart deployment "$d" >/dev/null 2>&1 || true
     done
-    _s11_journal "annulation : audience du mandataire rétablie"
+    _s11_journal "annulation : jetons porteurs de nouveau acceptés par le mandataire"
   fi
   _s11_oublier mandataire
 }
@@ -426,6 +456,7 @@ _s11_meneur() {
     p="$(_s11_lire "incident-$((i - 1))")"
     # Attendre la réparation du précédent ET le délai minimal.
     while :; do
+      _s11_arret_demande && { _s11_journal "meneur : arrêt demandé, fin"; return 0; }
       (($(date +%s) - debut > _S11_DUREE_MAX)) && { _s11_journal "meneur : durée maximale atteinte, fin"; return 0; }
       if [[ -z "$p" ]] || ! _s11_present "$p"; then
         (($(date +%s) - t0 >= _S11_DELAI)) && break
@@ -435,6 +466,7 @@ _s11_meneur() {
     # Lab redevenu sain avant l'incident suivant (sinon on attend encore un peu, puis on abandonne).
     _s11_attendre 300 _s11_sain_leger || { _s11_journal "meneur : instance non saine, fin sans injection"; return 0; }
     for p in $(_s11_lire "reste"); do
+      _s11_arret_demande && { _s11_journal "meneur : arrêt demandé, fin"; return 0; }
       _s11_poser reste "$(_s11_lire reste | sed "s/^$p *//")"
       rc=0
       _s11_injecter "$p" || rc=$?
@@ -454,9 +486,22 @@ _s11_meneur() {
 
 _s11_sain_leger() { (($(_s11_api_pretes) >= 1)) && [[ "$(_s11_code_pret)" == 200 ]]; }
 
+# _s11_debut_processus PID — date de démarrage du processus (champ 22 de /proc/PID/stat) : distingue
+# le meneur d'un processus qui aurait repris son numéro après un redémarrage d'adm01.
+_s11_debut_processus() {
+  local st
+  st="$(cat "/proc/$1/stat" 2>/dev/null)" || return 1
+  st="${st##*) }"
+  awk '{ print $20 }' <<<"$st"
+}
+
 _s11_lancer_meneur() {
-  local d
+  local d pid
   d="$(_s11_etat)"
+  rm -f -- "$d/arret"
+  # « set -m » : le meneur dans SON groupe de processus (numéro = son PID), pour que --annuler l'arrête
+  # avec tous ses enfants (kubectl, curl, sleep), sans toucher au reste de la session.
+  set -m
   (
     # Hérité de lab/bin/break : « set -e » arrêterait le meneur au premier contrôle négatif.
     set +e +o pipefail
@@ -464,17 +509,29 @@ _s11_lancer_meneur() {
     _s11_meneur
     rm -f -- "$d/meneur.pid"
   ) </dev/null >>"$d/meneur.log" 2>&1 &
-  printf '%s\n' "$!" >"$d/meneur.pid"
-  disown 2>/dev/null || true
+  pid=$!
+  set +m
+  printf '%s %s\n' "$pid" "$(_s11_debut_processus "$pid")" >"$d/meneur.pid"
+  disown "$pid" 2>/dev/null || true
 }
 
 _s11_arreter_meneur() {
-  local pid
-  pid="$(_s11_lire meneur.pid)"
-  if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
-    # Le sous-shell et ses enfants (sleep) : groupe de processus du lanceur, on vise le sous-shell.
-    pkill -P "$pid" 2>/dev/null || true
-    kill "$pid" 2>/dev/null || true
+  local pid debut i
+  # 1. Drapeau d'arrêt : le meneur ne lance plus aucune injection, même s'il n'est pas encore tué.
+  (umask 077 && : >"$(_s11_etat)/arret")
+  read -r pid debut <<<"$(_s11_lire meneur.pid)"
+  if [[ "${pid:-}" =~ ^[0-9]+$ && -n "${debut:-}" && "$(_s11_debut_processus "$pid" 2>/dev/null)" == "$debut" ]]; then
+    # 2. Tout le groupe de processus du meneur, puis attente de sa fin (au plus 30 s, puis KILL) :
+    #    aucune modification ne peut arriver APRÈS l'annulation.
+    kill -TERM -- "-$pid" 2>/dev/null || true
+    for ((i = 0; i < 30; i++)); do
+      kill -0 -- "-$pid" 2>/dev/null || break
+      sleep 1
+    done
+    if kill -0 -- "-$pid" 2>/dev/null; then
+      kill -KILL -- "-$pid" 2>/dev/null || true
+      sleep 1
+    fi
     _s11_journal "meneur $pid arrêté"
   fi
   _s11_oublier meneur.pid
@@ -486,6 +543,7 @@ _s11_arreter_meneur() {
 _s11_demarrer() {
   local seq p rc
   _s11_sain || return 1
+  _s11_oublier arret
   seq="$(_s11_sequence "$1")"
   _s11_poser sequence "$seq"
   _s11_poser reste "$seq"
@@ -520,16 +578,22 @@ verifier_S11() {
 annuler_S11() {
   local p
   _s11_arreter_meneur
-  for p in reseau route cache identite mandataire; do
-    _s11_defaire "$p" || true
-  done
-  wb_k8s_restaurer >/dev/null 2>&1 || true
+  if _s11_borne 2>/dev/null; then
+    for p in reseau route cache identite mandataire; do
+      _s11_defaire "$p" || true
+    done
+    wb_k8s_restaurer >/dev/null 2>&1 || true
+  else
+    wb_avert "variables WB_F7_* hors du GHSV : rien n'est défait (état gardé dans $(_s11_etat))"
+  fi
   _s11_oublier incident-1
   _s11_oublier incident-2
   _s11_oublier incident-3
   _s11_oublier reste
   _s11_oublier sequence
   _s11_oublier app
+  # Le drapeau « arret » reste posé jusqu'à la prochaine injection (un meneur qui aurait survécu ne
+  # reprendrait pas la main).
   _s11_journal "annulation terminée"
 }
 

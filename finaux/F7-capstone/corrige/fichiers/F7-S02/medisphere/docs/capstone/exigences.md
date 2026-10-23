@@ -29,7 +29,7 @@
 | NF-18 | Clés dédiées : rotation et destruction | ESC-06, ERV-04 | rotation ≤ 12 mois ; destruction sur demande avec procès-verbal ≤ 5 jours ouvrés | rotation automatique annuelle, `rewrap` dans le mois | à construire |
 | NF-19 | Flux chiffrés | ESC-07 | 100 % des flux en TLS ≥ 1.2 (1.3 en façade) | 0 flux en clair dans le cluster | à construire |
 | NF-20 | Délais de support | EXP-01, EXP-02 | P1 : prise en compte 15 min, rétablissement 4 h ; P2 : 1 h ouvrée, 1 jour ouvré | P1 pris en compte en 5 min | à construire (organisation, S06) |
-| NF-21 | Rapport mensuel | EXP-03 | remis avant le 10 du mois | généré le 2 | à construire |
+| NF-21 | Rapport mensuel | EXP-03 | remis avant le 10 du mois | généré le 1er à 06:15 | à construire |
 | NF-22 | Export de réversibilité | ERV-02, ERV-03 | export complet ≤ 30 j, format ouvert, vérifié par un tiers | essai annuel (pas seulement en 3e année) | à construire |
 | NF-23 | Pas de donnée réelle hors production | ESC-13, EXP-06 | 0 donnée réelle en recette | contrôle mensuel | tenue (F2, extraction pseudonymisée) |
 
@@ -47,7 +47,7 @@
 ### NF-02 — SLO interne en requêtes (ENF-03)
 
 - **Définition** : bonnes = réponses non 5xx ; valides = toutes les requêtes de l'API du GHSV hors `/sante`, `/pret`, `/metrics` et hors 4xx (une erreur du client n'est pas une indisponibilité, mais un taux de 4xx anormal se surveille à part : un 401 généralisé est une panne). Point de mesure : métriques de la Gateway (vues **avant** l'application, une API absente y compte) et histogramme de MédiAgenda (`mediagenda_http_requests_total`).
-- **Budget** (H-01, 22 req/s en moyenne journalière ≈ 57 millions de requêtes par mois) : 0,05 % ≈ **28 500 requêtes en erreur par mois**.
+- **Budget** (hypothèse de profil horaire : moyenne journalière ≈ 15 % de la pointe de 150 req/s, soit ≈ 22 req/s ≈ 57 millions de requêtes par mois ; à remplacer par la mesure dès le premier mois) : 0,05 % ≈ **28 500 requêtes en erreur par mois**.
 - **Politique de budget d'erreur** : budget consommé à 50 % → changements non urgents du GHSV soumis à l'avis de Karim ; à 100 % → gel des changements du locataire `ghsv` hors correctifs, post-mortem, actions prioritaires ; alertes de consommation rapide (multi-fenêtres, Pyrra, M21).
 
 ### NF-03 — Maintenances (ENF-04, R-12)
@@ -140,7 +140,7 @@ MFA des agents : responsabilité du GHSV (R-16) ; notre engagement est de **n'of
 ## 7. Exploitation et réversibilité (NF-20 à NF-23)
 
 - **NF-20** (EXP-01, EXP-02) : horodatages de l'outil de tickets commun (création, prise en compte, rétablissement) ; P1 déclenchés aussi par les alertes (astreinte). Organisation : S06.
-- **NF-21** (EXP-03) : rapport généré automatiquement le 2 du mois (disponibilité, latence, incidents, maintenances, capacité, sécurité, changements), relu et envoyé avant le 10 (F7-S10).
+- **NF-21** (EXP-03) : rapport généré automatiquement le 1er du mois à 06:15 (disponibilité, latence, incidents, maintenances, capacité, sécurité, changements), relu et envoyé avant le 10 (F7-S10).
 - **NF-22** (ERV-02, ERV-03) : export complet en format ouvert (ADR-0374), chronométré ; essai annuel sur une copie de la production restaurée, contrôle par un tiers (l'équipe Data, qui n'a jamais vu le schéma) avec la seule documentation.
 - **NF-23** (ESC-13, EXP-06) : la recette du GHSV ne contient que des données fictives ; contrôle mensuel (aucun identifiant `P`+6 chiffres réel, aucun nom issu de l'export de reprise).
 

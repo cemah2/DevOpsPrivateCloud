@@ -2,8 +2,10 @@
 # Accès du DPI du client à l'API du contrat, sur le nom PUBLIC (route « mediagenda » de livraison.yaml,
 # dont le component « client » change la destination vers ce mandataire).
 #   - le DPI présente un jeton porteur obtenu par « client credentials » auprès du royaume medisphere
-#     (client ghsv-dpi, tofu/clients-dpi-ghsv.tf) ; OAuth2 Proxy en vérifie la signature (JWKS de
-#     Keycloak), l'émetteur, l'expiration et l'AUDIENCE (ghsv-api) — skip_jwt_bearer_tokens ;
+#     (client ghsv-dpi, tofu/clients-dpi-ghsv.tf) ; avec skip_jwt_bearer_tokens, OAuth2 Proxy en vérifie
+#     la signature (JWKS de Keycloak), l'émetteur, l'expiration et l'AUDIENCE avec le vérificateur de
+#     son fournisseur : émetteur oidc_issuer_url, audience = son client_id « ghsv-api » (+
+#     oidc_extra_audiences). D'où le mappeur d'audience « ghsv-api » des clients du DPI ;
 #   - aucune session de navigateur : sans jeton, /api/ répond 401 (api_routes), jamais une redirection ;
 #   - les portées rdv:lecture / rdv:ecriture sont contrôlées par l'API (MEDIAGENDA_PORTEES=oui), qui
 #     reçoit le jeton tel quel ;
@@ -19,10 +21,13 @@ data:
     provider = "keycloak-oidc"
     oidc_issuer_url = "https://sso.par1.medisphere.internal/realms/medisphere"
     provider_ca_files = ["/etc/medisphere-ca/medisphere-root-ca.crt"]
-    # Jetons porteurs acceptés : émetteur medisphere, audience ghsv-api (mappeur d'audience du client
-    # ghsv-dpi). Un jeton émis pour un autre client du royaume (Grafana, Argo CD…) est refusé.
+    # Jetons porteurs acceptés : émetteur medisphere, audience ghsv-api (= client_id de ce mandataire,
+    # vérifiée par le fournisseur ; mappeur d'audience des clients du DPI). Un jeton émis pour un autre
+    # client du royaume (Grafana, Argo CD…) n'a pas cette audience : refusé. extra_jwt_issuers ne sert
+    # qu'à accepter un AUTRE émetteur (ou une autre audience) : inutile ici, et trompeur (le vérificateur
+    # du fournisseur passe en premier, oauth2-proxy 7.15, oauthproxy.go buildSessionChain).
+    # Sans cette ligne, un jeton porteur est ignoré : /api/ répond 401 (api_routes) à tout appel du DPI.
     skip_jwt_bearer_tokens = true
-    extra_jwt_issuers = ["https://sso.par1.medisphere.internal/realms/medisphere=ghsv-api"]
     # Un compte de service n'a pas d'adresse : l'identifiant est preferred_username
     # (« service-account-ghsv-dpi »). À vérifier avec ta version (corrigé, points non testés).
     user_id_claim = "preferred_username"

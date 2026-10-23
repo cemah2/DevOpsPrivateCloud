@@ -20,7 +20,7 @@ if [[ -n "$_f7_s06_planning" ]]; then
   check_cmd "planning : jalons du 1er mars 2027 et du 30 juin 2027" \
     _f7c_doc_contient planning.md '1(er)? mars( 2027)?|2027-03-01|01/03/2027' '30 juin( 2027)?|2027-06-30|30/06/2027'
   _f7_s06_dates() {
-    (($(grep -Eoi '([0-9]{1,2}(er)?[[:space:]]+(janv|f(é|e)vr|mars|avr|mai|juin|juil|d(é|e)c)[a-zé.]*)|(20[0-9]{2}-[01][0-9]-[0-3][0-9])' <<<"$_f7_s06_planning" |
+    (($(grep -Eoi '([0-9]{1,2}(er)?[[:space:]]+(janv|f(é|e)vr|mars|avr|mai|juin|juil|ao(û|u)t|sept|oct|nov|d(é|e)c)[a-zé.]*)|(20[0-9]{2}-[01][0-9]-[0-3][0-9])' <<<"$_f7_s06_planning" |
       tr '[:upper:]' '[:lower:]' | sort -u | grep -c . || true) >= 8))
   }
   check_cmd "planning : au moins 8 jalons datés distincts" _f7_s06_dates
@@ -50,6 +50,9 @@ check_cmd "run.md présent sur main" _f7c_doc_present run.md
 if _f7c_doc_present run.md; then
   check_cmd "run : support du samedi, astreinte, priorités P1 à P3, rapport mensuel, montée en compétences" \
     _f7c_doc_contient run.md 'samedi' 'astreinte' 'P1' 'P3' 'rapport mensuel' 'formation|comp(é|e)tences|bin(ô|o)me'
+  check_cmd "run : délais du cahier des charges repris (P1 pris en compte en 15 min, 24 h/24) et effectif de l'astreinte chiffré" \
+    _f7c_doc_contient run.md '15[[:space:]]*min' '24[[:space:]]*h[[:space:]]*/[[:space:]]*24|24/7|24[[:space:]]*h[[:space:]]+sur[[:space:]]+24' \
+    '([0-9]+|deux|trois|quatre|cinq|six)[[:space:]]+(personnes|ing(é|e)nieurs|semaines?)'
 else
   skip "contenu du run" "document absent"
 fi

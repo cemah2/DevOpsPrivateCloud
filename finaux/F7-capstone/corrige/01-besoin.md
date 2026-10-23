@@ -3,8 +3,8 @@
 > ⚠️ Corrigé — à lire après avoir cherché. Les deux scénarios sont des rédactions : les documents de référence sont **des** réponses possibles, jugées sur les critères ci-dessous. Une analyse différente, argumentée et appuyée sur le code et les mesures, vaut autant.
 
 **Validé hors du lab** (à la rédaction, 23/10/2026) :
-- annexe A1 : OpenAPI 3.1 valide (`openapi-spec-validator` 0.9) ; chaque écart avec MédiAgenda relevé ci-dessous a été vérifié dans `apps/mediagenda` (`app.py`, `modeles.py`) et dans le correctif `rappel` du M27-E06 ;
-- annexe A2 : totaux recalculés (somme des consultations 1 800 000, des patients 462 300 contre 400 000 déclarés) ;
+- annexe A1 : OpenAPI 3.1 valide (`openapi-spec-validator`, et `redocly lint` 1.34 : seul avertissement, l'absence de licence) ; chaque écart avec MédiAgenda relevé ci-dessous a été vérifié dans `apps/mediagenda` (`app.py`, `modeles.py`) et dans le correctif `rappel` du M27-E06 ;
+- annexe A2 : totaux recalculés (somme des consultations 1 800 000, dont 129 000 pour GHSV-12 ; total corrigé par R-03 : 1 683 900 ; patients 462 300 contre 400 000 déclarés ; 2 000 Go de pièces jointes pour 176 600 rendez-vous en ligne) ; chiffres de S02 recalculés (budgets d'erreur, 1,06⁵ = 1,338, capacité, volumes) ;
 - checks `check-S01.sh` et `check-S02.sh` rejoués sur les documents de référence (GitLab simulé).
 
 **Fichiers** : [`fichiers/F7-S01/`](fichiers/F7-S01/) et [`fichiers/F7-S02/`](fichiers/F7-S02/), arborescence de `plateforme/medisphere` (`medisphere/docs/capstone/…`).
@@ -29,7 +29,7 @@ Ce qu'il fallait trouver, par ordre d'importance pour l'offre :
 6. **Les données douteuses** : la ligne GHSV-12 (129 000 consultations pour 7 praticiens), le total des patients (dédoublonné), le volume de pièces jointes rapporté aux rendez-vous en ligne.
 7. **La recevabilité** : HDS « activités 1 à 6 » alors que MédiSphère est certifiée 2 à 6 (Q-08, R-13), ISO 27001 en cours (non éliminatoire), ESC-04 démontrable.
 
-Les **questions** de référence ont trois qualités qu'on vérifie une par une : chacune cite une exigence, chacune dit ce qu'elle change dans l'offre, chacune a une hypothèse de repli. Aucune ne révèle notre architecture (« utilisez-vous CloudNativePG ? » n'a rien à faire là) ni nos faiblesses (« acceptez-vous un PRA sans capacité complète avant avril ? » apprendrait à nos concurrents ce que nous ne savons pas faire). Q-05, Q-09 et Q-14 restent sans réponse : les hypothèses H-07, H-10 entrent dans l'offre comme réserves écrites.
+Les **questions** de référence ont trois qualités qu'on vérifie une par une : chacune cite une exigence, chacune dit ce qu'elle change dans l'offre, chacune a une hypothèse de repli. Aucune ne révèle notre architecture (« utilisez-vous CloudNativePG ? » n'a rien à faire là) ni nos faiblesses (« acceptez-vous un PRA sans capacité complète avant avril ? » apprendrait à nos concurrents ce que nous ne savons pas faire). Q-05, Q-09 et Q-14 restent sans réponse : les hypothèses H-07 et H-10, et la date d'export final retenue pour Q-09, entrent dans l'offre comme réserves écrites.
 
 La **recommandation** de référence est « répondre avec réserves », avec des conditions de *no-go* explicites. Une recommandation « ne pas répondre » est défendable si elle est argumentée (charge de développement, calendrier) ; « répondre sans réserve » ne l'est pas.
 

@@ -28,12 +28,12 @@ resource "keycloak_realm" "ghsv_idp" {
   # Protection contre la force brute (ESC-05 côté GHSV, bonne pratique).
   security_defenses {
     brute_force_detection {
-      permanent_lockout            = false
-      max_login_failures           = 10
-      wait_increment_seconds       = 60
-      max_failure_wait_seconds     = 900
-      failure_reset_time_seconds   = 43200
-      quick_login_check_milli_seconds = 1000
+      permanent_lockout                = false
+      max_login_failures               = 10
+      wait_increment_seconds           = 60
+      max_failure_wait_seconds         = 900
+      failure_reset_time_seconds       = 43200
+      quick_login_check_milli_seconds  = 1000
       minimum_quick_login_wait_seconds = 60
     }
   }

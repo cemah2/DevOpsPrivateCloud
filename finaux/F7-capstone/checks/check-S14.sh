@@ -39,9 +39,9 @@ _f7_s14_preuves_env="${WB_F6_PREUVES_ENV:-$HOME/.config/workbook/s3-preuves-conf
 if [[ -r "$_f7_s14_preuves_env" ]]; then
   _f7_s14_preuves() {
     _f7l_s3_ls "$_f7_s14_preuves_env" "${WB_F6_RGW_URL:-https://rgw.par1.medisphere.internal}" \
-      "s3://${WB_F6_PREUVES_BUCKET:-preuves-conformite}/" | grep -Eqi "capstone|${_f7l_client}"
+      "s3://${WB_F6_PREUVES_BUCKET:-preuves-conformite}/lots/" | grep -Eq '/preuves/P-CAP-[0-9]{2}\.[a-z0-9]+$'
   }
-  check_cmd "preuves-conformite : des preuves de la capstone déposées par ms-preuves" _f7_s14_preuves
+  check_cmd "preuves-conformite : des preuves de la capstone (P-CAP-nn) déposées par ms-preuves dans un lot" _f7_s14_preuves
 else
   skip "preuves de la capstone dans preuves-conformite" "identité S3 de lecture des preuves absente ($_f7_s14_preuves_env, F6)"
 fi
