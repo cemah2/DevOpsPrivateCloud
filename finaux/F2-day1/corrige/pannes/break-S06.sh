@@ -9,7 +9,10 @@
 #   1. quota : réplicas et requests mémoire relevés au-delà du ResourceQuota de medivisio-recette
 #      → ReplicaSet « exceeded quota », déploiement bloqué à mi-chemin ;
 #   2. image désignée par son ÉTIQUETTE au lieu de son empreinte → refus de la politique Kyverno
-#      exiger-signature-medisphere (verifyDigest) ;
+#      exiger-signature-medisphere (verifyDigest). Avec l'autogénération de la politique (deployments,
+#      M26-E15), c'est le DEPLOYMENT qui est refusé à l'admission : la synchronisation d'Argo CD échoue
+#      (OutOfSync, opération Failed), les anciens pods servent encore. Sans autogénération, ce serait le
+#      ReplicaSet (FailedCreate) : les deux constats sont acceptés ;
 #   3. nouveau secret lu dans kv/medivisio/commun/visio, hors de la politique eso-medivisio-recette
 #      → ExternalSecret en SecretSyncedError, nouveaux pods en CreateContainerConfigError.
 #
@@ -260,6 +263,17 @@ f2s06_constat_rs() {  # REGEX — un ReplicaSet de la recette signale un échec 
     jq -e --arg r "$1" --arg t "$(f2s06_lire debut)" \
       'any(.items[]; ((.lastTimestamp // .eventTime // "") >= $t) and (.message | test($r; "i")))' >/dev/null 2>&1
 }
+f2s06_constat_app() {  # REGEX — la dernière opération de synchronisation (après l'injection) a échoué ainsi
+  local a
+  a="$(f2s06_lire app)"
+  [[ -n "$a" ]] || return 1
+  wb_kubectl -n argocd get applications.argoproj.io "$a" -o json 2>/dev/null |
+    jq -e --arg r "$1" --arg t "$(f2s06_lire debut)" '.status.operationState as $o
+      | (($o.phase // "") | IN("Failed", "Error")) and (($o.startedAt // "") >= $t) and (($o | tostring) | test($r; "i"))' >/dev/null 2>&1
+}
+f2s06_constat_v2() {
+  f2s06_constat_app 'denied|exiger-signature|digest' || f2s06_constat_rs 'denied|exiger-signature|digest|admission'
+}
 f2s06_constat_es() {
   wb_kubectl -n "$_F2S06_NS" get externalsecrets.external-secrets.io consultation-visio -o json 2>/dev/null |
     jq -e 'any(.status.conditions[]?; .type == "Ready" and .status == "False")' >/dev/null 2>&1
@@ -268,7 +282,7 @@ f2s06_constat_es() {
 verifier_S06() {
   case "$WB_VAR" in
     1) f2s06_attendre 360 f2s06_constat_rs 'exceeded quota|forbidden' ;;
-    2) f2s06_attendre 360 f2s06_constat_rs 'denied|exiger-signature|digest|admission' ;;
+    2) f2s06_attendre 360 f2s06_constat_v2 ;;
     3) f2s06_attendre 360 f2s06_constat_es ;;
     *) return 1 ;;
   esac
@@ -304,13 +318,13 @@ annuler_S06() {
 symptome_S06() {
   wb_symptome "DEV-3206 — Inès Garnier (MédiVisio)" \
     "« Notre déploiement en recette ne démarre pas, alors que ça marchait en dev ce matin." \
-    "  Argo CD dit que tout est synchronisé, mais la nouvelle version n'arrive jamais." \
+    "  Argo CD a bien vu le commit, mais la nouvelle version n'arrive jamais." \
     "  Léo et Lucas ont touché à la configuration hier soir. On a la démonstration jeudi. »" \
     "" \
     "Espace : medivisio-recette — temps cible : 45 min." \
     "Vérification : lab/bin/check F2 06 · abandon : lab/bin/break F2 06 --annuler"
 }
 
-resume_S06() { echo "La recette de MédiVisio ne déploie plus sa nouvelle version (« synchronisé » mais rien ne démarre)."; }
+resume_S06() { echo "La recette de MédiVisio ne déploie plus sa nouvelle version (le commit est vu, rien ne démarre)."; }
 
 if [[ -z "${WB_PANNES_LIB:-}" ]]; then main() { wb_main F2 S06 3 "$@"; }; fi

@@ -30,7 +30,8 @@ for c in ssh jq aws bao; do
 done
 bao token lookup >/dev/null 2>&1 || { echo "pas de jeton OpenBao valide : bao login -method=oidc" >&2; exit 1; }
 
-rgw() { ssh -o BatchMode=yes "$CEPH_ADMIN" sudo -n radosgw-admin "$@"; }
+# ssh -n : n'avale pas l'entrée standard de la boucle « while read » de rgw-compartiments.yaml.
+rgw() { ssh -n -o BatchMode=yes "$CEPH_ADMIN" sudo -n radosgw-admin "$@"; }
 
 # 1. Utilisateur, créé une seule fois ; clés envoyées directement à OpenBao (JSON sur l'entrée standard).
 if rgw user info --uid="$UTILISATEUR" >/dev/null 2>&1; then

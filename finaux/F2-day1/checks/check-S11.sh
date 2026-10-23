@@ -47,6 +47,17 @@ _s11_garde() {
     <<<"$j" >/dev/null 2>&1
 }
 check_cmd "admission : une politique refuse les liaisons RBAC de oidc:ext-* hors des espaces prévus" _s11_garde
-check_cmd "revue d'accès : modele.yml décrit le périmètre de $_s11_g (projet, espace)" \
-  _f2b_fichier_contient "$_f2b_projet_identite" outils/revue-acces/modele.yml "$_s11_g" "$_f2b_ns_axiom|${_f2b_projet_api//\//.}"
+# Après le départ (S12), le périmètre d'AxiomDev est retiré de modele.yml et seul le groupe (vide) y
+# reste déclaré : on n'exige plus que le projet ou l'espace y figurent (la recette relance ce check).
+_s11_parti=1
+for _s11_u in "${_f2b_axiom_personnes[@]}"; do
+  _f2b_desactivee "$_s11_u" || _s11_parti=0
+done
+if ((_s11_parti)); then
+  check_cmd "revue d'accès : modele.yml déclare encore le groupe $_s11_g (départ fait)" \
+    _f2b_fichier_contient "$_f2b_projet_identite" outils/revue-acces/modele.yml "$_s11_g"
+else
+  check_cmd "revue d'accès : modele.yml décrit le périmètre de $_s11_g (projet, espace)" \
+    _f2b_fichier_contient "$_f2b_projet_identite" outils/revue-acces/modele.yml "$_s11_g" "$_f2b_ns_axiom|${_f2b_projet_api//\//.}"
+fi
 check_cmd "panne F2-S11 close (lab/bin/break F2 11 --annuler après réparation)" _f2b_aucune_panne_active S11

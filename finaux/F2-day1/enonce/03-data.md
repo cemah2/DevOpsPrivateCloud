@@ -98,7 +98,7 @@ Les requêtes personnalisées de CloudNativePG (`spec.monitoring.customQueriesCo
 4. **Le rapport** : un outil de `plateforme/outils` qui produit le rapport d'un mois à partir de Prometheus et de tarifs versionnés ; le premier rapport publié ; RB-328 (ce qui est compté, ce qui ne l'est pas, comment lire et quoi proposer aux équipes).
 
 **Critères de réussite**
-- [ ] Dans `data-traitements`, au moins un CronJob en `medisphere-lot`, conteneurs avec requests (CPU, mémoire) et limite mémoire, un passage réussi depuis moins de 36 h ; un `ResourceQuota` à portée `PriorityClass` `medisphere-lot`.
+- [ ] Dans `data-traitements`, au moins deux CronJobs en `medisphere-lot` (agrégats, export mensuel), conteneurs avec requests (CPU, mémoire) et limite mémoire, un passage réussi depuis moins de 36 h ; un `ResourceQuota` à portée `PriorityClass` `medisphere-lot`.
 - [ ] Au moins quatre règles `locataire:…` ; Prometheus sert `locataire:cpu_demande:somme` pour `medivisio` et `data`, `locataire:cpu_utilise:taux5m`, la mémoire réservée et utilisée, `locataire:stockage_demande:somme`.
 - [ ] Le tableau `plateforme-consommation-locataires` existe et interroge au moins trois de ces règles.
 - [ ] `docs/accueil/mesures/refacturation-AAAA-MM.md` cite chaque équipe accueillie (CPU, mémoire, stockage) ; RB-328 publié.

@@ -57,9 +57,11 @@ Même chemin : MR sur `equipes/$EQUIPE.yaml` (personne en plus ou en moins, quot
 
 1. MR : `etat: retiree` (et date dans le ticket). Effets à la propagation : personnes désactivées dans l'annuaire (jamais supprimées), groupe vidé, appartenances GitLab retirées, jetons de groupe révoqués, politique, groupe externe et rôles du coffre supprimés (**plan avec destruction : application manuelle**), AppProject, ApplicationSet, routes d'alertes, utilisateurs Capsule, cloison réseau retirés.
 2. Ce que la CI ne fait **pas** : supprimer le locataire et les espaces (`Prune=false`, `preventDeletion`). Après accord écrit du responsable (données à garder, à exporter, à détruire) :
+
+   ⚠️ **Attention** : supprimer le `Tenant` supprime **tous** ses espaces et leurs volumes. Avant de lever la protection : inventaire **par espace** (l'étiquette `capsule.clastix.io/tenant` est sur les espaces, pas sur les objets qu'ils contiennent), sauvegardes vérifiées (Velero, CNPG), accord écrit ; retire si besoin un espace à garder (`kubectl patch namespace … ownerReferences: []`, RB-280 § Retour arrière). Retour arrière tant que rien n'est supprimé : remettre `preventDeletion: true`.
    ```
-   admin@adm01:~$ kubectl get all,pvc -A -l capsule.clastix.io/tenant=$EQUIPE         # inventaire
+   admin@adm01:~$ kubectl get tenant $EQUIPE -o jsonpath='{.status.namespaces}{"\n"}'
+   admin@adm01:~$ for ns in $(kubectl get ns -l capsule.clastix.io/tenant=$EQUIPE -o name | cut -d/ -f2); do kubectl -n "$ns" get all,pvc,externalsecrets; done   # inventaire
    admin@adm01:~$ kubectl patch tenant $EQUIPE --type=merge -p '{"spec":{"preventDeletion":false}}'
    ```
-   ⚠️ **Attention** : supprimer le `Tenant` supprime **tous** ses espaces et leurs volumes. Vérifie d'abord l'inventaire, les sauvegardes (Velero, CNPG) et l'accord écrit ; retire si besoin un espace à garder (`kubectl patch namespace … ownerReferences: []`, RB-280 § Retour arrière).
 3. Preuves (comptes désactivés, jetons révoqués, espaces retirés) dans `docs/accueil/departs/$EQUIPE.md`.

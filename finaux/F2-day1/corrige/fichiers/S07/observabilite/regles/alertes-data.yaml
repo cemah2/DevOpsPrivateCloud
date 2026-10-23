@@ -50,9 +50,13 @@ spec:
           annotations:
             resume: "Une colonne identifiante est apparue dans stats.rendez_vous de la base Data"
             description: "Suspendre l'extraction (RB-327 §4), prévenir Sophie Laurent (RSSI) et le DPO."
+        # kube_job_failed (condition Failed du Job, après épuisement des essais) plutôt que
+        # kube_job_status_failed (pods en échec, même si un nouvel essai a réussi) ; seuls les Jobs
+        # démarrés depuis moins de 20 h comptent (les Jobs échoués sont gardés 7 jours).
         - alert: ExtractionMediagendaEchec
           expr: |
-            max by (namespace, job_name) (kube_job_status_failed{namespace="mediagenda-secours", job_name=~"extraction-data-.*"}) > 0
+            max by (namespace, job_name) (kube_job_failed{namespace="mediagenda-secours", job_name=~"extraction-data-.*", condition="true"}) > 0
+              and on (namespace, job_name) (time() - kube_job_status_start_time{namespace="mediagenda-secours"} < 20 * 3600)
           for: 10m
           labels:
             gravite: avertissement

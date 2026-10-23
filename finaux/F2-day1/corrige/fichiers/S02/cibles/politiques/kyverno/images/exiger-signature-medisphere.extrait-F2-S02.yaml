@@ -11,6 +11,10 @@
 # Migration sans trou : (1) poser l'étiquette sur les cinq espaces historiques (MR plateforme/k8s, task
 # espaces) ; (2) vérifier « kubectl get ns -l medisphere.internal/signature-exigee=oui » (les cinq) ;
 # (3) seulement alors, fusionner ce changement.
+# ⚠️ REMPLACER le namespaceSelector, pas le fusionner : le bloc matchExpressions (liste de noms) du M26
+# disparaît. Gardés ensemble, les deux conditions se cumuleraient (ET) et aucune équipe nouvelle ne
+# serait couverte. resourceRules et autogen restent tels quels (autogénération : le Deployment lui-même
+# est vérifié à l'admission, F2-S06).
 spec:
   matchConstraints:
     namespaceSelector:

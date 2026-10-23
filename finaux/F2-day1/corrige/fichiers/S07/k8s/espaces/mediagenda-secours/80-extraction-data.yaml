@@ -102,7 +102,7 @@ spec:
                   # le rejeu des WAL (max_standby_archive_delay, 30 s par défaut) ; le Job réessaie.
                   psql "host=mediagenda-db-secours-r port=5432 dbname=mediagenda user=extraction_data sslmode=require connect_timeout=10 application_name=extraction-data" \
                     -v ON_ERROR_STOP=1 -X -q \
-                    -c "\copy (SELECT rdv_pseudo, patient_pseudo, praticien_pseudo, jour, heure, jour_semaine, duree_minutes, canal_rappel, delai_reservation_jours FROM extraction.rendez_vous_pseudo ORDER BY jour, rdv_pseudo) TO 'rendez-vous.csv' WITH (FORMAT csv, HEADER true)"
+                    -c "\copy (SELECT rdv_pseudo, patient_pseudo, praticien_pseudo, jour, demi_journee, jour_semaine, duree_minutes, canal_rappel, delai_reservation_jours FROM extraction.rendez_vous_pseudo ORDER BY jour, rdv_pseudo) TO 'rendez-vous.csv' WITH (FORMAT csv, HEADER true)"
                   lignes=$(( $(wc -l < rendez-vous.csv) - 1 ))
                   if [ "$lignes" -lt 1 ]; then echo "extraction vide : rien n'est déposé" >&2; exit 1; fi
                   gzip -9 rendez-vous.csv

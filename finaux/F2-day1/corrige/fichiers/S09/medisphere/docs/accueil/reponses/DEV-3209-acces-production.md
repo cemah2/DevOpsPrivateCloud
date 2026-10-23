@@ -16,11 +16,11 @@ Tu demandes un compte en lecture sur `mediagenda-db` en production pour produire
 ## 3. Ce que nous te proposons (disponible dès maintenant)
 
 - Une **base PostgreSQL à toi**, `statistiques-db`, dans l'espace `data-traitements` (libre-service, sauvegardée chaque nuit).
-- Chaque nuit, une **extraction pseudonymisée** des rendez-vous des 13 derniers mois, chargée dans `stats.rendez_vous` : identifiants du rendez-vous, du patient et du praticien remplacés par des pseudonymes stables (HMAC), jour, heure, jour de la semaine, durée, canal de rappel, délai de réservation. Ni nom, ni motif, ni coordonnées, ni horodatage exact. (ADR-0327, RB-327.)
-- Des **identifiants personnels et temporaires** pour tes analyses : `bao read db-data/creds/data-analyste` après connexion OIDC (8 h), puis `kubectl port-forward` vers `statistiques-db-ro`.
+- Chaque nuit, une **extraction pseudonymisée** des rendez-vous des 13 derniers mois, chargée dans `stats.rendez_vous` : identifiants du rendez-vous, du patient et du praticien remplacés par des pseudonymes stables (HMAC), jour, demi-journée, jour de la semaine, durée, canal de rappel, délai de réservation. Ni nom, ni motif, ni coordonnées, ni horodatage exact. (ADR-0327, RB-327.)
+- Des **identifiants personnels et temporaires** pour tes analyses : `bao read db-data/creds/data-analyste` après connexion OIDC (8 h), puis `kubectl port-forward` vers `statistiques-db-r` (une seule instance : le Service `-ro`, qui ne vise que les réplicas, n'a aucun point de terminaison).
 - Des **traitements par lots** à toi (CronJobs en classe `medisphere-lot`) et un compartiment `data-resultats` pour publier tes résultats agrégés.
 
-Ce qui ne sort pas et pourquoi : le motif (texte libre : on y trouve des pathologies et parfois des noms) ; le contact de rappel ; l'heure à la minute. Si une statistique future en a besoin (par exemple une classification des motifs), la demande passe par Julien et Sophie : une nouvelle colonne **dérivée** (catégorie, jamais le texte) sera ajoutée à la vue par une migration de MédiAgenda.
+Ce qui ne sort pas et pourquoi : le motif (texte libre : on y trouve des pathologies et parfois des noms) ; le contact de rappel ; l'heure du rendez-vous (avec le praticien et le jour, elle désigne presque un rendez-vous précis). Si une statistique future en a besoin (par exemple une classification des motifs), la demande passe par Julien et Sophie : une nouvelle colonne **dérivée** (catégorie, jamais le texte) sera ajoutée à la vue par une migration de MédiAgenda.
 
 **Règles d'usage** que tu acceptes en utilisant ces données : pas de tentative de ré-identification ; aucun résultat publié hors MédiSphère portant sur moins de 10 rendez-vous ; pas de copie hors de `data-traitements` et `data-resultats` ; conservation 13 mois.
 

@@ -31,7 +31,7 @@ data:
         patient_pseudo          text NOT NULL,
         praticien_pseudo        text NOT NULL,
         jour                    date NOT NULL,
-        heure                   smallint NOT NULL CHECK (heure BETWEEN 0 AND 23),
+        demi_journee            text NOT NULL CHECK (demi_journee IN ('matin', 'apres-midi')),
         jour_semaine            smallint NOT NULL CHECK (jour_semaine BETWEEN 1 AND 7),
         duree_minutes           integer NOT NULL,
         canal_rappel            text NOT NULL,
@@ -52,5 +52,8 @@ data:
     RESET ROLE;
     GRANT SELECT ON ALL TABLES IN SCHEMA stats TO stats_lecture;
     -- Métriques (cnpg_stats_extraction_*) : le collecteur lit le journal des chargements, rien d'autre.
+    -- CloudNativePG 1.30 exécute les requêtes personnalisées sous le rôle cnpg_metrics_exporter, membre
+    -- de pg_monitor (avec héritage) : le droit donné à pg_monitor lui parvient. La documentation
+    -- conseille de le donner à cnpg_metrics_exporter lui-même : fais-le si le rôle existe déjà ici.
     GRANT USAGE ON SCHEMA stats TO pg_monitor;
     GRANT SELECT ON stats.chargements TO pg_monitor;

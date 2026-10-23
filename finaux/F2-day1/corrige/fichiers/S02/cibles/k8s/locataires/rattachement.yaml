@@ -128,6 +128,9 @@ spec:
               # cache Harbor et par empreinte. Vérifie qu'elle fournit /bin/sh (image kubectl de Clastix).
               image: registry.par1.medisphere.internal/dockerhub/clastix/kubectl:v1.36.5@sha256:<DIGEST-KUBECTL>
               command: ["/bin/sh", "/script/rattacher.sh"]
+              # Système de fichiers en lecture seule : kubectl écrit son cache de découverte sous $HOME.
+              env:
+                - {name: HOME, value: /tmp}
               resources:
                 requests: {cpu: 10m, memory: 32Mi}
                 limits: {memory: 64Mi}
@@ -137,7 +140,10 @@ spec:
                 capabilities: {drop: ["ALL"]}
               volumeMounts:
                 - {name: script, mountPath: /script, readOnly: true}
+                - {name: tmp, mountPath: /tmp}
           volumes:
+            - name: tmp
+              emptyDir: {sizeLimit: 16Mi}
             - name: script
               configMap:
                 name: rattacher-locataires

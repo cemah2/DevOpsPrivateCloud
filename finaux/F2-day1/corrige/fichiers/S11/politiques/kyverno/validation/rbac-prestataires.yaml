@@ -40,7 +40,7 @@ spec:
         object.kind != 'RoleBinding' || variables.prestataires.all(g,
           object.metadata.namespace.endsWith('-' + g.substring(9)))
       messageExpression: >-
-        'un prestataire n''est lié que dans son espace <locataire>-<société> : ' + variables.prestataires.join(', ')
+        "un prestataire n'est lié que dans son espace <locataire>-<société> : " + variables.prestataires.join(', ')
         + ' refusé dans ' + object.metadata.namespace + ' (SEC-3211, RB-329)'
       reason: Forbidden
     - expression: >-

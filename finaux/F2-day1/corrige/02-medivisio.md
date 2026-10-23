@@ -94,8 +94,8 @@ Le délai jusqu'au premier déploiement devient un indicateur suivi (médiane pa
 
 ```
 ines@poste$ bao kv put kv/medivisio/prod/consultation cle_salles="$(openssl rand -hex 32)"
-ines@poste$ bao kv list kv/medivisio/                         # dev/ prod/ recette/ — pas ci/
-ines@poste$ bao kv get kv/medivisio/ci/promotion              # refusé : jeton de la CI
+ines@poste$ bao kv list kv/medivisio/                         # ci/ dev/ prod/ recette/ : une liste montre les noms, rien de plus
+ines@poste$ bao kv get kv/medivisio/ci/promotion              # refusé (403) : jeton de la CI, ni lisible ni listable en dessous
 admin@adm01:~$ kubectl -n medivisio-prod get externalsecret consultation   # STATUS SecretSynced, READY True
 ```
 
@@ -119,7 +119,7 @@ admin@adm01:~$ amtool alert add EssaiRoutageF2S05 gravite=avertissement equipe=m
                  --annotation=summary="Essai de routage F2-S05" --alertmanager.url=http://alertmanager.apps.par1.medisphere.internal:9093
 ```
 
-L'alerte d'essai arrive dans Mailpit (destinataire `medivisio@medisphere.internal`) après `group_wait` (30 s) ; elle expire seule (sans `--end`, 1 h par défaut côté `amtool` : vérifie `amtool alert add --help` sur ta version). Ajoute les cas de [`routes-tests.extrait`](fichiers/S05/observabilite/alertmanager/routes-tests.extrait-F2-S05.txt) à `alertmanager/routes-tests.txt` de `plateforme/observabilite`.
+L'alerte d'essai arrive dans Mailpit (destinataire `medivisio@medisphere.internal`) après `group_wait` (30 s) ; elle se résout seule : sans `--end`, `amtool` n'envoie pas de fin et Alertmanager la considère résolue après `resolve_timeout` (5 min par défaut) faute d'être renvoyée. Ajoute les cas de [`routes-tests.extrait`](fichiers/S05/observabilite/alertmanager/routes-tests.extrait-F2-S05.txt) à `alertmanager/routes-tests.txt` de `plateforme/observabilite`.
 
 **4. Tableau de bord.** MR d'Inès sur `plateforme/observabilite` : [`tableaux/medivisio/medivisio-consultation.json`](fichiers/S05/observabilite/tableaux/medivisio/medivisio-consultation.json) et sa ligne de [`kustomization`](fichiers/S05/observabilite/tableaux/kustomization.extrait-F2-S05.yaml) (`grafana_folder: MédiVisio`, dossier créé en S02) — intervention de la Plateforme (relecture), notée dans la mesure.
 
@@ -158,18 +158,18 @@ Revue de mise en production (parcours d'accueil, § avant la production) signée
 
 ### F2-S06 — Panne : les premiers pas qui coincent
 
-Le script ([`pannes/break-S06.sh`](pannes/break-S06.sh)) fait **un commit de Lucas Martin** (marqueur `F2-S06`) dans l'overlay de recette de `medivisio/consultation-deploiement`, choisi parmi trois variantes, puis constate la panne sur place. Argo CD synchronise : l'Application reste `Synced`, la santé passe à `Progressing` ou `Degraded`.
+Le script ([`pannes/break-S06.sh`](pannes/break-S06.sh)) fait **un commit de Lucas Martin** (marqueur `F2-S06`) dans l'overlay de recette de `medivisio/consultation-deploiement`, choisi parmi trois variantes, puis constate la panne sur place. Variantes 1 et 3 : Argo CD applique le commit, l'Application reste `Synced` et sa santé passe à `Progressing` puis `Degraded`. Variante 2 : c'est la synchronisation elle-même qui échoue (refus à l'admission du Deployment), l'Application passe `OutOfSync` avec une opération `Failed`, sa santé reste `Healthy` (anciens pods).
 
 **Démarche de diagnostic**
 
-*Symptômes* : « synchronisé, mais la nouvelle version n'arrive jamais » ; la recette répond peut-être encore (anciens pods).
+*Symptômes* : « Argo CD a vu le commit, mais la nouvelle version n'arrive jamais » ; la recette répond peut-être encore (anciens pods).
 
-*Hypothèses*, dans l'ordre où on les élimine : (a) Argo CD n'a pas appliqué (non : `Synced`) ; (b) les pods ne sont pas **créés** (quota, admission) ; (c) ils sont créés mais ne **démarrent** pas (Secret, image, sondes) ; (d) l'application elle-même.
+*Hypothèses*, dans l'ordre où on les élimine : (a) Argo CD n'a pas pu appliquer (lire `Sync Status` et le résultat de la dernière opération : `Failed` = refus à l'admission d'un objet de Git, variante 2) ; (b) les pods ne sont pas **créés** (quota, admission) ; (c) ils sont créés mais ne **démarrent** pas (Secret, image, sondes) ; (d) l'application elle-même.
 
 *Commandes, dans l'ordre* (RB-321) :
 
 ```
-admin@adm01:~$ argocd app get medivisio-consultation-recette                         # Synced ; santé ?
+admin@adm01:~$ argocd app get medivisio-consultation-recette                         # Sync Status, santé, « Phase » et « Message » de la dernière opération
 admin@adm01:~$ kubectl -n medivisio-recette rollout status deploy/consultation --timeout=10s
 admin@adm01:~$ kubectl -n medivisio-recette get rs,pods -l app.kubernetes.io/instance=consultation
 admin@adm01:~$ kubectl -n medivisio-recette describe rs <nouveau-rs> | sed -n '/Conditions/,$p'
@@ -185,7 +185,7 @@ admin@adm01:~$ git -C ~/src/consultation-deploiement pull && git -C ~/src/consul
 - *Prévention* : contrôle en CI du dépôt de déploiement (réplicas × *requests* ≤ quota déclaré), panneau « quota utilisé » dans le tableau de l'équipe.
 
 **Variante 2 — image désignée par étiquette, refusée par Kyverno.**
-- *Constat* : le nouveau ReplicaSet ne crée **aucun** pod ; condition `ReplicaFailure` : `admission webhook "…kyverno…" denied the request: … exiger-signature-medisphere …` (exigence d'empreinte) ; `kubectl -n medivisio-recette get policyreports` pour le détail. En dev, la même modification passerait (la politique n'y est pas appliquée) : d'où « ça marchait en dev ».
+- *Constat* : **aucun** nouveau ReplicaSet. La politique est autogénérée pour les Deployments (M26-E15, `autogen.podControllers`) : c'est le **Deployment** qui est refusé à l'admission. `argocd app get` : `Sync Status: OutOfSync`, dernière opération `Failed`, message `one or more objects failed to apply, reason: admission webhook "…kyverno…" denied the request: … exiger-signature-medisphere …` (exigence d'empreinte) ; santé `Healthy` (les anciens pods servent). Argo CD ne réessaie pas seul la même révision : l'écart reste affiché jusqu'au prochain commit. En dev, la même modification passerait (la politique n'y est pas appliquée) : d'où « ça marchait en dev ». (Sans autogénération, le refus tomberait au niveau du pod : `ReplicaFailure`/`FailedCreate` du nouveau ReplicaSet.)
 - *Cause racine* : le commit remplace `digest: sha256:…` par `newTag: v…` dans `images:` de l'overlay ; la politique exige `verifyDigest` dans les espaces étiquetés `signature-exigee`.
 - *Correctif* : remettre l'empreinte (revert, ou `kustomize edit set image registry.par1.medisphere.internal/medisphere/medivisio-consultation@sha256:<EMPREINTE>` dans `overlays/recette`), MR.
 - *Prévention* : la CI du dépôt de déploiement refuse un `newTag` sur une image `medisphere/*` ; expliquer à l'équipe pourquoi une étiquette n'est pas une identité (elle peut être déplacée ; l'empreinte, non).
@@ -200,7 +200,7 @@ admin@adm01:~$ git -C ~/src/consultation-deploiement pull && git -C ~/src/consul
 
 **Explications**
 
-Argo CD dit si l'état **déclaré** est appliqué, pas si l'état **voulu** est atteint : entre les deux, le contrôleur de Deployment, le ReplicaSet, l'admission (quota, Pod Security, Kyverno, Capsule) et le kubelet (Secrets, image) peuvent tous refuser. Chaque refus laisse sa trace à un endroit précis : condition du ReplicaSet et événement `FailedCreate` pour ce qui empêche la **création** ; événements du pod et statut de l'`ExternalSecret` pour ce qui empêche le **démarrage**. Dans un cadre multi-locataire, les trois causes sont des **protections qui fonctionnent** : le diagnostic se conclut par une explication à l'équipe, pas par un assouplissement.
+Argo CD dit si l'état **déclaré** est appliqué, pas si l'état **voulu** est atteint : entre les deux, le contrôleur de Deployment, le ReplicaSet, l'admission (quota, Pod Security, Kyverno, Capsule) et le kubelet (Secrets, image) peuvent tous refuser. Chaque refus laisse sa trace à un endroit précis : résultat de l'opération d'Argo CD pour ce qui refuse l'objet **de Git** lui-même (une politique autogénérée pour les Deployments) ; condition du ReplicaSet et événement `FailedCreate` pour ce qui empêche la **création** des pods ; événements du pod et statut de l'`ExternalSecret` pour ce qui empêche leur **démarrage**. Dans un cadre multi-locataire, les trois causes sont des **protections qui fonctionnent** : le diagnostic se conclut par une explication à l'équipe, pas par un assouplissement.
 
 **Alternatives**
 
@@ -210,7 +210,7 @@ Argo CD dit si l'état **déclaré** est appliqué, pas si l'état **voulu** est
 
 **Pièges classiques**
 
-- S'arrêter à `Synced` et chercher côté Argo CD.
+- S'arrêter à `Synced` et chercher côté Argo CD ; ou, à l'inverse, ne pas lire le message de l'opération en échec quand Argo CD affiche `OutOfSync`.
 - « Corriger » par `kubectl edit` dans la recette : Argo CD (selfHeal) le défait ; et l'équipe n'a pas ce droit.
 - Agrandir le quota, désactiver la politique Kyverno pour l'espace ou élargir la politique du coffre : on supprime la protection au lieu de corriger la demande.
 - Oublier que l'ancien ReplicaSet sert encore : la recette « marche » et masque le problème jusqu'au prochain redémarrage.

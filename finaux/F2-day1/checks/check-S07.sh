@@ -126,8 +126,9 @@ case "$_s07_rc" in
       while IFS= read -r p; do
         [[ -n "$p" && "$p" != default ]] || continue
         t="$(_f2b_bao_texte_politique "$p")"
-        grep -q 'mediagenda' <<<"$t" && return 1
-        grep -q 'db-data/creds/' <<<"$t" && vu=1
+        # Lignes « path » seulement : les commentaires d'une politique peuvent citer mediagenda.
+        grep -Eq '^[[:space:]]*path[[:space:]]+"[^"]*mediagenda' <<<"$t" && return 1
+        grep -Eq '^[[:space:]]*path[[:space:]]+"db-data/creds/' <<<"$t" && vu=1
       done <<<"$_s07_pols"
       ((vu == 1))
     }

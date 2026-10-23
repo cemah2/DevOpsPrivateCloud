@@ -110,7 +110,7 @@ Tester le routage sans attendre une vraie panne : `amtool config routes test` su
 ### F2-S06 — Panne : les premiers pas qui coincent  `BF` `★★★`
 
 > **Ticket DEV-3206** — *De : Inès Garnier*
-> Bonjour, notre déploiement en **recette** ne démarre pas, alors que ça marchait en dev ce matin. Léo a poussé une petite modification de configuration hier soir (« rien de méchant », dit-il), et Lucas nous a aidés à « simplifier » un fichier. Argo CD dit que tout est synchronisé, mais la nouvelle version n'arrive jamais. On a la démonstration jeudi. Vous pouvez regarder ?
+> Bonjour, notre déploiement en **recette** ne démarre pas, alors que ça marchait en dev ce matin. Léo a poussé une petite modification de configuration hier soir (« rien de méchant », dit-il), et Lucas nous a aidés à « simplifier » un fichier. Argo CD a bien vu le commit, mais la nouvelle version n'arrive jamais. On a la démonstration jeudi. Vous pouvez regarder ?
 
 **Injection** : `lab/bin/break F2 06` (depuis `adm01` ; tire une cause au hasard parmi plusieurs).
 **Temps cible** : 45 min.
@@ -140,7 +140,7 @@ Tester le routage sans attendre une vraie panne : `amtool config routes test` su
 
 <details><summary>Indice 1</summary>
 
-« Synchronisé » veut dire qu'Argo CD a écrit ce que dit Git ; cela ne dit pas que les pods ont pu être créés. Descends d'un niveau : qui crée les pods, et où écrit-il quand il n'y arrive pas ?
+Commence par le résultat de la **dernière opération** d'Argo CD : a-t-il pu écrire ce que dit Git ? S'il l'a écrit (« Synchronisé »), cela ne dit pas encore que les pods ont pu être créés : descends d'un niveau — qui crée les pods, et où écrit-il quand il n'y arrive pas ?
 </details>
 
 <details><summary>Indice 2</summary>

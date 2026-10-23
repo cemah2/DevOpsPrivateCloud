@@ -134,10 +134,10 @@ _s10_rb_limite() {
         | ($r | length == 1)
           and ($n | IN("admin", "edit", "cluster-admin") | not)
           and all($r[0].rules[]?;
-                ((.resources // []) | any(. == "*" or . == "secrets" or . == "roles" or . == "rolebindings") | not)
+                ((.resources // []) | any(. == "*" or . == "secrets" or . == "roles" or . == "rolebindings" or . == "pods/exec" or . == "pods/attach") | not)
                 and ((.verbs // []) | any(. == "*" or . == "escalate" or . == "bind" or . == "impersonate") | not)))' >/dev/null 2>&1
 }
-check_cmd "$_s10_ns : oidc:$_s10_g lié à un rôle limité (ni Secrets, ni RBAC, ni joker)" _s10_rb_limite
+check_cmd "$_s10_ns : oidc:$_s10_g lié à un rôle limité (ni Secrets, ni RBAC, ni exec, ni joker)" _s10_rb_limite
 check_output "aucune autre liaison RBAC (cluster ou autre espace) pour AxiomDev" '^0$' _f2b_liaisons_hors "$_s10_ns" "$_s10_re"
 
 # --- 4. OpenBao, revue d'accès, documentation ---------------------------------------------------------

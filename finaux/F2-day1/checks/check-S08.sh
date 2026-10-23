@@ -18,10 +18,12 @@ _s08_ns="$_f2b_ns_data"
 # --- 1. Les traitements -----------------------------------------------------------------------------
 _s08_cj="$(kube get cronjobs -n "$_s08_ns" -o json 2>/dev/null)" || _s08_cj='{"items":[]}'
 _s08_lots() {
-  jq -e '[.items[] | select(.spec.jobTemplate.spec.template.spec.priorityClassName == "medisphere-lot")] | length >= 1' \
+  # Deux au moins : le chargement de S07 peut déjà être en medisphere-lot ; S08 ajoute les agrégats et
+  # l'export mensuel.
+  jq -e '[.items[] | select(.spec.jobTemplate.spec.template.spec.priorityClassName == "medisphere-lot")] | length >= 2' \
     <<<"$_s08_cj" >/dev/null 2>&1
 }
-check_cmd "$_s08_ns : au moins un CronJob en classe medisphere-lot" _s08_lots
+check_cmd "$_s08_ns : des CronJobs de traitement en classe medisphere-lot (agrégats, export mensuel)" _s08_lots
 _s08_requests() {
   jq -e '[.items[] | select(.spec.jobTemplate.spec.template.spec.priorityClassName == "medisphere-lot")
           | .spec.jobTemplate.spec.template.spec.containers[]

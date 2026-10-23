@@ -211,9 +211,14 @@ _s11_v2_actif() {
 
 _s11_v2_annuler() {
   [[ -n "$(_s11_lire crb)" ]] || return 0
-  # Supprimé seulement s'il porte encore la marque de la panne.
+  # Supprimé seulement s'il porte encore la marque de la panne, ou s'il est exactement tel que créé
+  # avant la pose des annotations (injection interrompue entre « create » et « annotate »).
   if _s11_kubectl get clusterrolebinding "$_S11_CRB" -o json 2>/dev/null |
-    jq -e '.metadata.annotations["workbook.medisphere.internal/panne"] == "F2-S11"' >/dev/null 2>&1; then
+    jq -e --arg g "oidc:$_f2b_groupe_axiom" '
+      .metadata.annotations["workbook.medisphere.internal/panne"] == "F2-S11"
+      or ((.metadata.annotations // {} | has("workbook.medisphere.internal/panne") | not)
+          and .roleRef.name == "view"
+          and ([.subjects[]? | [.kind, .name]] == [["Group", $g]]))' >/dev/null 2>&1; then
     _s11_kubectl delete clusterrolebinding "$_S11_CRB" --ignore-not-found >/dev/null 2>&1 &&
       _s11_journal "annulation : ClusterRoleBinding $_S11_CRB supprimé"
   fi

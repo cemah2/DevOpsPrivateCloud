@@ -34,7 +34,8 @@ resource "vault_database_secret_backend_connection" "statistiques" {
 }
 
 # data-analyste : personnes du groupe « data » (Hugo, Sarah) pour l'analyse ad hoc, en lecture, 8 h au
-#   plus (une journée de travail) ; connexion par « kubectl port-forward » vers statistiques-db-ro.
+#   plus (une journée de travail) ; connexion par « kubectl port-forward » vers statistiques-db-r (une seule instance : le Service -ro
+#   n'a aucun point de terminaison tant qu'il n'y a pas de réplica).
 # data-traitement : CronJobs de l'équipe (ESO, générateur VaultDynamicSecret), écriture dans stats,
 #   1 h ; la session prend le rôle stats_ecriture (les objets créés lui appartiennent, pas au compte
 #   temporaire : sinon DROP ROLE échouerait à la fin du bail).

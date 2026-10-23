@@ -11,8 +11,10 @@
 --     lisible par « mediagenda » seul : la vue s'exécute avec les droits de son propriétaire (vue
 --     classique, sans security_invoker), le lecteur de la vue ne voit jamais la clé.
 --   - Le texte libre (motif) et les coordonnées (contact_rappel) ne sortent pas.
---   - Les horodatages sont tronqués (jour et heure du rendez-vous, jour de la prise) : un horodatage à la
---     seconde près ré-identifie une personne qui connaît son propre rendez-vous.
+--   - Les horodatages sont tronqués (jour et demi-journée du rendez-vous, jour de la prise) : un
+--     horodatage précis ré-identifie une personne qui connaît son propre rendez-vous. L'HEURE ne sort pas
+--     non plus : un praticien n'a qu'un rendez-vous par début de créneau (index unique de V2), donc
+--     (praticien, jour, heure) désigne au plus deux rendez-vous ; à la demi-journée, une dizaine.
 -- Un pseudonyme reste une donnée PERSONNELLE au sens du RGPD (considérant 26) : la base Data est traitée
 -- comme telle (accès nominatifs, journaux, durée de conservation), seulement avec un risque réduit.
 
@@ -46,7 +48,8 @@ SELECT
     left(encode(hmac(convert_to('patient:' || lower(btrim(r.patient)), 'UTF8'), k.cle, 'sha256'), 'hex'), 32) AS patient_pseudo,
     left(encode(hmac(convert_to('praticien:' || lower(btrim(r.praticien)), 'UTF8'), k.cle, 'sha256'), 'hex'), 32) AS praticien_pseudo,
     (r.debut AT TIME ZONE 'Europe/Paris')::date                                AS jour,
-    extract(hour FROM r.debut AT TIME ZONE 'Europe/Paris')::smallint           AS heure,
+    CASE WHEN extract(hour FROM r.debut AT TIME ZONE 'Europe/Paris') < 13
+         THEN 'matin' ELSE 'apres-midi' END                                    AS demi_journee,
     extract(isodow FROM r.debut AT TIME ZONE 'Europe/Paris')::smallint         AS jour_semaine,
     r.duree_minutes,
     r.canal_rappel,

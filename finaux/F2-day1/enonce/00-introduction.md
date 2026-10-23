@@ -73,7 +73,7 @@ admin@adm01:~$ kubectl get applications.argoproj.io -n argocd | grep -Ev 'Synced
 admin@adm01:~$ kubectl get priorityclasses | grep medisphere
 ```
 
-Attendu : les checks verts ; l'étiquette `day0-v1` ; les locataires `mediagenda`, `medidoc`, `medinotif` à l'état `Active` ; aucune Application hors `Synced`/`Healthy` (la seconde commande ne doit afficher que l'en-tête) ; les quatre classes `medisphere-critique`, `-standard`, `-ci`, `-lot`. Si F1 n'a pas été fait, l'état de fin du bloc G suffit (`lab/bin/check 29 25` et ceux ci-dessus) : note-le dans `docs/accueil/README.md`.
+Attendu : les checks verts ; l'étiquette `day0-v1` ; les locataires `mediagenda`, `medidoc`, `medinotif` à l'état `Active` ; aucune Application hors `Synced`/`Healthy` (la commande sur les Applications ne doit afficher que l'en-tête) ; les quatre classes `medisphere-critique`, `-standard`, `-ci`, `-lot`. Si F1 n'a pas été fait, l'état de fin du bloc G suffit (`lab/bin/check 29 25` et ceux ci-dessus) : note-le dans `docs/accueil/README.md`.
 
 ## Personnages ajoutés
 
