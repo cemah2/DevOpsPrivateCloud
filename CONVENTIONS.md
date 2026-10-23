@@ -39,7 +39,7 @@
 │           ├── fichiers/      # Solutions complètes (code, configs) référencées par le corrigé
 │           └── pannes/        # Scripts d'injection de pannes (break & fix) — ils révèlent la panne
 ├── finaux/
-│   └── FN-slug/               # même structure que modules/
+│   └── FN-slug/               # même structure que modules/, fichiers par phases (§2)
 └── annexes/
     ├── prerequis.md           # Graphe des dépendances entre modules
     ├── certifications.md      # Correspondance certifications ↔ exercices
@@ -60,6 +60,8 @@ Chaque module est découpé en **5 paliers**, un fichier chacun :
 | 3. Production | `03-production.md` | HA, sécurité, automatisation, supervision, sauvegarde de la brique | ~25 % |
 | 4. Expert | `04-expert.md` | Break & fix, cas limites, performance, internals | ~20 % |
 | 5. Mini-projet | `05-mini-projet.md` | Livrer la brique dans l'infrastructure MédiSphère (intégration) | 1 projet |
+
+**Workbooks finaux** : pas de paliers ni de mini-projet. L'énoncé et le corrigé sont découpés en **phases** du scénario (`01-<phase>.md`, `02-<phase>.md`…, mêmes noms dans `corrige/`), avec des scénarios `F<N>-SXX` numérotés en continu ; le dernier scénario est la recette du final (étiquette sur `plateforme/medisphere`). Détails figés : `PLAN.md` §4.14.
 
 `00-introduction.md` contient : contexte MédiSphère du module, concepts clés (synthèse, pas un cours exhaustif — renvoyer à la doc officielle), schéma d'architecture du module, préparation de l'environnement.
 

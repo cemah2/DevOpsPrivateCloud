@@ -15,13 +15,16 @@
 #   symptome_EXX   affiche le symptôme tel qu'un utilisateur le rapporterait
 #   resume_EXX     une phrase de symptôme (utilisée par les exercices d'astreinte)
 #   main           if [[ -z "${WB_PANNES_LIB:-}" ]]; then main() { wb_main <NN> EXX <nb_variantes> "$@"; }; fi
+#                  (workbooks finaux : wb_main F<N> SXX <nb_variantes> "$@", fonctions panne_SXX_vN,
+#                  verifier_SXX, annuler_SXX, symptome_SXX ; clé et marqueur F<N>-SXX)
 #
 # Conventions d'état :
 #   - sur chaque hôte modifié : /var/lib/workbook/pannes.log (journal) et
 #     /var/lib/workbook/M<NN>-EXX.* (sauvegardes avant modification) ;
 #   - sur adm01 (poste qui lance les pannes) : un marqueur par panne active dans
 #     ~/.local/state/workbook/pannes-actives/M<NN>-EXX (contient le numéro de variante).
-#   Dans les fonctions, WB_EX vaut « M<NN>-EXX » (ex. M04-E41) et WB_VAR la variante.
+#   Dans les fonctions, WB_EX vaut « M<NN>-EXX » (ex. M04-E41) ou « F<N>-SXX » (ex. F3-S05)
+#   et WB_VAR la variante.
 
 WB_ETAT_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/workbook/pannes-actives"
 
@@ -180,8 +183,14 @@ wb_symptome() {
 wb_main() {
   local mod="$1" ex="$2" nb="$3"; shift 3
   local var="" annuler=0 cle
-  mod="$(printf '%02d' "$((10#$mod))")"
-  cle="M${mod}-${ex}"
+  if [[ "$mod" =~ ^[Ff][0-9]$ ]]; then
+    # Workbook final : clé F<N>-SXX (ex. F3-S05), lancé par « lab/bin/break F3 5 »
+    mod="${mod^^}"
+    cle="${mod}-${ex}"
+  else
+    mod="$(printf '%02d' "$((10#$mod))")"
+    cle="M${mod}-${ex}"
+  fi
   while (($#)); do
     case "$1" in
       --variante)
@@ -201,7 +210,7 @@ wb_main() {
     WB_VAR="${WB_VAR:-annulation}"
     "annuler_$ex"
     wb_marqueur_suppr "$cle"
-    echo "Panne $cle annulée : l'état sain a été restauré. Contrôle : lab/bin/check $mod ${ex#E}"
+    echo "Panne $cle annulée : l'état sain a été restauré. Contrôle : lab/bin/check $mod ${ex#[ES]}"
     return 0
   fi
 
@@ -226,7 +235,7 @@ wb_main() {
   # Contrôle sur place que la panne est effective (si le script le prévoit).
   if declare -F "verifier_$ex" >/dev/null && ! "verifier_$ex"; then
     echo "La panne n'a pas pu être constatée après injection : annulation, rien n'est cassé." >&2
-    echo "Vérifie que le lab est sain (lab/bin/check $mod ${ex#E}) puis relance." >&2
+    echo "Vérifie que le lab est sain (lab/bin/check $mod ${ex#[ES]}) puis relance." >&2
     "annuler_$ex" || true
     return 1
   fi
