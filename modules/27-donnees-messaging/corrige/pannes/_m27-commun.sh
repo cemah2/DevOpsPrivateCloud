@@ -26,7 +26,7 @@
 #   - l'auto-synchronisation d'Argo CD n'est jamais désactivée : rafraîchissement ou opération de
 #     synchronisation seulement.
 #
-# Variables facultatives de lab/lab.env (voir corrige/.lab-env.txt) :
+# Variables facultatives de lab/lab.env (voir lab/lab.env.example, section bloc G) :
 #   WB_M27_IMAGE_AGENDA         image du témoin de trafic (défaut : celle de MédiAgenda en recette)
 #   WB_M27_TRAFIC_URL           URL publiée de MédiAgenda recette
 #   WB_M27_APP_AGENDA           Application Argo CD de MédiAgenda recette (défaut mediagenda-recette)
