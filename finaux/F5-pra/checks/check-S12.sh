@@ -16,27 +16,27 @@ require_cmd kubectl jq curl dig ssh
 
 _f5_s12_t0="$(_f5e_t0 2>/dev/null || true)"
 _f5_s12_levee="$(_f5e_levee 2>/dev/null || true)"
-check_cmd "T0 et heure de levée de l'isolement lisibles sur gw01 (/var/lib/workbook/f5-t0, f5-levee)" \
+check_cmd "T0 (adm02 ou gw01) et heure de levée de l'isolement (gw01) lisibles dans /var/lib/workbook/" \
   test -n "$_f5_s12_t0" -a -n "$_f5_s12_levee"
 
 # 1. Isolement levé, DNS revenu.
-_f5_s12_sans_table() { ! _f5e_sur "$1" 'sudo -n nft list tables' 2>/dev/null | grep -q 'f5_sinistre' && _f5e_sur "$1" true; }
+_f5_s12_sans_table() { ! _f5p_sur "$1" 'sudo -n nft list tables' 2>/dev/null | grep -q 'f5_sinistre' && _f5p_sur "$1" true; }
 check_cmd "gw01 : plus de table f5_sinistre" _f5_s12_sans_table gw01
 check_cmd "gw02 : plus de table f5_sinistre" _f5_s12_sans_table gw02
 _f5_s12_cname() { dig +short +time="$WB_TIMEOUT" +tries=1 "@$2" "$1" CNAME 2>/dev/null | grep -Eq '\.apps\.par1\.medisphere\.internal\.?$'; }
-_f5_s12_cname2() { _f5_s12_cname "$1" "$_F5E_DNS01" && _f5_s12_cname "$1" "$_F5E_DNS03"; }
+_f5_s12_cname2() { _f5_s12_cname "$1" "$_f5p_dns01" && _f5_s12_cname "$1" "$_f5p_dns03"; }
 for _f5_n in "${_F5E_NOMS[@]}"; do
   check_cmd "dns01 et dns03 : $_f5_n → *.apps.par1.medisphere.internal" _f5_s12_cname2 "$_f5_n"
   _f5_s12_site="$(_f5e_site "$_f5_n" 2>/dev/null || true)"
   check_cmd "$_f5_n répond (2xx) avec X-MediSphere-Site: par1 (reçu : ${_f5_s12_site:-aucune réponse})" test "$_f5_s12_site" = par1
 done
 _f5_s12_serie() { dig +short +time="$WB_TIMEOUT" +tries=1 "@$1" medisphere.internal SOA 2>/dev/null | awk '{print $3}'; }
-_f5_s12_s1="$(_f5_s12_serie "$_F5E_DNS01" || true)"
-_f5_s12_s3="$(_f5_s12_serie "$_F5E_DNS03" || true)"
+_f5_s12_s1="$(_f5_s12_serie "$_f5p_dns01" || true)"
+_f5_s12_s3="$(_f5_s12_serie "$_f5p_dns03" || true)"
 check_cmd "medisphere.internal : même numéro de série sur dns01 et dns03 (${_f5_s12_s1:-?} / ${_f5_s12_s3:-?})" \
   test -n "$_f5_s12_s1" -a "$_f5_s12_s1" = "$_f5_s12_s3"
 _f5_s12_secondaire() {
-  _f5e_sur "$_f5e_dns03" 'sudo -n pdnsutil zone list-all secondary 2>/dev/null || sudo -n pdnsutil list-all-zones secondary' 2>/dev/null \
+  _f5p_sur "$_f5e_dns03" 'sudo -n pdnsutil zone list-all secondary 2>/dev/null || sudo -n pdnsutil list-all-zones secondary' 2>/dev/null \
     | grep -qx 'medisphere.internal\.\{0,1\}'
 }
 check_cmd "dns03 : la zone medisphere.internal est redevenue secondaire" _f5_s12_secondaire
@@ -68,13 +68,13 @@ if ((_f5_s12_rc == 2)); then
 else
   check_cmd "réplique de PAR2 à moins de 10 min de PAR1 (cnpg_pg_replication_lag)" test "$_f5_s12_rc" -eq 0
 fi
-check_cmd "s3-02 : réplication filer.sync depuis s3-01 reprise" _f5e_p_filersync
+check_cmd "s3-02 : réplication filer.sync depuis s3-01 reprise" _f5p_filersync_ok
 
 # 3. Rien de ce qui a été écrit pendant le PRA n'est perdu.
 _f5_s12_mesures="docs/pra/mesures/$_f5e_exercice"
 _f5_s12_temoins() {
   local c ids n=0 ok=0 id r
-  c="$(_f5e_fichier "$_f5e_depot_doc" "$_f5_s12_mesures/temoins-par2.csv" 2>/dev/null)" || return 1
+  c="$(_f5p_fichier "$_f5p_projet_doc" "$_f5_s12_mesures/temoins-par2.csv" 2>/dev/null)" || return 1
   ids="$(sed -n 's/^\([0-9][0-9]*\),.*/\1/p' <<<"$c")"
   (($(grep -c . <<<"$ids") >= 10)) || return 1
   while IFS= read -r id; do
@@ -87,7 +87,7 @@ _f5_s12_temoins() {
 check_cmd "témoins écrits à PAR2 pendant le PRA ($_f5_s12_mesures/temoins-par2.csv) tous servis par PAR1" _f5_s12_temoins
 _f5_s12_documents() {
   local c ids n=0 ok=0 id
-  c="$(_f5e_fichier "$_f5e_depot_doc" "$_f5_s12_mesures/medidoc-par2.csv" 2>/dev/null)" || return 1
+  c="$(_f5p_fichier "$_f5p_projet_doc" "$_f5_s12_mesures/medidoc-par2.csv" 2>/dev/null)" || return 1
   ids="$(grep -Eo '^[0-9a-f]{32}' <<<"$c")"
   [[ -n "$ids" ]] || return 1
   while IFS= read -r id; do
@@ -107,8 +107,8 @@ else
   check_cmd "mesures de ms-sonde-pra lisibles sur adm02 depuis adm01" false
 fi
 check_cmd "RB-351 publié (neutralisation, jetons CNPG, données MédiDoc, DNS)" \
-  _f5e_doc docs/pra/runbooks '^RB-351' 'neutralis' 'demotionToken' 'promotionToken' 'rclone|s3-02' 'dns03|DNS'
+  _f5p_doc_motif runbooks '^RB-351' 'neutralis' 'demotionToken' 'promotionToken' 'rclone|s3-02' 'dns03|DNS'
 check_cmd "fiche CHG-3512 publiée (fenêtre, coupure mesurée, retour arrière)" \
-  _f5e_doc "docs/pra/exercices/$_f5e_exercice" '^CHG-3512' 'coupure' 'retour arri(è|e)re'
+  _f5p_doc_motif "exercices/$_f5e_exercice" '^CHG-3512' 'coupure' 'retour arri(è|e)re'
 _f5_s12_clos() { _f5e_journal_pra gitlab 2>/dev/null | grep -Eq '\[cl(ô|o)ture\]'; }
-check_cmd "main courante INC-6109 sur main de $_f5e_depot_doc, incident clos" _f5_s12_clos
+check_cmd "main courante INC-6109 sur main de $_f5p_projet_doc, incident clos" _f5_s12_clos

@@ -15,23 +15,23 @@ require_cmd kubectl jq curl dig git
 
 _f5_s10_horloge() {
   local t
-  t="$(_f5e_sur "$_f5e_s302" 'chronyc -n tracking 2>/dev/null; chronyc -n sources 2>/dev/null')" || return 1
+  t="$(_f5p_sur "$_f5e_s302" 'chronyc -n tracking 2>/dev/null; chronyc -n sources 2>/dev/null')" || return 1
   grep -Eq 'Leap status *: Normal' <<<"$t" || return 1
   # Source retenue (« ^* ») ailleurs qu'à PAR1.
   grep -E '^\^\*' <<<"$t" | grep -vq ' 10\.10\.' || return 1
   # Écart absolu avec adm02 inférieur à 5 s.
   local d
-  d="$(_f5e_sur "$_f5e_s302" 'date +%s')" || return 1
+  d="$(_f5p_sur "$_f5e_s302" 'date +%s')" || return 1
   (( (d - $(date +%s)) ** 2 < 25 ))
 }
 check_cmd "s3-02 : horloge synchronisée sur une source joignable de PAR2, écart < 5 s" _f5_s10_horloge
 
-_f5_s10_resout() { dig +short +time="$WB_TIMEOUT" +tries=1 "@$_F5E_DNS03" "$1" A 2>/dev/null | grep -Eq '^[0-9]'; }
+_f5_s10_resout() { dig +short +time="$WB_TIMEOUT" +tries=1 "@$_f5p_dns03" "$1" A 2>/dev/null | grep -Eq '^[0-9]'; }
 check_cmd "dns03 (récurseur) résout s3-02.par2.medisphere.internal" _f5_s10_resout s3-02.par2.medisphere.internal
 check_cmd "dns03 (récurseur) résout mediagenda.medisphere.internal" _f5_s10_resout mediagenda.medisphere.internal
 _f5_s10_relais() {
   local c
-  c="$(_f5e_sur "$_f5e_dns03" 'sudo -n cat /etc/powerdns/recursor.yml' 2>/dev/null)" || return 1
+  c="$(_f5p_sur "$_f5e_dns03" 'sudo -n cat /etc/powerdns/recursor.yml' 2>/dev/null)" || return 1
   grep -q 'forward_zones' <<<"$c" || return 1
   ! grep -Eq '10\.10\.20\.(10|16)' <<<"$c"
 }
@@ -39,7 +39,7 @@ check_cmd "dns03 : le récurseur ne renvoie aucune zone vers les autoritaires de
 
 _f5_s10_miroir() {
   local t
-  t="$(_f5e_sur "$_f5e_adm02" 'sudo -n sshd -T -C user=miroir,host=k8s-par2-n01,addr=10.20.20.50' 2>/dev/null)" || return 1
+  t="$(_f5p_sur "$_f5e_adm02" 'sudo -n sshd -T -C user=miroir,host=k8s-par2-n01,addr=10.20.20.50' 2>/dev/null)" || return 1
   if grep -qi '^allowusers' <<<"$t"; then grep -i '^allowusers' <<<"$t" | grep -qw miroir || return 1; fi
   if grep -qi '^denyusers' <<<"$t"; then grep -i '^denyusers' <<<"$t" | grep -qw miroir && return 1; fi
   return 0

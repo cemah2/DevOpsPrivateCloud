@@ -15,6 +15,12 @@ seaweedfs_identites:
     cle_acces: "{{ vault_seaweedfs_cnpg_par2_cle_acces }}"
     cle_secrete: "{{ vault_seaweedfs_cnpg_par2_cle_secrete }}"
     actions: [Read:cnpg-k8s-par1, List:cnpg-k8s-par1, Read:cnpg-k8s-par2, Write:cnpg-k8s-par2, List:cnpg-k8s-par2]
+  # CloudNativePG de k8s-par1 (S06, lu au retour S12) : LIT l'archive de PAR2, rien d'autre.
+  # (List oublié lors de l'exercice 2026-1 : écart E6 du rapport, corrigé ici.)
+  - nom: cnpg-par1-lecture
+    cle_acces: "{{ vault_seaweedfs_cnpg_par1_lecture_cle_acces }}"
+    cle_secrete: "{{ vault_seaweedfs_cnpg_par1_lecture_cle_secrete }}"
+    actions: [Read:cnpg-k8s-par2, List:cnpg-k8s-par2]
   # Copie de MédiDoc (minuterie de s3-02) : écrit la copie.
   - nom: copie-medidoc
     cle_acces: "{{ vault_seaweedfs_copie_medidoc_cle_acces }}"

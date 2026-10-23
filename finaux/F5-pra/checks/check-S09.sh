@@ -21,10 +21,10 @@ fi
 _f5_s09_par1_coupe() { ! curl -s -o /dev/null --max-time 3 "https://git01.par1.medisphere.internal/" 2>/dev/null; }
 check_cmd "PAR1 reste injoignable depuis PAR2 (isolement non levé)" _f5_s09_par1_coupe
 
-_f5_s09_cname() { dig +short +time="$WB_TIMEOUT" +tries=1 "@$_F5E_DNS03" "$1" CNAME 2>/dev/null | grep -Eq '\.apps\.par2\.medisphere\.internal\.?$'; }
+_f5_s09_cname() { dig +short +time="$WB_TIMEOUT" +tries=1 "@$_f5p_dns03" "$1" CNAME 2>/dev/null | grep -Eq '\.apps\.par2\.medisphere\.internal\.?$'; }
 _f5_s09_ttl() {
   local t
-  t="$(dig +noall +answer +time="$WB_TIMEOUT" +tries=1 "@$_F5E_DNS03" -p 5300 "$1" CNAME 2>/dev/null | awk '{print $2; exit}')" || return 1
+  t="$(dig +noall +answer +time="$WB_TIMEOUT" +tries=1 "@$_f5p_dns03" -p 5300 "$1" CNAME 2>/dev/null | awk '{print $2; exit}')" || return 1
   [[ -n "$t" ]] && ((t <= 300))
 }
 for _f5_n in "${_F5E_NOMS[@]}"; do
@@ -56,7 +56,7 @@ check_cmd "k8s-par2 : $_F5E_CNPG_PAR2 est PRIMAIRE et sain" \
   _f5e_kq2 "($_F5E_JQ_PRIMAIRE) and $_F5E_JQ_SAIN" cluster "$_F5E_CNPG_PAR2" -n "$_F5E_NS_PROD"
 _f5_s09_temoin() {
   local j
-  j="$(_f5e_kube2 get cronjob temoin-rpo -n "$_F5E_NS_PROD" -o json 2>/dev/null)" || return 1
+  j="$(_f5p_kube get cronjob temoin-rpo -n "$_F5E_NS_PROD" -o json 2>/dev/null)" || return 1
   jq -e --argjson t0 "${_f5_s09_t0:-0}" '((.spec.suspend // false) | not)
     and ((.status.lastSuccessfulTime // "1970-01-01T00:00:00Z") | fromdateiso8601) > $t0
     and ((now - ((.status.lastSuccessfulTime // "1970-01-01T00:00:00Z") | fromdateiso8601)) < 600)' >/dev/null 2>&1 <<<"$j"

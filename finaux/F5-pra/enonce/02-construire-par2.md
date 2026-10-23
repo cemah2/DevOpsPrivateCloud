@@ -31,7 +31,7 @@ Prérequis de la phase : S01 et S02 publiés ; l'ADR-0350 décidé par Claire. L
 - La zone `par2.medisphere.internal` et la zone inverse `20.10.in-addr.arpa` sont sur le primaire `dns01` (écrites par l'API, M06) ; les transferts sont signés par la clé TSIG `axfr-par1`. La zone parente `medisphere.internal` est générée par le rôle `powerdns_auth`.
 - Noms globaux à créer dans `medisphere.internal` : `mediagenda`, `medidoc`, `rdv` → CNAME (TTL **60 s**) vers les noms de PAR1 (`mediagenda.apps.par1.medisphere.internal`, `medidoc-recette.apps.par1.medisphere.internal`, `rdv.par1.medisphere.internal`).
 - Valeurs figées : voir l'introduction (pool `par2`, étiquette `site-par2`, stockage `par2-vms`, `vmbr2`, table `inet par2`, `wg1` 10.255.3.1/24 UDP 51823, VMID et adresses). État OpenTofu : compartiment **`tofu-par2`** de `s3-02`, clé **`envs/par2/terraform.tfstate`**.
-- Les checks attendent une archive de la configuration de PBS **`/root/f5/pbs-config-<AAAAMMJJ>.tar.gz`** sur `hp01` **et** une copie dans `~/f5/` de `adm01`.
+- Les checks attendent une archive de la configuration de PBS **`/root/f5/pbs-config-<AAAAMMJJ>.tar.gz`** sur `hp01` **et** une copie dans `~/f5/` de `adm01`, et la fiche de changement dans **`docs/changements/fiches/CHG-3503-<sujet>.md`** (convention du F4).
 
 **Travail demandé**
 
@@ -100,7 +100,7 @@ Depuis Proxmox VE 8, utiliser un pont pour une carte de VM demande un droit sur 
 - **Code** : GitLab CE `git01` ; les *push mirrors* (SSH ou HTTPS) sont disponibles dans l'édition gratuite ; miroirs attendus sur `adm02` dans `/srv/miroirs/<groupe>/<projet>.git` (dépôts nus), compte `miroir`.
 - **Images** : Harbor `registry.par1.medisphere.internal`, projets `medisphere` (images signées, Cosign 3, clé `transit/cosign-medisphere`, clé publique `docs/registre/cosign.pub`), `charts`, caches publics ; `reg02` (VMID 1053, 10.20.20.18) est un `registry:3` ; le runner **`k8s-par1-protege`** (jobs `ref_protected`, espace `ci-jobs-protege`) est le seul à manipuler la clé de signature et à promouvoir.
 - RPO de MédiAgenda : 15 min (S01, si tu ne l'as pas changé) ; la base de production archive sous le nom de serveur **`mediagenda-db-prod-day0`** dans `cnpg-k8s-par1`.
-- Les checks attendent : un document **`docs/pra/mesures/retard-replication.md`** ; une unité systemd de `filer.sync` active sur `s3-02` (nom libre, contenant `filer-sync`) ; une minuterie systemd de copie MédiDoc active sur `s3-02` (nom libre, contenant `medidoc`) ; dans `reg02`, le dépôt `medisphere/mediagenda-api` avec le *digest* déployé en production et sa signature.
+- Les checks attendent : un document **`docs/pra/mesures/retard-replication.md`** ; une ou plusieurs unités systemd de `filer.sync` actives sur `s3-02` (noms libres : le check les reconnaît à leur commande `weed filer.sync`, unité simple ou instances d'une unité modèle `@`) ; une minuterie systemd de copie MédiDoc active sur `s3-02` (nom libre, contenant `medidoc`) ; dans `reg02`, le dépôt `medisphere/mediagenda-api` avec le *digest* déployé en production et sa signature.
 
 **Travail demandé**
 
@@ -122,7 +122,7 @@ Contraintes :
 - [ ] Le WAL le plus récent de `mediagenda-db-prod-day0` présent dans `cnpg-k8s-par1` de `s3-02` a moins de 15 min (ou ton RPO).
 - [ ] L'unité de `filer.sync` est active sur `s3-02` ; `s3-02` contient les compartiments de sauvegarde retenus et pas `ci-cache`.
 - [ ] `medidoc-documents` existe sur `s3-02`, alimenté par une minuterie active dont la dernière exécution a réussi.
-- [ ] Les miroirs de `adm02` existent pour les projets retenus, et leur branche `main` est celle de GitLab (ou en retard de moins d'une heure).
+- [ ] Les miroirs de `adm02` existent pour les projets retenus, et leur branche `main` est celle de GitLab (ou en retard de moins d'une heure) ; le compte `miroir` n'a pas de shell interactif.
 - [ ] `reg02` sert l'image de MédiAgenda déployée en production (même *digest*) et sa signature Cosign se vérifie avec `cosign.pub`.
 - [ ] `retard-replication.md` et RB-354 sont publiés ; une alerte existe sur le retard de chaque flux.
 
@@ -251,9 +251,9 @@ Contraintes :
 - Aucune charge applicative ne tourne à PAR2 en veille ; la mémoire du nœud reste sous 5 Go.
 
 **Critères de réussite**
-- [ ] `k8s-par2` a un nœud `Ready` (1.36), Cilium avec une `CiliumL2AnnouncementPolicy` et le pool `lb-par2` (10.20.20.200-239) ; `gw-par2` est programmée en 10.20.20.200.
+- [ ] `k8s-par2` a un nœud `Ready` (1.36) sans *taint* `NoSchedule`, Cilium avec une `CiliumL2AnnouncementPolicy` et le pool `lb-par2` (10.20.20.200-239) ; `gw-par2` est programmée en 10.20.20.200.
 - [ ] Le certificat présenté par `gw-par2` est émis par « MédiSphère PAR2 Intermediate CA » et couvre `mediagenda.medisphere.internal`.
-- [ ] `mediagenda-db-par2` est sain, en réplica, avec `replica.primary: mediagenda-db` ; à PAR1, `mediagenda-db` déclare la même topologie.
+- [ ] `mediagenda-db-par2` est sain, en réplica, avec `replica.primary: mediagenda-db`, lit l'archive de PAR1 sous son `serverName` et dispose d'une archive propre dans `cnpg-k8s-par2` ; à PAR1, `mediagenda-db` déclare la même topologie.
 - [ ] Les HTTPRoute de MédiAgenda posent `X-MediSphere-Site` (`par2` à PAR2) ; une requête à `mediagenda.apps.par1.medisphere.internal` renvoie `X-MediSphere-Site: par1`.
 - [ ] À PAR2, aucun pod applicatif ne tourne dans `mediagenda-prod`, `medidoc-recette`, `legacy-rdv-prod`, `medinotif-prod` (hors base de secours) ; les ExternalSecrets de `mediagenda-prod` sont synchronisés.
 - [ ] La sonde `ms-sonde-pra` tourne sur `adm02` : sa dernière mesure de `mediagenda.medisphere.internal` a moins de 2 min, en 2xx, `site` = `par1`.

@@ -20,7 +20,7 @@ Clés **gérées par MédiSphère** dans OpenBao (moteur `transit`), **une par u
 
 | Clé | Ce qu'elle protège | Mécanisme |
 |---|---|---|
-| `transit/ghsv-donnees` (cible de production, pas dans le lab) | champs identifiants des rendez-vous (patient, contact du rappel, motif) dans la base, **et donc** dans ses sauvegardes, ses WAL archivés, son réplica de PAR2 et les exports | chiffrement **applicatif** par MédiAgenda (chiffrement d'enveloppe : une clé de données par enregistrement ou par lot, chiffrée par `transit`) — développement DEV-3707 |
+| `transit/ghsv-donnees` (cible de production, pas dans le lab) | champs identifiants des rendez-vous (patient, contact du rappel, motif) dans la base, **et donc** dans ses sauvegardes, ses WAL archivés, son réplica de PAR2 et les exports | chiffrement **applicatif** par MédiAgenda (chiffrement d'enveloppe : une clé de données par enregistrement ou par lot, chiffrée par `transit`) — développement DEV-3704 |
 | `transit/ghsv-sauvegardes` | pièces jointes et sauvegardes de la base dans le stockage objet | chiffrement côté serveur du stockage objet avec un KMS externe (Ceph RGW SSE-KMS avec OpenBao en moteur `transit` : compatibilité **à confirmer**) ; à défaut, chiffrement côté client par l'application avant dépôt |
 | `transit/ghsv-exports` | exports de réversibilité et restitutions de journaux | chiffrement d'enveloppe de l'archive livrée (clé de données à usage unique ; remise au GHSV par un canal séparé) |
 | `transit/ghsv-signature` (signature, pas chiffrement) | manifestes des exports | le GHSV vérifie l'origine et l'intégrité de l'export avec la clé publique |
@@ -43,7 +43,7 @@ Règles :
 
 ## Conséquences
 
-- Développement : DEV-3707 (chiffrement d'enveloppe dans MédiAgenda, migration des données existantes, tests), estimé à 10 jours.
+- Développement : DEV-3704 (chiffrement d'enveloppe dans MédiAgenda, migration des données existantes, tests), estimé à 10 jours.
 - Disponibilité : OpenBao devient une dépendance **en lecture et en écriture** de la prise de rendez-vous (avant : seulement au démarrage, pour les secrets). Cache local des clés de données déchiffrées (durée courte) et supervision d'OpenBao comme composant critique ; PRA : `bao-par2` doit être restauré **avant** la reprise du GHSV (ordre du F5).
 - Performance : un appel `transit` par lot d'écritures ; à mesurer en F7-S07 (impact sur le p95).
 - Preuves : démonstration de destruction dans le lab (clé de recette détruite → sauvegarde de recette illisible) en F7-S07 ou S10.

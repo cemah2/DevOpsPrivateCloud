@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# controles-planifies — P-CTL-01 (F6-S08 à S10) : résultat du dernier pipeline PLANIFIÉ de main des
+# contrôles de remédiation (intégrité de l'archive d'audit, exceptions de vulnérabilité échues, kit
+# forensique). Un contrôle qui ne tourne plus, ou qui échoue, se voit dans le lot du lendemain.
+# Identité : GITLAB_TOKEN (read_api, comme P-IAM-03).
+# (dans le dépôt : à côté des collecteurs de S02 ; ici, corrigé du F6-S02)
+# shellcheck source=../../../../F6-S02/outils/preuves/collecteurs/_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+exige GITLAB_TOKEN
+GL="${GITLAB_URL:-https://git01.par1.medisphere.internal}"
+res="[]"
+for p in plateforme/observabilite plateforme/politiques plateforme/outils; do
+  r="$(http_jeton "$GL/api/v4/projects/$(enc "$p")/pipelines?ref=main&source=schedule&per_page=1" "$GITLAB_TOKEN" 'PRIVATE-TOKEN:')"
+  res="$(jq -c --arg p "$p" --argjson r "$r" '. + [{projet: $p, statut: ($r[0].status // "aucun"),
+    date: ($r[0].updated_at // null), url: ($r[0].web_url // null)}]' <<<"$res")"
+done
+entete_preuve | jq -S --argjson r "$res" '. + {controles: $r}'
+jq -e 'all(.[]; .statut == "success")' >/dev/null <<<"$res"

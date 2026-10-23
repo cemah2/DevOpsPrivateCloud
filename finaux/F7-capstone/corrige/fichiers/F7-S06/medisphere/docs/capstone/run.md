@@ -47,7 +47,7 @@
 
 ## 5. Rapport mensuel (EXP-03, NF-21)
 
-Généré automatiquement le 2 du mois (F7-S10) à partir de Prometheus, Loki, des fiches de changement et des tickets ; relu par Nadia Roussel et toi ; envoyé au GHSV avant le 10. Contenu : disponibilité (NF-01, méthode rappelée, minutes indisponibles et causes), latence p95/p99, incidents et post-mortems, maintenances (durée annoncée et mesurée), capacité (pointe, marge, prévision), sécurité (vulnérabilités, accès de notre personnel, incidents), changements réalisés et prévus, état des actions, rotation des clés (NF-18).
+Généré automatiquement le 1er du mois à 06:15 (F7-S10, RB-374) à partir de Prometheus, Loki, des fiches de changement et des tickets ; relu par Nadia Roussel et toi ; envoyé au GHSV avant le 10. Contenu : disponibilité (NF-01, méthode rappelée, minutes indisponibles et causes), latence p95/p99, incidents et post-mortems, maintenances (durée annoncée et mesurée), capacité (pointe, marge, prévision), sécurité (vulnérabilités, accès de notre personnel, incidents), changements réalisés et prévus, état des actions, rotation des clés (NF-18).
 
 ## 6. Changements chez le GHSV
 
@@ -57,7 +57,7 @@ Processus du F4 (fiches CHG, go/no-go, mesure) ; en plus : préavis de **5 jours
 
 | Action | Pour qui | Quand |
 |---|---|---|
-| Runbooks RB-370 (exploitation du service GHSV, à écrire à la notification), RB-371 (réversibilité et fin de contrat d'un client), RB-372 (identité fédérée du client), RB-373 (contrat d'API du client), RB-374 (engagements et PRA du client, avec la réconciliation des rendez-vous) | toute l'astreinte | avant la vague 1 (RB-370, RB-372, RB-373), avant le premier test de PRA (RB-371, RB-374) |
+| Runbooks RB-370 (exploitation du service GHSV, avec la réconciliation des rendez-vous après un PRA ; à écrire à la notification), RB-371 (réversibilité et fin de contrat d'un client), RB-372 (identité fédérée du client), RB-373 (contrat d'API du client), RB-374 (rapport mensuel d'un client) ; PRA du client : `pra-ghsv.md` et RB-350/RB-351 du F5 | toute l'astreinte | avant la vague 1 (RB-370, RB-372, RB-373), avant le premier test de PRA (RB-371, RB-374) |
 | Binôme d'astreinte : chaque nouvel arrivant fait deux semaines en second avant d'être primaire | nouvel ingénieur, Lucas Martin | dès l'arrivée |
 | Exercice sur table d'un P1 du GHSV (panne de la base, IdP du GHSV en panne, fuite suspectée) | astreinte, support | février, puis trimestriel |
 | Journée de jeu (M29) sur la recette du GHSV | Plateforme et MédiAgenda | trimestrielle |

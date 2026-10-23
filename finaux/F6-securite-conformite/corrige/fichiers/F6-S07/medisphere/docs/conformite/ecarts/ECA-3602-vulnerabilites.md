@@ -1,3 +1,19 @@
+---
+id: ECA-3602
+titre: "Vulnérabilités sans délai de traitement, exceptions sans échéance"
+origine: audit-2026 (Auditia Santé, Hélène Mercier)
+mesures: [8.8, 5.36, 8.19, HDS activité 4]
+gravite: mineur
+statut: ouvert
+ouvert-le: 2026-11-18
+echeance: 2026-12-18
+responsable: sophie.laurent
+remediation: SEC-3609
+clos-le:
+preuve:
+valideur:
+---
+
 # ECA-3602 — Vulnérabilités sans délai de traitement, exceptions sans échéance
 
 > Audit à blanc (Auditia Santé), constat du 2026-11-18, formalisé en F6-S07 (SEC-3607).
@@ -34,3 +50,6 @@ Sophie Laurent (politique), Plateforme (outillage).
 
 ## Statut
 ouvert
+
+## Preuve de clôture
+_(à la clôture : lot `ms-preuves` cité dans l'en-tête, et ce qu'il contient)_

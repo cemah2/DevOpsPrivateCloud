@@ -1,3 +1,19 @@
+---
+id: ECA-3604
+titre: "Revue des accès non périodique, comptes orphelins"
+origine: audit-2026 (Auditia Santé, Hélène Mercier)
+mesures: [5.18, 5.15, 6.5, 8.2, HDS activité 5]
+gravite: mineur
+statut: en cours
+ouvert-le: 2026-11-18
+echeance: 2026-12-11
+responsable: sophie.laurent
+remediation: SEC-3603
+clos-le:
+preuve:
+valideur:
+---
+
 # ECA-3604 — Revue des accès non périodique, comptes orphelins
 
 > Audit à blanc (Auditia Santé), constat du 2026-11-18, formalisé en F6-S07 (SEC-3607).
@@ -34,3 +50,6 @@ Deuxième revue (2026-12) faite et documentée : 2026-12-11.
 
 ## Statut
 en cours
+
+## Preuve de clôture
+_(à la clôture : lot `ms-preuves` cité dans l'en-tête, et ce qu'il contient)_

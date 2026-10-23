@@ -28,9 +28,9 @@ Le courriel est arrivé à 8 h 02, depuis le profil d'acheteur d'un groupement h
 | Phase | Fichier | Scénarios | Ce qui en sort | Durée indicative |
 |---|---|---|---|---|
 | 1. Comprendre le besoin | [`01-besoin.md`](01-besoin.md) | S01-S02 | analyse du cahier des charges, questions au client, exigences non fonctionnelles chiffrées et traçables | 7 à 9 h |
-| 2. Concevoir | [`02-concevoir.md`](02-concevoir.md) | S03-S06 | architecture de production sur deux sites, ADR, chiffrage sur cinq ans, planning, risques, organisation du run | 18 à 22 h |
-| 3. Livrer | [`03-livrer.md`](03-livrer.md) | S07-S11 | le client en code dans le lab (locataire `ghsv`), identité fédérée, contrats d'interface testés, engagements mesurés, démonstration sous incidents | 20 à 30 h |
-| 4. Soutenir | [`04-soutenir.md`](04-soutenir.md) | S12-S14 | dossier et support de soutenance, questions du jury, recette `capstone-v1` | 6 à 10 h |
+| 2. Concevoir | [`02-concevoir.md`](02-concevoir.md) | S03-S06 | architecture de production sur deux sites, ADR, chiffrage sur cinq ans, planning, risques, organisation du run | 17 à 22 h |
+| 3. Livrer | [`03-livrer.md`](03-livrer.md) | S07-S11 | le client en code dans le lab (locataire `ghsv`), identité fédérée, contrats d'interface testés, engagements mesurés, démonstration sous incidents | 22 à 29 h |
+| 4. Soutenir | [`04-soutenir.md`](04-soutenir.md) | S12-S14 | dossier et support de soutenance, questions du jury, recette `capstone-v1` | 7 à 10 h |
 
 Les phases 1 et 2 sont des **rédactions** : elles ne touchent à rien de ce qui tourne. Elles produisent pourtant les décisions que la phase 3 met en œuvre et que la phase 4 défend. Ne les bâcle pas : un jury pardonne une démonstration qui hoquette, pas un chiffre qu'on ne sait pas justifier.
 
@@ -106,13 +106,14 @@ Ces dates sont celles de la fiction : tu feras le final à ton rythme. Garde-les
 | Question au client | `Q-nn` | `Q-07` |
 | Hypothèse | `H-nn` | `H-04` |
 | Exigence non fonctionnelle de MédiSphère (ta reformulation mesurable) | `NF-nn` | `NF-01` |
-| Risque | `R-nn` | `R-12` |
+| Risque (registre de S06) | `RSQ-nn` | `RSQ-12` |
+| Réponse du GHSV aux candidats (S02) | `R-nn`, fixé par le GHSV | `R-11` |
 | Décision d'architecture | `ADR-037x` (`ADR-0370` à `ADR-0379`) | `ADR-0372` |
 | Runbook du final | `RB-370…` | — |
 
 **Tickets** : `PLAT-37xx` (plateforme) et `DEV-37xx` (développement), `xx` = numéro du scénario.
 
-**Objets du lab** (phase 3, détaillés dans [`03-livrer.md`](03-livrer.md)) : locataire `ghsv` déclaré dans `plateforme/equipes` (`equipes/ghsv.yaml`), espaces `ghsv-recette` et `ghsv-prod`, `https://ghsv.apps.par1.medisphere.internal` et `https://ghsv-recette.apps.par1.medisphere.internal`, clés `transit/ghsv-*` d'OpenBao, royaume Keycloak `ghsv-idp` sur `idp01` (le fournisseur d'identité **simulé** du GHSV), déclaré comme fournisseur d'identité dans le royaume `medisphere`. VMID 3700-3799 réservés à tes essais ; aucune VM n'est imposée.
+**Objets du lab** (phase 3, détaillés dans [`03-livrer.md`](03-livrer.md)) : locataire `ghsv` déclaré dans `plateforme/equipes` (`equipes/ghsv.yaml`), espaces `ghsv-recette` et `ghsv-prod`, `https://ghsv.apps.par1.medisphere.internal` et `https://ghsv-recette.apps.par1.medisphere.internal`, clés `transit/ghsv-*` d'OpenBao, royaume Keycloak `ghsv-idp` sur `idp01` (le fournisseur d'identité **simulé** du GHSV), déclaré comme fournisseur d'identité (alias `ghsv-idp`) dans le royaume `medisphere`. VMID 3700-3799 réservés à tes essais ; aucune VM n'est imposée.
 
 **Jury** (S13) : Claire Morel, Sophie Laurent, Karim Benali et Élodie Marchand, DSI du GHSV (personnage fictif, comme tout le groupement).
 

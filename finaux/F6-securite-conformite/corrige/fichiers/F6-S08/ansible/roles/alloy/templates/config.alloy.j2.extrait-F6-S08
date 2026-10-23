@@ -1,0 +1,30 @@
+{# roles/alloy/templates/config.alloy.j2 — EXTRAIT F6-S08 (SEC-3608) : dans le bloc des fichiers d'audit #}
+{# (M24-E26), REMPLACE le composant « loki.source.file "audit" » par ce qui suit. Les fichiers déclarés   #}
+{# avec un champ « horodatage » (nom du champ JSON qui porte l'heure de l'événement) sont datés à la      #}
+{# SOURCE ; sans ce champ, l'heure de lecture (quelques secondes de retard) reste, comme avant.            #}
+loki.source.file "audit" {
+	targets    = local.file_match.audit.targets
+	forward_to = [loki.process.audit_fichiers.receiver]
+}
+
+loki.process "audit_fichiers" {
+{% for f in alloy_audit_fichiers if f.horodatage is defined %}
+	// {{ f.chemin }} : heure de l'événement lue dans le champ « {{ f.horodatage }} » (RFC 3339, UTC).
+	stage.match {
+		selector = "{service=\"{{ f.service }}\", fichier=\"{{ f.fichier }}\"}"
+
+		stage.json {
+			expressions = { horodatage = "{{ f.horodatage }}" }
+		}
+
+		// Une ligne sans horodatage lisible garde l'heure de lecture : jamais une heure inventée.
+		stage.timestamp {
+			source            = "horodatage"
+			format            = "RFC3339Nano"
+			action_on_failure = "skip"
+		}
+	}
+
+{% endfor %}
+	forward_to = [loki.write.audit.receiver]
+}

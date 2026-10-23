@@ -79,6 +79,7 @@ politique de lecture posée pour preuves-lecture
       | jq -r '.data.data | "AWS_ACCESS_KEY_ID=\(.AWS_ACCESS_KEY_ID)\nAWS_SECRET_ACCESS_KEY=\(.AWS_SECRET_ACCESS_KEY)"' \
       > ~/.config/workbook/s3-preuves-conformite-lecture.env
   ```
+  Même commande, depuis `kv/plateforme/preuves/rgw-ecriture`, pour `~/.config/workbook/s3-preuves-conformite-depot.env` (identité de dépôt du kit forensique, S10-S12) : elle **écrit**, elle ne doit jamais servir aux checks.
 
 *2. Essais en GOVERNANCE* (rétention d'un jour), avec l'identité d'écriture chargée dans un sous-shell :
 

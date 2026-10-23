@@ -27,7 +27,7 @@
 - [ ] Enveloppe ouverte (E1, E2, E4, E6, E7, E9) ; trois gardiens de parts joignables.
 - [ ] `hp01` sain : PBS actif, mémoire libre ≥ 4 Go (`free -g`), aucune tâche PBS lourde (vérification, GC) : si oui, l'**arrêter** (`proxmox-backup-manager task stop <UPID>`) : la mémoire va au PRA.
 - [ ] Heure : `chronyc tracking` sur `hp01` synchronisé (sources hors PAR1).
-- [ ] Main courante ouverte sur `adm02` (`docs/pra/journal/<date>.md` du miroir de `plateforme/medisphere`) ; heure **T0** notée (première indisponibilité constatée ; exercice : `/var/lib/workbook/f5-t0` de `gw01`, connue de Sophie).
+- [ ] Main courante ouverte sur `adm02` (`docs/pra/journal/<date>.md` du miroir de `plateforme/medisphere`) ; heure **T0** notée (première indisponibilité constatée ; exercice : `/var/lib/workbook/f5-t0` de `adm02`, connue de Sophie).
 
 ## Vague 0 — Isoler et figer (15 min)
 
@@ -41,7 +41,7 @@
 
 1. `dns03` devient **primaire** des zones internes : sur `dns03`, chaque zone passe de « secondary » à « native » (`pdnsutil` de PowerDNS 5 : sous-commande de changement de type de zone, voir `pdnsutil --help` de ta version), API locale activée (variables `powerdns_auth_mode: primaire`, `powerdns_auth_api_active: true` dans `host_vars/dns03/`, playbook depuis `adm02`).
 2. `adm02` devient la **forge** : compte `admin` autorisé en écriture sur `/srv/miroirs` le temps du PRA ; toute modification du PRA est commitée là (message `PRA INC-6109 : …`).
-3. Supervision minimale : sonde `ms-sonde-pra` (minuterie de 15 s sur `adm02`) active ; `tail -f /var/lib/ms-sonde-pra/mesures.csv`.
+3. Sonde `ms-sonde-pra` (minuterie de 15 s sur `adm02`) active ; `tail -f /var/lib/ms-sonde-pra/mesures.csv`. (Le reste de la supervision minimale vient en vague 6.)
 
 **Condition de passage** : `dig @10.20.20.11 SOA medisphere.internal` répond ; `pdnsutil list-all-zones` de `dns03` montre les zones en `native` ; la sonde écrit (échecs attendus).
 
@@ -86,7 +86,8 @@ Dans l'ordre de la BIA : **MédiAgenda**, puis MédiNotif, MédiDoc, Legacy-RDV.
 ## Vague 6 — Mode dégradé
 
 - Messages : cabinets (bandeau, message vocal, courriel aux 20 plus gros), direction (toutes les 2 h), autorités si données perdues (Sophie, DPO).
-- Surveillance par vacations (toutes les heures) : sonde, `kubectl get pods -A`, mémoire de `hp01`, espace de `s3-02` et de `par2-vms`, retard de sauvegarde de `mediagenda-db-par2`.
+- Supervision minimale de PAR2 mise en service sur `adm02` (`objectifs.md` §4) : Prometheus, Alertmanager, Mailpit de secours ; alertes sur les noms globaux, la base de PAR2 (santé, archivage), la mémoire et le disque de `hp01` ; une alerte essayée jusqu'à la boîte de la cellule.
+- En attendant, et en complément, surveillance par vacations (toutes les heures) : sonde, `kubectl get pods -A`, mémoire de `hp01`, espace de `s3-02` et de `par2-vms`, retard de sauvegarde de `mediagenda-db-par2`.
 - Ce qui reste coupé : `objectifs.md` §3 (mode dégradé), livraisons gelées (exception : correctif d'urgence, annexe).
 
 ## Si une vague échoue

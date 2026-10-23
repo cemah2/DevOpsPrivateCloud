@@ -4,6 +4,8 @@ Le dossier est écrit (phases 1 et 2) : exigences chiffrées, architecture, déc
 
 Prérequis de la phase : phases 1 et 2 terminées (`docs/capstone/exigences.md`, `architecture.md`, ADR-0370 et suivantes sur `main`) ; F2 (`plateforme/equipes`), F5 (PAR2) et F6 (`ms-preuves`) terminés.
 
+Les réponses du GHSV aux candidats ([`ressources/S02/reponses-aux-candidats.md`](../ressources/S02/reponses-aux-candidats.md)) s'imposent aussi à la preuve de concept : R-14 et R-17 (clés, réversibilité : S07), R-16 (MFA à la charge du GHSV : S08), R-01, R-06 et R-07 (appels du DPI, pièces jointes hors v1, identifiants des praticiens : S09), R-09, R-10 et R-11 (mesure, centile, rendez-vous de la fenêtre perdue : S10).
+
 **Conventions de la phase** (valeurs figées, reprises par les checks) :
 
 | Élément | Valeur |
@@ -35,7 +37,7 @@ Prérequis de la phase : phases 1 et 2 terminées (`docs/capstone/exigences.md`,
 - Concevoir, outiller et **éprouver** un export de réversibilité.
 
 **Prérequis** : F2-S02 (format v1 et générateur), F2-S07 et F2-S10 (évolutions du format), M28 (Capsule), M25 (OpenBao, ESO, `transit`), M20 (Argo CD, `mediagenda/deploiement`), M27 (CNPG), F6-S09 (chiffrement des exports) ; phase 2 de ce final (ADR de l'hébergement du client).
-**Durée indicative** : 6 à 7 h.
+**Durée indicative** : 5 à 6 h.
 
 **Contexte technique**
 - Le format de `plateforme/equipes` ne change que **par ajout** (README du projet, « Évolutions du format après S02 ») : schéma, générateur, gabarits et tests dans la même MR, fichiers rendus portant l'en-tête « GÉNÉRÉ … NE PAS MODIFIER ICI ».
@@ -102,7 +104,7 @@ Une clé `transit` qui n'est utilisée que pour **envelopper** les clés de chif
 - Protéger une application sans authentification par un mandataire (OAuth2 Proxy) et prouver que le cloisonnement tient.
 
 **Prérequis** : M24 (Keycloak, `plateforme/identite`, fournisseur `keycloak/keycloak`, flux `navigateur-medisphere`, OAuth2 Proxy), F7-S07.
-**Durée indicative** : 7 à 8 h.
+**Durée indicative** : 6 à 8 h.
 
 **Contexte technique**
 - Le royaume `medisphere` est décrit dans `plateforme/identite/tofu/` ; le client d'OpenTofu `svc-tofu-keycloak` n'administre **que** ce royaume (il ne peut pas créer de royaume). Le royaume `ghsv-idp` simule un système **qui n'est pas le nôtre** : son code et son état sont séparés de ceux de `medisphere`, et son identité d'administration aussi.
@@ -231,10 +233,10 @@ Tenir deux contrats (les cabinets, le GHSV) sans dupliquer l'application : une c
 - Étendre un PRA existant à un nouveau locataire et mesurer sa couverture sans bascule réelle.
 
 **Prérequis** : M21 (Pyrra, Thanos, sondes de `mon01`), F2-S08 (`ms-showback`), F4-S02 (sonde de continuité), F5 (PAR2 : réplication, `k8s-par2`, témoin de RPO, noms globaux), F7-S07.
-**Durée indicative** : 5 à 6 h.
+**Durée indicative** : 4 à 6 h.
 
 **Contexte technique**
-- Engagements du cahier des charges : ENF-03 (99,9 % de disponibilité **mensuelle** de la prise de rendez-vous, web et API), ENF-04 (maintenances annoncées 5 jours ouvrés avant, entre 22 h et 6 h, 4 h par mois au plus), ENF-05 (95 % des requêtes de l'API en moins de 300 ms sur le mois, **aucune** au-delà d'une seconde, mesurés au point d'entrée), ENF-06 (RTO 4 h, RPO 15 min), EXP-03 (rapport mensuel avant le 10), EXP-07 (méthode de mesure décrite).
+- Engagements du cahier des charges : ENF-03 (99,9 % de disponibilité **mensuelle** de la prise de rendez-vous, web et API), ENF-04 (maintenances annoncées 5 jours ouvrés avant, entre 22 h et 6 h, 4 h par mois au plus), ENF-05 (95 % des requêtes de l'API en moins de 300 ms sur le mois, **aucune** au-delà d'une seconde, mesurés au point d'entrée ; le second seuil peut porter sur un centile, R-10), ENF-06 (RTO 4 h, RPO 15 min ; ENF-07 maintenue, R-11), EXP-03 (rapport mensuel avant le 10), EXP-07 (méthode de mesure décrite ; la mesure du titulaire fait foi si sa méthode est validée en comité, R-09).
 - Pyrra calcule des objectifs sur des fenêtres **glissantes** ; la rétention locale de Prometheus est de 15 jours, Thanos garde les données brutes 30 jours (M21).
 - Le PRA de MédiAgenda (F5) repose sur une réplique CNPG en topologie distribuée dans `k8s-par2`, alimentée depuis `s3-02`, des applications à 0 réplica en veille, un CronJob `temoin-rpo` et la sonde `ms-sonde-pra` de `adm02`. Le GHSV doit en bénéficier sans bascule de MédiAgenda ni du GHSV.
 - Les checks lisent le cluster de secours avec un kubeconfig en lecture (variable `WB_F7_PAR2_KUBECONFIG` de `lab/lab.env`) ; sans lui, les contrôles de PAR2 sont ignorés.

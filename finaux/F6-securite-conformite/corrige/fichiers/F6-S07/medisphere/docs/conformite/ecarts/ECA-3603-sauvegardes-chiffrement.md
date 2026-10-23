@@ -1,3 +1,19 @@
+---
+id: ECA-3603
+titre: "Sauvegardes Velero et exports non chiffrés côté serveur"
+origine: audit-2026 (Auditia Santé, Hélène Mercier)
+mesures: [8.13, 8.24, 5.33, 7.10, HDS activité 6]
+gravite: majeur
+statut: ouvert
+ouvert-le: 2026-11-18
+echeance: 2026-12-18
+responsable: karim.benali
+remediation: SEC-3609
+clos-le:
+preuve:
+valideur:
+---
+
 # ECA-3603 — Sauvegardes Velero et exports non chiffrés côté serveur
 
 > Audit à blanc (Auditia Santé), constat du 2026-11-18, formalisé en F6-S07 (SEC-3607).
@@ -35,3 +51,6 @@ Karim Benali.
 
 ## Statut
 ouvert
+
+## Preuve de clôture
+_(à la clôture : lot `ms-preuves` cité dans l'en-tête, et ce qu'il contient)_

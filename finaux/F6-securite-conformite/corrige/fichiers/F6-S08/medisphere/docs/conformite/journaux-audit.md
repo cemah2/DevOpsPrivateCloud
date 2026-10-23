@@ -14,41 +14,55 @@ distinctes : Loki centralise, l'archive en verrouillage d'objets rend inaltérab
 
 ## 2. Sources couvertes
 
-| Source | Ce qui est tracé | Mécanisme natif | Étiquette `job` |
-|---|---|---|---|
-| Kubernetes | Appels à l'API (qui, quoi, quand, sur quel objet) | Politique d'audit de l'API (M14), `/var/log/kubernetes/audit/audit.log` | `kubernetes-audit` |
-| OpenBao | Lectures/écritures de secrets, authentifications, politiques | Moteur d'audit `file` (HMAC des valeurs sensibles) | `openbao-audit` |
-| Keycloak | Connexions, échecs, actions d'administration | Écouteur d'événements `jboss-logging` (events + admin events) | `keycloak-audit` |
-| GitLab | Événements d'audit (accès, changements de droits, poussées protégées) | `audit_json.log` (gitlab-rails) | `gitlab-audit` |
-| Proxmox | Tâches (`pve01`, `pbs01`) et authentifications | `/var/log/pve/tasks/`, `journald` | `proxmox-audit` |
-| FreeIPA | Modifications d'annuaire, connexions Kerberos | 389-ds `nsslapd-auditlog`, `/var/log/krb5kdc.log` | `freeipa-audit` |
+| Source | Ce qui est tracé | Mécanisme natif | Sélecteur (locataire `audit`) | Depuis |
+|---|---|---|---|---|
+| Kubernetes | Appels à l'API (qui, quoi, quand, sur quel objet) | Politique d'audit de l'API, `/var/log/kubernetes/audit/audit.log` | `{job="kubernetes-audit"}` | M14, M22-E07 |
+| OpenBao | Requêtes et réponses (valeurs sensibles en HMAC) | Dispositif d'audit **déclaré** dans `openbao.hcl` (`fichier`, `/var/log/openbao/audit.log`) : l'API `sys/audit` refuse d'en activer un depuis OpenBao 2.4 | `{service="openbao"}` | M25-E21 |
+| Keycloak | Connexions, échecs, actions d'administration | Événements et événements d'administration, journal de `keycloak.service` | `{service="keycloak"}` | M24-E26 |
+| FreeIPA | Liaisons et recherches LDAP, tickets Kerberos, erreurs de l'API | 389-ds `access`, `krb5kdc.log`, `httpd/error_log` | `{service="freeipa"}` | M24-E26 |
+| GitLab | Événements d'audit (connexions, droits, jetons, comptes bloqués/débloqués) | `/var/log/gitlab/gitlab-rails/audit_json.log` (partiel en édition Free) | `{service="gitlab"}` | **F6-S08** |
+| Proxmox | Connexions, tâches et leur auteur, ACL (`pve01`, PBS de `hp01`) | journal de `pvedaemon`, `pveproxy`, `proxmox-backup(-proxy)` | `{service="proxmox"}` | **F6-S08** |
 
-Toutes vont dans le **locataire `audit`** de Loki (`X-Scope-OrgID: audit`). La politique d'audit de
-Kubernetes et le HMAC d'OpenBao garantissent qu'**aucune valeur de secret** n'entre dans ce locataire.
+Toutes vont dans le **locataire `audit`** de Loki (`X-Scope-OrgID: audit`), par le rôle `alloy` de
+`plateforme/ansible` (variables `alloy_audit_unites`, `alloy_audit_fichiers`) ; étiquettes de la liste
+fermée du M22 (`job`, `host`, `site`, `service`). La politique d'audit de Kubernetes (niveau `Metadata`
+pour les Secrets) et le HMAC d'OpenBao garantissent qu'**aucune valeur de secret** n'entre dans ce locataire.
 
 ## 3. Horodatage
 
-Référence unique : `gw01` (chrony, M00), sur laquelle toutes les VMs se synchronisent. Chaque source
-émet un horodatage que l'étape `stage.timestamp` d'Alloy utilise (sinon Loki date à la réception, ce
-qui décale une chronologie d'incident). Un décalage d'horloge sur une source est lui-même une alerte.
+Référence unique : `gw01`/`gw02` (chrony, M00), sur laquelle toutes les VMs et les deux hôtes physiques se
+synchronisent. Les sources lues dans journald gardent l'heure de journald ; les fichiers JSON sont datés
+par leur propre champ (`requestReceivedTimestamp` pour Kubernetes, `time` pour GitLab et OpenBao) par
+l'étape `stage.timestamp` d'Alloy, sinon Loki daterait à la lecture. Une ligne sans heure lisible garde
+l'heure de lecture (jamais une heure inventée). Un décalage d'horloge sur une source est lui-même alerté.
 
 ## 4. Archive inaltérable
 
-- Compartiment RGW **`archive-audit`** (`ceph-par1`), créé **avec** verrouillage d'objets activé dès le
-  départ (versionnage obligatoire). Mode **`COMPLIANCE`** : un objet ne peut être ni supprimé ni
-  remplacé avant son échéance, même par l'administrateur du RGW.
-- Dépôt quotidien par le CronJob `audit-archive` (espace `observabilite`) : un fichier compressé par
-  source pour la journée, un **manifeste** (période, objets, SHA-256, nombre de lignes), la **signature**
-  du manifeste (`transit` d'OpenBao). `put-object --object-lock-mode COMPLIANCE
-  --object-lock-retain-until-date <jour + 1 an>`.
-- Éprouver d'abord en `GOVERNANCE` (verrou levable avec le bon droit, pour corriger une erreur de date),
-  basculer en `COMPLIANCE` une fois la rétention validée.
+- Compartiment RGW **`archive-audit`** (`ceph-par1`), créé **avec** verrouillage d'objets
+  (`plateforme/ceph`, `rgw-preuves.sh` avec `COMPARTIMENT=archive-audit`) : utilisateurs `archive-audit`
+  (écriture, clés dans `kv/plateforme/archive-audit/rgw-ecriture`) et `archive-audit-lecture` (lecture
+  par politique de compartiment). Rétention par défaut **`COMPLIANCE` 365 jours** : un objet ne peut être
+  ni supprimé ni remplacé avant son échéance, même par le propriétaire du compartiment.
+- Dépôt quotidien par le CronJob `journaux/audit-archive` (`plateforme/k8s`, image
+  `plateforme/audit-archive`, outil `archiver-audit` de `plateforme/observabilite`) : pour la veille, un
+  `<source>.jsonl.gz` par source, `manifeste.json` (période, objets, SHA-256, nombre de lignes) et
+  `manifeste.sig` (signature du SHA-256 du manifeste par `transit/audit-archive`), sous le préfixe
+  `AAAA-MM-JJ/`. Une période déjà archivée n'est jamais réécrite.
+- Éprouvé d'abord en `GOVERNANCE` 1 jour sur des périodes d'essai, puis bascule en `COMPLIANCE` le
+  2026-12-07 ; essai de suppression d'une version sous `COMPLIANCE` : `AccessDenied` (SEC-3608).
 
 ## 5. Intégrité
 
-`observabilite/outils/verifier-archive-audit.sh` (pipeline planifié et à la demande de l'auditeur) :
-télécharge le manifeste et les objets d'une période, **vérifie la signature**, recalcule les condensats,
-les compare. Écart → sortie ≠ 0 → alerte. C'est ce contrôle, et non Loki, qui prouve l'inaltérabilité.
+`outils/verifier-archive-audit.sh` de `plateforme/observabilite` (pipeline planifié `archive:verifier`
+chaque matin sur la veille, et à la demande de l'auditrice sur une période au hasard) : télécharge le
+manifeste et les objets d'une période, **vérifie la signature** (`transit/verify/audit-archive`),
+recalcule les condensats, vérifie qu'aucun objet ne manque. Écart → sortie ≠ 0 → pipeline rouge → alerte.
+C'est ce contrôle, et non Loki, qui prouve que rien n'a bougé.
+
+**Limites** (écrites, pas cachées) : l'archive prouve ce que Loki a **reçu** ; une source qui n'a rien
+émis (collecteur arrêté) laisse un trou, couvert par l'alerte « source d'audit muette » et la preuve
+P-AUD-01 ; l'administrateur de Ceph peut détruire le pool sous le RGW (même limite que
+`preuves-conformite`, `preuves.md`) ; GitLab Free ne journalise pas tous les événements d'audit.
 
 ## 6. Conservation et minimisation
 
@@ -62,4 +76,5 @@ les compare. Écart → sortie ≠ 0 → alerte. C'est ce contrôle, et non Loki
 ## 7. Revue
 
 À chaque revue de conformité : vérifier que les six sources émettent (alerte « trou de journalisation »),
-relancer `verifier-archive-audit.sh` sur une période au hasard, contrôler l'échéance de verrouillage.
+relancer `verifier-archive-audit.sh` sur une période au hasard, contrôler l'échéance de verrouillage
+(P-AUD-02 dans les lots quotidiens).

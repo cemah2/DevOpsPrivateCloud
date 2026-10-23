@@ -1,24 +1,19 @@
-<!-- EXTRAIT F6 à fusionner dans docs/conformite/soa.md (déclaration d'applicabilité, F6-S01/S07). -->
-<!-- Ne montre que les mesures ISO/IEC 27001:2022 et exigences HDS touchées par le F6, à jour après -->
-<!-- remédiation (phases 3-4) et incident (INC-6211). La SoA complète couvre les 93 mesures + HDS v2. -->
+<!-- EXTRAIT F6-S14 : lignes de docs/conformite/soa.md (F6-S01) REMPLACÉES après la remédiation et -->
+<!-- l'incident. Même format que la SoA complète (93 mesures, lue par les checks S01 et S14). -->
+<!-- En tête du fichier : « Version 1.1 du 2027-02-15 », approuvée par Sophie Laurent (MR). -->
 
-## Mesures mises à jour par le F6
+| Mesure | Intitulé | Applicable | Justification | Mise en œuvre | Preuve |
+|---|---|---|---|---|---|
+| 5.24 | Planification et préparation de la gestion des incidents | Oui | R, H : hébergeur de données de santé, obligation d'informer le client | RB-360 (rôles, gravités, volet réglementaire), RB-361, kit vérifié chaque nuit, exercice de table annuel (F6-S10) | P-CTL-01 ; ECA-3605 (lot du 2027-01-13) |
+| 5.25 | Appréciation des événements et prise de décision | Oui | R, H | qualification selon RB-360/RB-262, décision de notification écrite et registre des violations (INC-6211) | P-SUP-01 ; `docs/securite/incidents/INC-6211/` |
+| 5.26 | Réponse aux incidents de sécurité de l'information | Oui | R, H | quarantaine réseau, collecte RB-361, éradication et rotation (INC-6211) | `docs/securite/incidents/INC-6211/chronologie.md` |
+| 5.28 | Recueil de preuves | Oui | R, H | collecte forensique RB-361 vers `preuves-conformite` (verrouillé), empreintes dans la chronologie | P-CTL-01 ; `preuves-conformite/INC-6211/` |
+| 8.8 | Gestion des vulnérabilités techniques | Oui | R, H | Harbor/Trivy, délais par criticité (`vulnerabilites.md`), exceptions `EXC-V-nnn` à échéance, tableau `f6-vulnerabilites` (F6-S09) | P-VUL-01, P-VUL-03, P-CTL-01 ; ECA-3602 (lot du 2026-12-16) |
+| 8.13 | Sauvegarde des informations | Oui | R, H : activité 6 | PBS, CNPG, Velero (dépôt Kopia à phrase tirée d'OpenBao), restauration éprouvée (F6-S09) | P-SAV-01, P-SAV-02, P-SAV-03 ; ECA-3603 (lot du 2026-12-17) |
+| 8.15 | Journalisation | Oui | R, H | six sources dans le locataire `audit` de Loki, archive `archive-audit` en `COMPLIANCE` 1 an, manifeste signé, contrôle d'intégrité (F6-S08) | P-AUD-01, P-AUD-02, P-CTL-01 ; ECA-3601 (lot du 2026-12-09) |
+| 8.16 | Activités de surveillance | Oui | R, H | Falco, Tetragon, alertes du ruler `audit`, alerte sur les silences longs (ECA-3611) | P-SUP-01, P-AUD-01 |
+| 8.24 | Utilisation de la cryptographie | Oui | R, H | `transit` d'OpenBao (signatures des preuves et de l'archive), phrase Kopia et exports `age` (clés dans OpenBao) | P-SEC-01, P-SAV-03 |
 
-| Mesure | Applicable | Mise en œuvre | Preuve |
-|---|---|---|---|
-| A.8.15 Journalisation | Oui | Six sources d'audit → locataire `audit` de Loki ; archive verrouillée 1 an (F6-S08) | `preuves-conformite/ECA-3601/` |
-| A.8.16 Surveillance des activités | Oui | Falco/Tetragon, alertes, archive d'audit ; alerte « trou de journalisation » | `preuves-conformite/ECA-3601/` |
-| A.8.8 Gestion des vulnérabilités techniques | Oui | Trivy/Harbor, délais par criticité, exceptions datées, tableau de suivi (F6-S09) | `preuves-conformite/ECA-3602/` |
-| A.8.13 Sauvegarde | Oui | Velero/Kopia chiffré, restauration éprouvée (F6-S09) | `preuves-conformite/ECA-3603/` |
-| A.8.24 Chiffrement | Oui | Dépôt Velero et exports chiffrés côté serveur, clés dans OpenBao | `preuves-conformite/ECA-3603/` |
-| A.5.24 Planification de la réponse à incident | Oui | RB-360, rôles, gravités (F6-S10) | `preuves-conformite/ECA-3605/` |
-| A.5.25 Appréciation et décision sur les incidents | Oui | Qualification RB-360/RB-262, registre des violations (INC-6211) | `preuves-conformite/ECA-3605/`, `incidents/INC-6211/` |
-| A.5.26 Réponse aux incidents | Oui | INC-6211 géré de bout en bout (confinement, forensique, éradication) | `incidents/INC-6211/` |
-| A.5.28 Collecte de preuves | Oui | Kit forensique vérifié, RB-361, compartiment verrouillé | `preuves-conformite/ECA-3605/` |
-| A.8.10 Suppression d'information | Oui | Minimisation des journaux (rétention par locataire), effacement prouvé (F4) | `preuves-conformite/ECA-3601/` |
-| A.8.12 Prévention de la fuite de données | Oui | Refus réseau par défaut, Hubble, contrôle de dérive des NetworkPolicy (INC-6211) | `incidents/INC-6211/post-mortem.md` |
-| HDS v2 activité 5 (administration et exploitation) | Oui | Traçabilité inaltérable, réponse à incident testée | `preuves-conformite/ECA-3601/`, `ECA-3605/` |
-| HDS v2 activité 6 (sauvegarde) | Oui | Sauvegardes chiffrées, restauration éprouvée | `preuves-conformite/ECA-3603/` |
-
-> Chaque lien de preuve pointe un préfixe **existant** du compartiment verrouillé `preuves-conformite`.
-> Un lien mort ou un préfixe vide est un écart (contrôle `etat-preuves.sh`).
+> Chaque identifiant `P-…` est au catalogue (`preuves.md`) et présent dans les lots quotidiens ; chaque
+> écart cité renvoie au lot de sa fiche. Une preuve qui manque ou a vieilli ressort dans
+> [`etat-preuves.md`](etat-preuves.md), généré par `ms-etat-preuves`.

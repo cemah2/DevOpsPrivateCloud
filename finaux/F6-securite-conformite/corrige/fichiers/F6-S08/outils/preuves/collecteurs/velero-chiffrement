@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# velero-chiffrement — P-SAV-03 (F6-S09) : la phrase du dépôt Kopia vient d'OpenBao (ExternalSecret
+# velero-repo-credentials synchronisé ; jamais la valeur), dépôts de sauvegarde et restaurations des
+# 30 derniers jours. Identité : KUBECONFIG (lecture ; jamais les Secrets).
+# (dans le dépôt : à côté des collecteurs de S02 ; ici, corrigé du F6-S02)
+# shellcheck source=../../../../F6-S02/outils/preuves/collecteurs/_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+exige KUBECONFIG
+k() { kubectl --request-timeout="${DELAI_HTTP}s" -n velero "$@"; }
+es="$(k get externalsecrets.external-secrets.io -o json)"
+rep="$(k get backuprepositories.velero.io -o json)"
+res="$(k get restores.velero.io -o json)"
+entete_preuve | jq -S --argjson es "$es" --argjson rep "$rep" --argjson res "$res" \
+  --arg depuis "$(date -u -d '30 days ago' +%Y-%m-%dT%H:%M:%SZ)" '
+  . + {phrase_depot: [$es.items[] | select((.spec.target.name // .metadata.name) == "velero-repo-credentials")
+        | {externalsecret: .metadata.name, magasin: .spec.secretStoreRef.name,
+           cles_distantes: [.spec.data[]?.remoteRef.key] | unique,
+           pret: any(.status.conditions[]?; .type == "Ready" and .status == "True"),
+           derniere_synchro: (.status.refreshTime // null)}],
+       depots: [$rep.items[] | {nom: .metadata.name, type: .spec.repositoryType, etat: .status.phase}] | sort_by(.nom),
+       restaurations: [$res.items[] | select((.status.startTimestamp // "") >= $depuis)
+        | {nom: .metadata.name, sauvegarde: .spec.backupName, phase: .status.phase, fin: .status.completionTimestamp}]
+        | sort_by(.fin)}'

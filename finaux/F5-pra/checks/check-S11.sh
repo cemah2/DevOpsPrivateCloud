@@ -28,7 +28,7 @@ check_cmd "k8s-par2 : sauvegarde de base planifiée (ScheduledBackup) pour $_F5E
   scheduledbackups.postgresql.cnpg.io -n "$_F5E_NS_PROD"
 _f5_s11_vzdump() {
   local j
-  j="$(_f5e_sur "$_f5e_hp01" "pvesh get /nodes/\$(hostname -s)/tasks --typefilter vzdump --since $_f5_s11_t0 --limit 50 --output-format json" 2>/dev/null)" || return 1
+  j="$(_f5p_sur "$_f5e_hp01" "pvesh get /nodes/\$(hostname -s)/tasks --typefilter vzdump --since $_f5_s11_t0 --limit 50 --output-format json" 2>/dev/null)" || return 1
   jq -e '[.[] | select(.status == "OK")] | length > 0' >/dev/null 2>&1 <<<"$j"
 }
 check_cmd "hp01 : au moins une sauvegarde vzdump réussie depuis T0 (VMs de PAR2)" _f5_s11_vzdump

@@ -14,7 +14,7 @@
 #   WB_F7_MIN_EXIGENCES     S02 : nombre minimal d'exigences NF-nn (défaut 15)
 #   WB_F7_TRACABILITE_MIN   S02 : part minimale des exigences ENF/ESC du CDC reprises (défaut 0.8)
 #   WB_F7_MIN_ADR           S04 : nombre minimal d'ADR-037x (défaut 4)
-#   WB_F7_MIN_RISQUES       S06 : nombre minimal de risques R-nn (défaut 10)
+#   WB_F7_MIN_RISQUES       S06 : nombre minimal de risques RSQ-nn (défaut 10)
 #
 # ---------------------------------------------------------------------------------------------------
 # FONCTIONS (à utiliser depuis un check, en général dans check_cmd / check_output)
@@ -73,6 +73,9 @@ _f7c_cdc="${_f7c_ressources:-.}/S01/cahier-des-charges.md"
 _F7C_RE_CDC='(^|[^A-Za-z])(EF|ENF|ESC|ERV|EXP|MES)-[0-9]{2}'
 # shellcheck disable=SC2034
 _F7C_RE_NF='(^|[^A-Za-z])NF-[0-9]{2}'
+# Risques du registre (S06) : RSQ-nn. « R-nn » désigne les réponses du GHSV aux candidats (S02).
+# shellcheck disable=SC2034
+_F7C_RE_RSQ='(^|[^A-Za-z])RSQ-[0-9]{2}'
 
 # --- GitLab (lecture) ------------------------------------------------------------------------------
 

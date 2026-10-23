@@ -2,7 +2,7 @@
 
 > `plateforme/medisphere` — `docs/securite/incidents/INC-6211/decision-notification.md` (F6-S13).
 > Co-signée : Thomas Renaud (DPO), Sophie Laurent (RSSI). Fondée sur la **portée établie** en F6-S12
-> (`chronologie.md`). Date de décision : 2026-11-26.
+> (`chronologie.md`). Date de décision : 2027-01-20.
 
 ## 1. Y a-t-il violation de données à caractère personnel (RGPD art. 4.12) ?
 

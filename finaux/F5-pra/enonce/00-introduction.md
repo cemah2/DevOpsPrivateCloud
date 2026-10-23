@@ -174,28 +174,28 @@ Disque : stockage Proxmox **`par2-vms`** (répertoire sur le disque dur, à côt
 
 ## Variables de `lab/lab.env`
 
-Toutes facultatives : les défauts conviennent au lab. Pendant l'exercice (S09 à S11), les checks se lancent **depuis `adm02`** (dépôt du workbook cloné depuis GitHub sur `adm02`, avec son propre `lab/lab.env`).
+Toutes facultatives : les défauts conviennent au lab ; la liste complète, commentée, est dans la section F5 de [`lab/lab.env.example`](../../../lab/lab.env.example). Pendant l'exercice (S09 à S11), les checks se lancent **depuis `adm02`** (dépôt du workbook cloné depuis GitHub sur `adm02`, avec son propre `lab/lab.env`).
 
 | Variable | Défaut | Utilisée par |
 |---|---|---|
-| `WB_F5_DOC` | `docs/pra` | checks des documents |
-| `WB_F5_PROJET_DOC` | `plateforme/medisphere` | checks des documents |
+| `WB_F5_DOC`, `WB_F5_PROJET_DOC` | `docs/pra`, `plateforme/medisphere` | checks des documents |
 | `WB_F5_SOURCE_DOC` | `gitlab` | `miroir` : lire les documents sur les miroirs de `adm02` (quand GitLab n'est pas joignable) |
 | `WB_F5_MIROIRS` | `/srv/miroirs` | S04 et suivants (dossier des miroirs sur `adm02`) |
 | `WB_F5_HP01` | valeur de `WB_PBS_HOST` (`pbs01`) | S03 et suivants (SSH `root`) |
-| `WB_F5_ADM02` | `adm02.par2.medisphere.internal` | S03 et suivants (SSH `admin`) |
-| `WB_F5_DNS01`, `WB_F5_DNS03` | `10.10.20.10`, `10.20.20.11` | S03 |
-| `WB_F5_S3_URL` | `https://s3-02.par2.medisphere.internal:8333` | S03, S04 |
-| `WB_F5_S3_CHECKS_FILE` | `~/.config/workbook/s3-02-checks.env` | S03, S04 (identité **`wb-checks`** de `s3-02`, lecture et liste) |
-| `WB_F5_REG02_URL` | `https://reg02.par2.medisphere.internal` | S04 |
-| `WB_F5_REG02_CHECKS_FILE` | `~/.config/workbook/reg02-checks.env` | S04 (`REG02_USER`, `REG02_PASSWORD`) |
+| `WB_F5_ADM02`, `WB_F5_S3_02_HOTE`, `WB_F5_DNS03_HOTE` | `adm02.par2.medisphere.internal`, `s3-02.par2…`, `dns03.par2…` | SSH `admin` vers les VMs de PAR2 |
+| `WB_F5_DNS01`, `WB_F5_DNS03` | `10.10.20.10`, `10.20.20.11` | récurseurs interrogés (S03, S09 à S12) |
+| `WB_F5_S3_URL`, `WB_F5_S3_CHECKS_FILE` | `https://s3-02.par2.medisphere.internal:8333`, `~/.config/workbook/s3-02-checks.env` | S03, S04 (identité **`wb-checks`** de `s3-02`, lecture et liste) |
+| `WB_F5_REG02_URL`, `WB_F5_REG02_CHECKS_FILE` | `https://reg02.par2.medisphere.internal`, `~/.config/workbook/reg02-checks.env` | S04 (`REG02_USER`, `REG02_PASSWORD`) |
 | `WB_F5_KUBECONFIG_PAR2` | `~/.config/workbook/k8s-par2-checks.kubeconfig` | S06 et suivants (compte `wb-checks` de `k8s-par2`, lecture, jamais les Secrets) |
-| `WB_F5_SERVEUR_PROD` | `mediagenda-db-prod-day0` | S04, S06 (nom d'archivage de la base de production) |
-| `WB_F5_RETARD_MAX_S` | `900` | S04 (âge maximal du dernier WAL copié à PAR2 : le RPO de MédiAgenda) |
-| `WB_F5_MIROIR_RETARD_MAX_S` | `3600` | S04 (retard maximal d'un miroir Git) |
+| `WB_F5_PAR2_ADMIN_KUBECONFIG` | `~/.kube/k8s-par2.config` | panne S08 (administration de `k8s-par2` depuis `adm01`) |
+| `WB_F5_SERVEUR_PROD` | `mediagenda-db-prod-day0` | S04, S06 (nom d'archivage de la base de production ; `mediagenda-db-prod-pra1` après le retour de S12) |
+| `WB_F5_RETARD_MAX_S`, `WB_F5_MIROIR_RETARD_MAX_S` | `900`, `3600` | S04 (RPO de MédiAgenda ; retard d'un miroir Git) |
 | `WB_F5_PROJETS_MIROIRS` | voir `checks/_f5-par2.sh` | S04 (projets qui doivent avoir un miroir) |
-| `WB_F5_URL_PAR1` | `https://mediagenda.apps.par1.medisphere.internal` | S06 (repère de site) |
-| `WB_F5_KMS01_URL` | `https://kms01.par1.medisphere.internal:8200` | S05 (`kms01` de PAR1 intact) |
+| `WB_F5_URL_PAR1`, `WB_F5_KMS01_URL` | `https://mediagenda.apps.par1.medisphere.internal`, `https://kms01.par1.medisphere.internal:8200` | S06 (repère de site), S05 (`kms01` de PAR1 intact) |
+| `WB_F5_EXERCICE`, `WB_F5_DEPOT_PAR2` | `2026-exercice-1`, `~/medisphere` (sur `adm02`) | S08 à S14 (dossiers de l'exercice, clone de travail de la documentation pendant le PRA) |
+| `WB_F5_RTO_MEDIAGENDA_MIN`, `WB_F5_RTO_MEDIDOC_MIN`, `WB_F5_RTO_RDV_MIN` | `240`, `480`, `480` | S09 (tes objectifs de S01, en minutes) |
+| `WB_F5_PROM_PAR2_URL`, `WB_F5_AM_PAR2_URL`, `WB_F5_MAILPIT_PAR2_URL` | `http://adm02.par2.medisphere.internal:9090`, `:9093`, `:8025` | S11, S12, S14 (supervision minimale de PAR2) |
+| `WB_F5_COUPURE_RETOUR_MAX_MIN` | `15` | S12 |
 
 **Outils sur `adm01` et `adm02`** : `curl`, `jq`, `dig`, `openssl`, `kubectl`, `aws` (CLI, S03-S04), `ssh` (vers `pbs01` en `root`, vers les VMs de PAR2 en `admin`), `git`.
 

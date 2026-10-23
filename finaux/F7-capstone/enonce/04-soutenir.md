@@ -17,7 +17,7 @@ Prérequis de la phase : phase 3 terminée (`lab/bin/check F7 7` à `F7 11` vert
 - Préparer une démonstration résistante aux incidents (plan B, ordre, durée).
 
 **Prérequis** : F7-S01 à F7-S11.
-**Durée indicative** : 4 à 5 h.
+**Durée indicative** : 3 à 4 h.
 
 **Contexte technique**
 - Dossier dans `docs/capstone/soutenance/` de `plateforme/medisphere` : `document-architecture.md`, `synthese-direction.md`, `script-demonstration.md`, `annexes-preuves.md` (tu peux ajouter des fichiers, pas en retirer).
@@ -151,7 +151,7 @@ Les pièges ont un présupposé faux (souveraineté « totale », chiffrement au
 - [ ] Les Applications Argo CD du GHSV sont `Synced`/`Healthy` ; `ghsv-recette` a été recréé (date de création postérieure au début de la recette) et répond.
 - [ ] Des preuves de la capstone sont présentes dans `preuves-conformite`.
 - [ ] `docs/capstone/recette.md` est sur `main` (contrôles, durées, écarts) et l'étiquette `capstone-v1` est posée.
-- [ ] `lab/bin/check F7 7` à `F7 12` sont verts.
+- [ ] `lab/bin/check F7 7` à `F7 12` sont verts (relance-les toi-même : `check F7 14` ne les rejoue pas).
 
 **Vérification** : `lab/bin/check F7 14`
 

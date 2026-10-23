@@ -44,7 +44,7 @@ Ce que nous **refusons** : un hyperviseur PAR2 qui touche au datastore `ds-lab` 
 
 ## Conséquences
 
-- **Acceptées** : nœud unique à PAR2 (aucune haute disponibilité pendant un PRA) ; pas d'observabilité complète (sonde `ms-sonde-pra` seulement) ; pas de MédiVisio ni de Data ; gel des livraisons pendant un PRA ; `hp01` porte **à la fois** les sauvegardes et le site de repli : un sinistre qui toucherait PAR2 pendant un PRA ne laisserait que l'enveloppe et les archives hors site.
+- **Acceptées** : nœud unique à PAR2 (aucune haute disponibilité pendant un PRA) ; pas d'observabilité complète (sonde `ms-sonde-pra` en permanence, supervision minimale sur `adm02` pendant un PRA) ; pas de MédiVisio ni de Data ; gel des livraisons pendant un PRA ; `hp01` porte **à la fois** les sauvegardes et le site de repli : un sinistre qui toucherait PAR2 pendant un PRA ne laisserait que l'enveloppe et les archives hors site.
 - **Charges nouvelles** : surveiller les retards de réplication (alertes, S04) ; monter `k8s-par2` en même temps que `k8s-par1` (F4 : « la chaîne d'abord ») ; renouveler l'intermédiaire PAR2 (3 ans) ; vérifier l'enveloppe (semestriel) ; exercice de PRA **semestriel** (`calendrier-tests.md`).
 - **Changements à PAR1** : filer de `s3-01` exposé à `s3-02` seulement (gRPC protégé) ; `mediagenda-db` déclare la topologie distribuée ; en-tête `X-MediSphere-Site` sur les routes ; méthode `k8s-par2` dans OpenBao ; *push mirrors* ; job `cosign copy`.
 

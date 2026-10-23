@@ -43,6 +43,7 @@ Le GHSV est un **locataire** de la plateforme mutualisée, déclaré par l'équi
 - **Travail pour la phase 3** : extension du format de `plateforme/equipes` (type `client`), `equipes/ghsv.yaml`, overlay du déploiement, politiques réseau, locataire de journaux (F7-S07).
 - **Preuves pour le jury** : un pod d'un autre locataire ne joint ni la base ni le Valkey du GHSV ; un utilisateur de l'équipe MédiAgenda ne lit pas `ghsv-prod` ; une clé `transit/ghsv-*` n'est utilisable que par les identités du GHSV.
 - **Lab** : nœuds mutualisés comme en production ; mêmes objets.
+- **Preuve de concept du lab** (F7-S07) : le groupe `ghsv` rendu par `equipes/ghsv.yaml` (Julien Petit, Nadia Roussel) joue le rôle du groupe `ghsv-exploitation` (un seul fichier à tenir au lieu de deux) ; journaux applicatifs du client dans le locataire Loki `mediagenda` (sélecteur `namespace=~"ghsv-.*"`, RB-371), pas encore dans un locataire `ghsv` dédié ; données fictives en recette et en production de démonstration.
 
 ## Révision
 

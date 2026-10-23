@@ -1,0 +1,10 @@
+---
+# host_vars/pve01/alloy.yml — F6-S08 (SEC-3608) : traces d'administration de Proxmox VE au locataire audit.
+# pvedaemon : connexions réussies et refusées (« successful auth », « authentication failure »), début et
+# fin de chaque tâche avec son auteur (« <utilisateur@royaume> starting task UPID:… »), changements d'ACL
+# par l'API ; pveproxy : requêtes de l'interface et de l'API. Horodatage : celui de journald (source).
+# pve01 est un hôte physique : le rôle alloy n'y installe que l'agent (aucun changement de réseau ni de
+# service Proxmox). Hôte ajouté au groupe « alloy » de l'inventaire (site.yml) par la même MR.
+alloy_audit_unites:
+  - {unite: pvedaemon.service, service: proxmox}
+  - {unite: pveproxy.service, service: proxmox}

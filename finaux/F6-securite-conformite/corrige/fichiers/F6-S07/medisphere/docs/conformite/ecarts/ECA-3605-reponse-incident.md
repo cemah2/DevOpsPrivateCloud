@@ -1,3 +1,19 @@
+---
+id: ECA-3605
+titre: "Aucune réponse à incident de sécurité testée, pas de kit forensique"
+origine: audit-2026 (Auditia Santé, Hélène Mercier)
+mesures: [5.24, 5.25, 5.26, 5.27, 5.28, 6.8, HDS information du client]
+gravite: majeur
+statut: ouvert
+ouvert-le: 2026-11-18
+echeance: 2027-01-15
+responsable: sophie.laurent
+remediation: SEC-3610
+clos-le:
+preuve:
+valideur:
+---
+
 # ECA-3605 — Aucune réponse à incident de sécurité testée, pas de kit forensique
 
 > Audit à blanc (Auditia Santé), constat du 2026-11-18, formalisé en F6-S07 (SEC-3607).
@@ -34,3 +50,6 @@ Sophie Laurent, avec Nadia Roussel (support) et Thomas Renaud (notifications).
 
 ## Statut
 ouvert
+
+## Preuve de clôture
+_(à la clôture : lot `ms-preuves` cité dans l'en-tête, et ce qu'il contient)_

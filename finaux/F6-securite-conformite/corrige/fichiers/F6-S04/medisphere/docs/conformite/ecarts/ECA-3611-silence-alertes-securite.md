@@ -1,3 +1,19 @@
+---
+id: ECA-3611
+titre: "Alertes de sécurité réduites au silence pour 60 jours"
+origine: audit-2026, F6-S04 (auditeur interne)
+mesures: [8.16, 5.25, 8.15, HDS activité 5]
+gravite: mineur
+statut: clos
+ouvert-le: 2026-11-17
+echeance: 2026-11-24
+responsable: karim.benali
+remediation: SEC-3604
+clos-le: 2026-11-18
+preuve: lots/2026/11/18/20261118T010507Z-quotidienne/
+valideur: sophie.laurent
+---
+
 # ECA-3611 — Alertes de sécurité réduites au silence pour 60 jours
 
 > Trouvé en F6-S04 (audit à blanc, SEC-3604), le 2026-11-17. Exemple de fiche : un écart par candidat injecté, même forme.
@@ -34,7 +50,7 @@ Karim Benali.
 2026-11-24.
 
 ## Statut
-**clos** le 2026-11-17.
+**clos** le 2026-11-18 (corrigé le 17 à 10:12, confirmé par le lot quotidien du 18).
 
 ## Preuve de clôture
 Lot `20261118T010507Z-quotidienne` : P-SUP-01 sans silence actif ; règle `SilenceLong` sur `main` de `plateforme/observabilite` (commit `<SHA>`) et son test `promtool`.

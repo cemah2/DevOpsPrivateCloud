@@ -6,8 +6,10 @@
 #     depuis s3-02 (cnpg-ghsv répliqué par filer.sync) ; promue par jeton pendant un PRA (RB-350) ;
 #   - API, mandataires et cache à 0 réplica en veille (mémoire de hp01) ;
 #   - témoin de RPO suspendu (le site passif n'écrit pas) ;
-#   - publication sur gw-par2 (noms *.apps.par2.medisphere.internal, repère X-MediSphere-Site: par2) ;
-#   - images tirées de reg02 (copie signée, F5-S04).
+#   - publication sur gw-par2 (noms *.apps.par2.medisphere.internal et ghsv.medisphere.internal, repère
+#     X-MediSphere-Site: par2), par les mêmes correctifs que overlays/prod-par2 de MédiAgenda (F5-S06) ;
+#   - images : mêmes références registry.par1… que la prod ; containerd de k8s-par2 les tire du miroir
+#     reg02 (copie signée, F5-S04 et F5-S06), sans réécriture ici.
 # L'espace ghsv-prod de k8s-par2 vient du rendu de plateforme/equipes appliqué au cluster de secours
 # (inventaire k8s-par2, F5-S06) : ce dossier ne le crée pas.
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -36,11 +38,42 @@ components:
   - ../../../components/valkey
   - ../../../components/client
   - ../../../components/temoin-rpo-client
-  # Différences de site de F5-S06 (gw-par2, reg02, repère X-MediSphere-Site) : reprends le nom du
-  # component de site de TON dépôt (celui qu'utilise l'overlay de PAR2 de MédiAgenda).
-  - ../../../components/site-par2
   - ../../../components/livraison
 patches:
+  # Routes (comme overlays/prod-par2 de MédiAgenda, F5-S06) : Gateway gw-par2, noms de PAR2 et nom
+  # global, repère de site lu par la sonde ms-sonde-pra.
+  - target: {group: gateway.networking.k8s.io, kind: HTTPRoute, name: mediagenda}
+    patch: |-
+      - op: replace
+        path: /spec/parentRefs
+        value:
+          - {group: gateway.networking.k8s.io, kind: Gateway, name: gw-par2, namespace: passerelles}
+      - op: replace
+        path: /spec/hostnames
+        value: [ghsv.apps.par2.medisphere.internal, ghsv.medisphere.internal]
+      - op: add
+        path: /spec/rules/0/filters
+        value:
+          - type: ResponseHeaderModifier
+            responseHeaderModifier:
+              set:
+                - {name: X-MediSphere-Site, value: par2}
+  - target: {group: gateway.networking.k8s.io, kind: HTTPRoute, name: mediagenda-agents}
+    patch: |-
+      - op: replace
+        path: /spec/parentRefs
+        value:
+          - {group: gateway.networking.k8s.io, kind: Gateway, name: gw-par2, namespace: passerelles}
+      - op: replace
+        path: /spec/hostnames
+        value: [ghsv-agents.apps.par2.medisphere.internal]
+      - op: add
+        path: /spec/rules/0/filters
+        value:
+          - type: ResponseHeaderModifier
+            responseHeaderModifier:
+              set:
+                - {name: X-MediSphere-Site, value: par2}
   # Veille : rien ne tourne hors de la base.
   - target: {kind: Deployment, name: mediagenda}
     patch: |-
@@ -79,3 +112,6 @@ patches:
       - op: replace
         path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
         value: mediagenda-db-par2-app
+# ⚠️ Les noms (HTTPRoute mediagenda et mediagenda-agents, Deployment, StatefulSet, chemins env/0) sont ceux
+# du chart du M17 et des components du F7 : lis TON rendu (kustomize build overlays/clients/ghsv-prod-par2)
+# et ajuste les cibles, comme pour overlays/prod-par2 (F5-S06).

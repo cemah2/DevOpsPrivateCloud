@@ -18,7 +18,9 @@
 | [`cellule-de-crise.md`](cellule-de-crise.md) | rôles, canaux qui ne dépendent pas de PAR1, messages, main courante |
 | [`runbooks/RB-350-bascule-par2.md`](runbooks/RB-350-bascule-par2.md) | déclenchement et bascule vers PAR2 |
 | [`runbooks/RB-351-retour-par1.md`](runbooks/RB-351-retour-par1.md) | retour à PAR1 sans perte |
-| [`runbooks/RB-355-restauration-kms01-par2.md`](runbooks/) | restauration de `kms01` à PAR2 (coffre de secours) |
+| [`runbooks/RB-353-hyperviseur-par2.md`](runbooks/RB-353-hyperviseur-par2.md) | hyperviseur et réseau de PAR2 sur `hp01` (go/no-go, retour arrière, amorçage de l'état) |
+| [`runbooks/RB-354-replication-par2.md`](runbooks/RB-354-replication-par2.md) | réplications vers PAR2 (objets, documents, code, images) ; copie ≠ sauvegarde |
+| [`runbooks/RB-355-coffre-de-secours.md`](runbooks/RB-355-coffre-de-secours.md) | restauration de `kms01` à PAR2 et coffre de secours `bao-par2` |
 | [`runbooks/RB-356-cluster-de-secours.md`](runbooks/RB-356-cluster-de-secours.md) | cluster `k8s-par2`, base de secours, secrets, témoin |
 | [`enveloppe.md`](enveloppe.md) | ce qu'il faut avoir en main (sans aucun secret ici) |
 

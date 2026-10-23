@@ -3,14 +3,12 @@
 > ⚠️ Corrigé — à lire après avoir cherché. Les solutions des `LIBRE` sont **des** solutions de référence : il en existe d'autres, jugées sur les mêmes critères (écart fermé, preuve inaltérable, mécanisme auto-portant).
 
 **Validé hors du lab** (à la rédaction, 23/10/2026) :
-- scripts (`verifier-archive-audit.sh`, `exceptions-vuln-echues.sh`) : `bash -n` et `shellcheck -x` ;
-- manifestes Alloy : relus contre la syntaxe des composants `local.file_match`, `loki.source.file`, `loki.process` de la 1.21 (M22) ; non exécutés sur une vraie plateforme F6 ;
-- CronJob d'archive : YAML valide, image par Harbor, profil `restricted` ;
-- verrouillage d'objets : logique relue contre l'API S3 `put-object` (`--object-lock-mode`, `--object-lock-retain-until-date`) et `get-object-lock-configuration`.
+- scripts (`archiver-audit`, `verifier-archive-audit.sh`, `exceptions-vuln-echues.sh`, collecteurs ajoutés à `ms-preuves`) : `bash -n` et `shellcheck -x` ;
+- extrait du gabarit Alloy : relu contre les composants `loki.source.file`, `loki.process` (`stage.match`, `stage.json`, `stage.timestamp`) d'Alloy 1.21 ; non exécuté sur une plateforme F6 ;
+- CronJob d'archive : YAML relu, profil `restricted`, jeton projeté pour OpenBao ;
+- verrouillage d'objets : logique relue contre l'API S3 (`put-object --content-md5`, `head-object`, `get-object-lock-configuration`).
 
-**Points non testés en conditions réelles** : voir la fin de l'énoncé (collecte Keycloak/GitLab/FreeIPA, bascule `COMPLIANCE`, chiffrement du dépôt Kopia). Signale tes retours.
-
-**Fichiers** : [`fichiers/F6-S08/`](fichiers/F6-S08/) et [`fichiers/F6-S09/`](fichiers/F6-S09/) : `medisphere/…` = `plateforme/medisphere`, `observabilite/…` = `plateforme/observabilite`, `k8s/…` = `plateforme/k8s`, `politiques/…` = `plateforme/politiques`. Les `*.extrait*` se fusionnent dans le fichier existant (emplacement en tête).
+**Fichiers** : [`fichiers/F6-S08/`](fichiers/F6-S08/) et [`fichiers/F6-S09/`](fichiers/F6-S09/) : `medisphere/…` = `plateforme/medisphere`, `observabilite/…` = `plateforme/observabilite`, `ansible/…` = `plateforme/ansible`, `k8s/…` = `plateforme/k8s`, `secrets/…` = `plateforme/secrets`, `outils/…` = `plateforme/outils`, `politiques/…` = `plateforme/politiques`. Les `*.extrait*` se fusionnent dans le fichier existant (emplacement en tête).
 
 ---
 
@@ -18,33 +16,41 @@
 
 **Solution** (solution de référence ; ce `LIBRE` s'évalue sur la chaîne complète et son inaltérabilité)
 
-Documents et code : [`journaux-audit.md`](fichiers/F6-S08/medisphere/docs/conformite/journaux-audit.md), [`audit-sources.alloy.extrait-F6`](fichiers/F6-S08/observabilite/alloy/audit-sources.alloy.extrait-F6), [`cronjob-archive-audit.yaml`](fichiers/F6-S08/k8s/composants/audit-archive/cronjob-archive-audit.yaml), [`verifier-archive-audit.sh`](fichiers/F6-S08/observabilite/outils/verifier-archive-audit.sh), [`ECA-3601.md`](fichiers/F6-S08/medisphere/docs/conformite/ecarts/ECA-3601.md).
+Documents et code : [`journaux-audit.md`](fichiers/F6-S08/medisphere/docs/conformite/journaux-audit.md) ; Alloy : [`host_vars/git01/alloy.yml`](fichiers/F6-S08/ansible/inventories/lab/host_vars/git01/alloy.yml), [`host_vars/pve01/alloy.yml`](fichiers/F6-S08/ansible/inventories/lab/host_vars/pve01/alloy.yml), [`host_vars/pbs01/alloy.yml`](fichiers/F6-S08/ansible/inventories/lab/host_vars/pbs01/alloy.yml), [`config.alloy.j2.extrait-F6-S08`](fichiers/F6-S08/ansible/roles/alloy/templates/config.alloy.j2.extrait-F6-S08) ; archive : [`archiver-audit`](fichiers/F6-S08/observabilite/outils/archiver-audit), [`Containerfile`](fichiers/F6-S08/observabilite/images/audit-archive/Containerfile), [`cronjob-archive-audit.yaml`](fichiers/F6-S08/k8s/composants/audit-archive/cronjob-archive-audit.yaml), [`audit-archive.tf`](fichiers/F6-S08/secrets/tofu/audit-archive.tf), [`audit-archive.hcl`](fichiers/F6-S08/secrets/politiques/audit-archive.hcl) ; intégrité : [`verifier-archive-audit.sh`](fichiers/F6-S08/observabilite/outils/verifier-archive-audit.sh) ; preuves : [`catalogue.yaml.extrait-F6-S08-S10`](fichiers/F6-S08/outils/preuves/catalogue.yaml.extrait-F6-S08-S10) et [`collecteurs/`](fichiers/F6-S08/outils/preuves/collecteurs/) ; écart : [`ECA-3601-journaux-audit.md`](fichiers/F6-S08/medisphere/docs/conformite/ecarts/ECA-3601-journaux-audit.md).
 
 La chaîne, bout à bout :
 
-1. **Six sources vers un puits** (locataire `audit` de Loki) :
-   - *Kubernetes* : déjà en place (M22, cible `audit` d'Alloy, `/var/log/kubernetes/audit/audit.log`, `job="kubernetes-audit"`) ;
-   - *OpenBao* : `bao audit enable file file_path=/var/log/openbao/audit.log` sur chaque nœud `vault01-03` (rôle Ansible `role_coffre`) ; le format JSON HMAC les champs sensibles (les valeurs ne sont jamais en clair) ; cible Alloy sur l'hôte, `job="openbao-audit"` ;
-   - *Keycloak* : écouteur d'événements `jboss-logging` activé (événements d'administration **et** de connexion), écrits en JSON dans le journal de `idp01`, cible Alloy `job="keycloak-audit"` ;
-   - *GitLab* : `audit_json.log` des composants (`gitlab-rails`), cible Alloy sur `git01`, `job="gitlab-audit"` ;
-   - *Proxmox* : journal des tâches (`/var/log/pve/tasks/`) et `journald` d'authentification de `pve01` et `pbs01`, cible Alloy, `job="proxmox-audit"` ;
-   - *FreeIPA* : greffon d'audit de 389-ds (`nsslapd-auditlog`) et les connexions Kerberos (`/var/log/krb5kdc.log`) de `ipa01`, cible Alloy, `job="freeipa-audit"`.
-   Chaque source garde `stage.tenant { value = "audit" }` et une étiquette `job` distincte. La fédération ne change pas : c'est un locataire, pas des métriques.
-
-2. **Horodatage cohérent** : `gw01` (chrony) est la référence de temps de tout le lab (M00) ; chaque source émet un horodatage, l'étape `stage.timestamp` d'Alloy s'en sert (sinon Loki date à la réception, ce qui fausse une chronologie d'incident). Documenté dans `journaux-audit.md`.
-
-3. **Archive inaltérable** : un CronJob quotidien (`audit-archive`, espace `observabilite`, image par Harbor, `restricted`) interroge Loki (`query_range` sur le locataire `audit`, 24 h en arrière), écrit un fichier compressé par source, calcule leurs condensats, construit un **manifeste** (période, objets, SHA-256, nombre de lignes), **signe** le manifeste par `transit` d'OpenBao, puis dépose le tout dans le compartiment `archive-audit` (RGW de `ceph-par1`) **en verrouillage d'objets** : `aws s3api put-object --object-lock-mode COMPLIANCE --object-lock-retain-until-date <aujourd'hui + 1 an>`. Le compartiment est créé **dès le départ** avec le verrouillage activé (le versionnage est obligatoire ; on ne peut pas l'activer après coup selon les versions).
-
-4. **Contrôle d'intégrité indépendant** : `verifier-archive-audit.sh` (lancé par un pipeline planifié, et à la demande d'un auditeur) télécharge le manifeste et les objets d'une période, **vérifie la signature** (`transit`/Cosign), recalcule les condensats et les compare. Un écart → sortie non nulle → alerte. C'est ce contrôle, pas Loki, qui prouve que rien n'a bougé.
-
-5. **Conservation et minimisation** : rétention `audit` d'un an dans Loki (M22-E13) **et** un an sur l'archive (échéance du verrouillage) ; les journaux applicatifs gardent leur rétention courte. La politique est écrite (`journaux-audit.md`) : on garde un an parce que c'est l'exigence et la durée utile d'une enquête, pas plus, parce que garder plus augmente le coût, la gravité d'une fuite et la difficulté d'un effacement (RGPD, minimisation).
-
-6. **Fermeture d'ECA-3601** : `ECA-3601.md` passe en `clos`, preuve = l'identifiant de l'objet `ms-preuves` qui contient la configuration Alloy, la configuration du verrouillage du compartiment (`get-object-lock-configuration`), une capture d'un échec de suppression sous `COMPLIANCE`, et un rapport vert de `verifier-archive-audit.sh`.
+1. **Faire l'inventaire avant d'écrire du code.** Quatre sources arrivent déjà dans le locataire `audit` : Kubernetes (`{job="kubernetes-audit"}`, M22-E07), OpenBao (`{service="openbao"}`, dispositif **déclaré** dans `openbao.hcl` au M25-E21 — `bao audit enable` répond depuis OpenBao 2.4 « cannot enable audit device via API »), Keycloak et FreeIPA (`{service="keycloak"}`, `{service="freeipa"}`, M24-E26). Le constat d'Hélène porte donc sur **deux** sources manquantes et sur l'inaltérabilité de toutes.
+   ```
+   admin@adm01:~$ logcli --org-id=audit series --since=24h '{service=~".+"}' | sort -u
+   admin@adm01:~$ logcli --org-id=audit series --since=24h '{job="kubernetes-audit"}' | head -3
+   ```
+2. **GitLab et Proxmox** par le mécanisme du M24 (rôle `alloy`), pas un nouveau : `git01` lit `audit_json.log` (`alloy_audit_fichiers`, capacité de lecture seule comme `ipa01`) ; `pve01` et `pbs01` (hôte `hp01`) envoient le journal de `pvedaemon`, `pveproxy` et `proxmox-backup(-proxy)` (`alloy_audit_unites`) — les deux hôtes physiques entrent dans le groupe `alloy` de l'inventaire, l'agent seul est installé. Vérifie ensuite les six sélecteurs (c'est ce que fait le check, et la preuve P-AUD-01).
+3. **Horodatage à la source** : journald porte l'heure de l'événement ; pour les fichiers JSON, l'extrait du gabarit ajoute un champ `horodatage` par fichier (`time` pour GitLab) et une étape `stage.timestamp` avec `action_on_failure = "skip"` (une ligne illisible garde l'heure de lecture, on n'invente jamais une heure). Référence de temps : chrony de `gw01`/`gw02`.
+4. **Archive inaltérable** : compartiment `archive-audit` créé **avec** le verrou par le script du F6-S02 paramétré (`COMPARTIMENT=archive-audit PROPRIETAIRE=archive-audit LECTEUR=archive-audit-lecture KV_BASE=plateforme/archive-audit rgw-preuves.sh creer`), essais en `GOVERNANCE` 1 jour, puis `rgw-preuves.sh retention COMPLIANCE 365` (même variables). Le CronJob `journaux/audit-archive` lance chaque nuit `archiver-audit` sur la veille : extraction paginée de chaque source, un `<source>.jsonl.gz` par source, `manifeste.json`, signature du SHA-256 du manifeste par `transit/audit-archive` (méthode kubernetes `k8s-par1`, rôle `audit-archive`, jeton projeté : aucune clé ni jeton statique dans le cluster), dépôt sous `AAAA-MM-JJ/` (signature en dernier) et contrôle que chaque objet porte la rétention `COMPLIANCE`. Fichier d'identité de lecture de `adm01` (`s3-archive-audit-lecture.env`) : même commande qu'en S02, depuis `kv/plateforme/archive-audit/rgw-lecture`.
+5. **Contrôle d'intégrité indépendant** : `verifier-archive-audit.sh`, pipeline planifié `archive:verifier` de `plateforme/observabilite` (rôle JWT `ci-observabilite-archive`, politique `audit-archive-verif` : `transit/verify/audit-archive` et la lecture de l'identité S3 de lecture) ; à la main :
+   ```
+   admin@adm01:~/src/observabilite$ export BAO_TOKEN="$(bao print token)"
+   admin@adm01:~/src/observabilite$ outils/verifier-archive-audit.sh "$(date -u -d yesterday +%F)"
+   ```
+   Fais-le rougir exprès sur une période d'essai en `GOVERNANCE` (remplace un objet : nouvelle version, condensat différent) avant de le croire.
+6. **Épreuve du verrou** (le cœur de l'écart) :
+   ```
+   admin@adm01:~$ (set -a; . <(bao kv get -format=json -mount=kv plateforme/archive-audit/rgw-ecriture | jq -r '.data.data | to_entries[] | "\(.key)=\(.value)"'); set +a
+       v=$(aws --endpoint-url https://rgw.par1.medisphere.internal s3api list-object-versions --bucket archive-audit \
+             --prefix "$(date -u -d yesterday +%F)/manifeste.json" --query 'Versions[0].VersionId' --output text)
+       aws --endpoint-url https://rgw.par1.medisphere.internal s3api delete-object --bucket archive-audit \
+         --key "$(date -u -d yesterday +%F)/manifeste.json" --version-id "$v")
+   An error occurred (AccessDenied) when calling the DeleteObject operation: forbidden by object lock
+   ```
+   (sans `--version-id`, la commande « réussit » : elle pose un marqueur de suppression dans un compartiment versionné, la version reste — à savoir expliquer à l'auditrice.)
+7. **Fermeture d'ECA-3601** : les preuves P-AUD-01, P-AUD-02 et P-CTL-01 entrent au catalogue (`ms-preuves`, et `preuves.md`), un lot quotidien les contient, la fiche passe en `clos` en citant **ce lot** (antérieur à la date de clôture), le plan de remédiation est mis à jour.
 
 **Explications**
 - **Centraliser ≠ rendre inaltérable.** Loki rassemble et rend consultable ; mais qui administre Loki peut, en théorie, réécrire un segment. L'inaltérabilité vient du verrouillage d'objets du RGW : un objet `COMPLIANCE` ne se supprime ni ne se remplace avant son échéance, pour personne. L'archive est la pièce qu'on présente ; Loki est l'outil de travail.
 - **Le manifeste signé** répond à la question de l'auditeur (« comment prouvez-vous que ce journal n'a pas été retouché ? ») : la signature atteste qui a produit le manifeste, les condensats attestent que les objets sont ceux de la période, le verrouillage atteste qu'ils n'ont pas bougé depuis.
-- **Pas de secret dans l'audit** : la politique d'audit de l'API (niveau `Metadata` pour les Secrets, M14) et le HMAC d'OpenBao garantissent que le locataire `audit` — et donc l'archive — ne contient aucune valeur sensible. C'est ce qui rend acceptable de la conserver un an et de la présenter.
+- **Pas de secret dans l'audit** : la politique d'audit de l'API (niveau `Metadata` pour les Secrets, M14) et le HMAC d'OpenBao garantissent que le locataire `audit` — et donc l'archive — ne contient aucune valeur sensible. C'est ce qui rend acceptable de la conserver un an et de la présenter. Les journaux de GitLab et de Proxmox contiennent des identifiants de personnes et des adresses : données personnelles des administrateurs, d'où la durée bornée et l'accès réservé au locataire `audit` (sécurité, astreinte).
+- **Pourquoi un compartiment dédié** : l'archive n'a ni le même producteur (un CronJob du cluster, pas le pipeline de collecte), ni le même volume, ni le même lecteur ; la mêler à `preuves-conformite` donnerait au CronJob le droit d'écrire là où sont les preuves de tout le reste.
 
 **Alternatives**
 - WORM au niveau du système de fichiers (montage immuable, `chattr +i`) : contournable par root ; le verrouillage d'objets du RGW est opposable (l'administrateur du RGW lui-même ne peut pas lever un `COMPLIANCE`).
@@ -53,7 +59,9 @@ La chaîne, bout à bout :
 - Envoyer chaque source dans un SIEM (Wazuh, Elastic) : plus riche en corrélation, plus lourd ; Loki + archive suffit à l'exigence de traçabilité inaltérable.
 
 **Pièges classiques**
-- Créer le compartiment d'archive **sans** verrouillage puis vouloir l'activer : selon les versions du RGW, impossible après coup. Créer avec `--object-lock-enabled-for-bucket` dès le départ.
+- Chercher à « activer l'audit d'OpenBao » avec `bao audit enable` : refusé depuis OpenBao 2.4 ; il est déjà déclaré dans `openbao.hcl` depuis le M25.
+- Créer le compartiment d'archive **sans** verrouillage puis vouloir l'activer : refusé (`InvalidBucketState`). Créer avec `--object-lock-enabled-for-bucket` dès le départ.
+- « Prouver » le verrou par un `delete-object` sans `--version-id` : il réussit (marqueur de suppression) et ne prouve rien.
 - Tester directement en `COMPLIANCE` : une erreur de date (10 ans au lieu d'1) devient irréversible. Éprouver en `GOVERNANCE`, qui se lève avec le bon droit, puis basculer.
 - Dater à la réception (pas d'étape `timestamp`) : une chronologie d'incident décalée de plusieurs minutes, inexploitable.
 - Oublier que l'archive doit aussi contenir le **manifeste** et sa **signature** : sans eux, l'archive est inaltérable mais non prouvable.
@@ -68,7 +76,7 @@ L'archive d'audit est présentée à l'auditeur HDS avec le rapport d'intégrit�
 
 **Solution** (solution de référence)
 
-Documents et code : [`vulnerabilites.md`](fichiers/F6-S09/medisphere/docs/conformite/vulnerabilites.md), [`exceptions-vuln-echues.sh`](fichiers/F6-S09/politiques/outils/exceptions-vuln-echues.sh), [`planifications.extrait-F6.yaml`](fichiers/F6-S09/k8s/composants/velero/planifications.extrait-F6.yaml), [`ECA-3602.md`](fichiers/F6-S09/medisphere/docs/conformite/ecarts/ECA-3602.md), [`ECA-3603.md`](fichiers/F6-S09/medisphere/docs/conformite/ecarts/ECA-3603.md).
+Documents et code : [`vulnerabilites.md`](fichiers/F6-S09/medisphere/docs/conformite/vulnerabilites.md), [`exceptions-vuln-echues.sh`](fichiers/F6-S09/politiques/outils/exceptions-vuln-echues.sh), [`planifications.extrait-F6.yaml`](fichiers/F6-S09/k8s/composants/velero/planifications.extrait-F6.yaml), [`ECA-3602-vulnerabilites.md`](fichiers/F6-S09/medisphere/docs/conformite/ecarts/ECA-3602-vulnerabilites.md), [`ECA-3603-sauvegardes-chiffrement.md`](fichiers/F6-S09/medisphere/docs/conformite/ecarts/ECA-3603-sauvegardes-chiffrement.md).
 
 1. **Politique de traitement** (`vulnerabilites.md`) : délais depuis la **première détection**, justifiés —
    | Criticité | Délai de traitement | Mesure du retard |
@@ -79,16 +87,17 @@ Documents et code : [`vulnerabilites.md`](fichiers/F6-S09/medisphere/docs/confor
    | Basse | au prochain cycle de mise à jour de l'image de base | — |
    Lien avec l'existant : Harbor bloque **toutes** les critiques au tirage, la CI bloque les critiques **corrigeables** (M13) ; la politique ajoute l'engagement de délai et la mesure. Circuit d'exception : proposée par l'équipe, validée par la RSSI, durée **≤ 90 jours**, compensation écrite, inscrite au registre `EXC-…` (type `EXC-V-nnn`, « vulnérabilité »).
 
-2. **Exceptions auto-expirantes** : une exception de vulnérabilité = une entrée de la `cve_allowlist` du projet Harbor **avec** `expires_at` (Harbor cesse de l'appliquer à la date) + une ligne `EXC-V-nnn` au registre avec la même date. Le contrôle `exceptions-vuln-echues.sh` (job de CI de `plateforme/politiques`) lit la `cve_allowlist` (API Harbor) et le registre, et **échoue** si une exception est échue, si une date manque, ou si les deux côtés divergent — même logique que le pipeline des `PolicyException` du M26. Une exception échue ne s'applique donc plus (Harbor) **et** fait rougir la CI (contrôle).
+2. **Exceptions auto-expirantes** : une exception de vulnérabilité = une CVE dans la `cve_allowlist` du projet Harbor + une ligne `EXC-V-nnn` au registre (CVE, image, compensation, échéance ≤ 90 jours, valideur). La liste de Harbor n'a qu'**une** date d'expiration (`expires_at`, pour toute la liste) : on la règle sur l'échéance la plus proche ; à cette date Harbor cesse de l'appliquer en entier, et ce qui reste justifié se revalide. Le contrôle `exceptions-vuln-echues.sh` (job de CI de `plateforme/politiques`) lit la `cve_allowlist` (API Harbor) et le registre, et **échoue** si une exception est échue, si une date manque, ou si les deux côtés divergent — même logique que le pipeline des `PolicyException` du M26. Une exception échue ne s'applique donc plus (Harbor) **et** fait rougir la CI (contrôle).
 
 3. **Tableau de suivi** (`observabilite/tableaux/securite/vulnerabilites.json`, UID `f6-vulnerabilites`) : alimenté par les métriques de Trivy Operator (`VulnerabilityReport` exposés) et/ou l'API de Harbor ; colonnes criticité, âge, échéance, **retard** (rouge si dépassé). Aucune saisie manuelle.
 
 4. **Chiffrement côté serveur (ECA-3603)** :
-   - *Velero* : dépôt Kopia chiffré par une phrase de passe tirée d'OpenBao (`kv/velero/depot/phrase`), injectée dans le Secret du dépôt par ESO ; le RGW/`s3-01` ne voit que du chiffré. (`planifications.extrait-F6.yaml` documente le `BackupRepository`/secret ; champ exact à confirmer sur Velero 1.18.)
-   - *Exports bruts* (dumps, archives) : chiffrés par `age` dans le pipeline (clé publique en clair dans le dépôt, clé privée dans `kv/exports/age`) avant dépôt sur `s3-01`.
-   - *Restauration éprouvée* : une restauration d'essai de `medidoc-dev` depuis la sauvegarde Velero chiffrée a réussi ; le déchiffrement d'un export `age` d'essai a réussi. Procédures dans `vulnerabilites.md` (section « Chiffrement et restauration »).
+   - *Velero, données des volumes* : Kopia chiffre toujours, mais avec la phrase **par défaut** que Velero écrit à l'installation dans `velero/velero-repo-credentials` (clé `repository-password`) — publique, donc équivalente au clair. Un `ExternalSecret` (`planifications.extrait-F6.yaml`) la remplace par une phrase aléatoire rangée dans `kv/plateforme/velero/depot`. La phrase est globale et un dépôt existant garde la sienne : nouveau préfixe `kopia-v2` pour l'emplacement `s3-01` (valeurs du chart, M16-E16), ancien emplacement déclaré en lecture seule jusqu'à l'expiration des anciennes sauvegardes.
+   - *Velero, manifestes* : Velero dépose l'archive des objets **en clair** ; on en exclut les Secrets (recréés par ESO depuis OpenBao). Ce qui reste n'est pas une donnée de santé.
+   - *Exports bruts* (dumps, archives) : chiffrés par `age` dans le pipeline (clé publique dans le dépôt, clé privée dans `kv/plateforme/exports/age`) avant dépôt sur `s3-01`.
+   - *Restauration éprouvée* : restauration d'essai de `medidoc-dev` (dans `wb-essais`) depuis une sauvegarde faite **après** le changement de phrase ; déchiffrement d'un export `age` d'essai. Procédures dans `vulnerabilites.md` (§ 5).
 
-5. **Fermeture** : `ECA-3602` et `ECA-3603` passent en `clos`, preuve `ms-preuves` = politique sur `main`, un essai d'exception échue rejetée par la CI, la configuration de chiffrement de Velero, le journal d'une restauration d'essai.
+5. **Fermeture** : P-VUL-03, P-SAV-03 et P-CTL-01 entrent au catalogue (collecteurs `harbor-allowlist`, `velero-chiffrement`, `controles-planifies`) ; les fiches `ECA-3602` et `ECA-3603` passent en `clos` en citant chacune un lot qui les contient, antérieur à la clôture.
 
 **Explications**
 - **Un délai sans mesure n'existe pas.** La politique n'a de valeur que si on mesure le retard (date de première détection → aujourd'hui) et qu'on le voit. D'où le tableau, pas une note.
@@ -97,13 +106,15 @@ Documents et code : [`vulnerabilites.md`](fichiers/F6-S09/medisphere/docs/confor
 
 **Alternatives**
 - Délais plus stricts (critique 48 h) : plus sûr, souvent intenable quand le correctif n'existe pas encore ; MédiSphère assume 7 jours + exception datée obligatoire.
-- Chiffrement du compartiment RGW au repos (SSE côté RGW) : protège le disque, **pas** l'administrateur du RGW qui a la clé ; le chiffrement applicatif (`age`, Kopia) protège aussi de lui.
+- Chiffrement côté serveur du stockage objet (SSE-S3, SSE-C par le greffon AWS de Velero) : protège le disque, **pas** l'administrateur du stockage qui détient ou voit passer la clé ; le chiffrement avant dépôt (`age`, Kopia avec une phrase d'OpenBao) protège aussi de lui.
 - Trivy Operator comme seule source : pratique dans le cluster, mais ne voit pas les images non déployées ; combiner avec l'analyse de Harbor.
 
 **Pièges classiques**
-- Une `cve_allowlist` sans `expires_at` : l'exception est éternelle, l'écart revient.
+- Une `cve_allowlist` sans `expires_at` : l'exception est éternelle, l'écart revient. Croire qu'on peut dater chaque CVE dans Harbor : la date porte sur toute la liste du projet.
 - Aligner mal les seuils chaîne/registre (M13) : une image avec une critique **non corrigeable** passe la CI puis ne peut plus être tirée ; décider (exception datée) et l'écrire.
 - Chiffrer la sauvegarde sans jamais éprouver la restauration : le jour du sinistre, la clé est introuvable ou la phrase est fausse.
+- Changer `repository-password` sur place : les dépôts Kopia existants restent chiffrés avec l'ancienne phrase, Velero ne les ouvre plus (sauvegardes et restaurations en échec) ; d'où le nouveau préfixe.
+- Croire que Kopia chiffre « toute la sauvegarde » : l'archive des manifestes (Secrets compris, si on ne les exclut pas) part en clair.
 - Mesurer le retard depuis la date du jour de l'exception au lieu de la première détection : on masque le retard réel.
 
 **En production chez MédiSphère**
@@ -113,7 +124,11 @@ Le respect des délais devient un SLO (« 95 % des critiques traitées dans le d
 
 ## Points non testés en conditions réelles (phase 3)
 
-- Collecte Alloy des événements **Keycloak, GitLab, FreeIPA** : formats/chemins selon les versions du M22/M24 ; relus, non exécutés sur une plateforme F6.
-- Champ exact du secret de dépôt **Kopia** chiffré de Velero 1.18 : à confirmer sur le lab.
-- `expires_at` de la `cve_allowlist` de **Harbor 2.15** : comportement (l'entrée cesse-t-elle d'être appliquée exactement à la date ?) à confirmer sur le lab ; le contrôle CI reste le filet.
+- Collecte Alloy de **GitLab** et de **Proxmox** vers le locataire `audit` : relue contre le mécanisme du M24-E26, non exécutée sur une plateforme F6.
+- Velero 1.18 : prise de propriété par ESO du Secret `velero-repo-credentials` créé par Velero, et nouveaux dépôts Kopia sous le préfixe `kopia-v2` (vérifie sur ta plateforme que les anciennes sauvegardes restent listées par l'emplacement en lecture seule) ; CRD `backuprepositories.velero.io` lue par le collecteur `velero-chiffrement`.
+- `archiver-audit` : pagination de `query_range` (entrées de même horodatage en bord de page), volume d'une journée d'audit (taille de l'`emptyDir`), paquet `awscli` de Debian 13 dans l'image, étiquette de l'image de base `bibliotheque/debian` ; signature `transit` pré-hachée (`prehashed`, clé `ecdsa-p256`).
+- GitLab Free : événements réellement écrits dans `audit_json.log` ; droits du dossier des journaux d'Omnibus (lecture par Alloy avec `CAP_DAC_READ_SEARCH`) ; Alloy sur `pve01` et `pbs01` (hôtes physiques) et flux `pbs01` → Loki par `wg0`.
+- Message exact du RGW quand le verrou refuse la suppression d'une version (`AccessDenied`).
+- Collecteurs ajoutés à `ms-preuves` (`audit-sources`, `archive-audit-verrou`, `harbor-allowlist`, `velero-chiffrement`, `controles-planifies`) : `shellcheck` propre, non exécutés ; présence de `cve_allowlist` dans la réponse de `GET /api/v2.0/projects` de Harbor 2.15 à vérifier (sinon, un appel par projet).
+- `expires_at` de la `cve_allowlist` de **Harbor 2.15** (date unique de la liste, en secondes) : comportement exact à la date à confirmer sur le lab ; le contrôle CI reste le filet.
 - Bascule `GOVERNANCE` → `COMPLIANCE` du compartiment d'archive : éprouvée sur un compartiment jetable seulement.

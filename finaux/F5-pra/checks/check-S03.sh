@@ -16,6 +16,16 @@ require_cmd ssh jq dig curl
 check_cmd "RB-353 publié : go/no-go, sauvegarde de /etc/proxmox-backup, retour arrière, CHG-3503" \
   _f5p_doc runbooks/RB-353-hyperviseur-par2.md 'go.?/.?no.?go|no-go' '/etc/proxmox-backup' 'retour arri' 'CHG-3503'
 
+_f5_s03_fiche() {
+  local f
+  while IFS= read -r f; do
+    [[ "${f##*/}" =~ ^CHG-3503 ]] || continue
+    _f5p_contient "$_f5p_projet_doc" "$f" 'd(é|e)cision' 'go' 'contr(ô|o)le' && return 0
+  done < <(_f5p_arbre "$_f5p_projet_doc" docs/changements/fiches)
+  return 1
+}
+check_cmd "fiche docs/changements/fiches/CHG-3503-… publiée : décision (go/no-go) et contrôles d'après" _f5_s03_fiche
+
 # --- PBS intact et sauvegarde de sa configuration --------------------------------------------------------
 _f5_s03_archive_hp01() {
   _f5p_hp01 'f=$(ls -1t /root/f5/pbs-config-*.tar.gz 2>/dev/null | head -n 1); [ -n "$f" ] && tar -tzf "$f" | grep -q "proxmox-backup/datastore.cfg"'
@@ -121,4 +131,4 @@ _f5_s03_source_hors_par1() {
 }
 check_cmd "hp01 : une source de temps qui ne passe pas par PAR1" _f5_s03_source_hors_par1
 check_cmd "dns03 se synchronise sur 10.20.20.1" \
-  _f5p_ssh dns03.par2.medisphere.internal 'chronyc -n sources 2>/dev/null | grep -q "10\.20\.20\.1"'
+  _f5p_ssh "$_f5p_dns03_hote" 'chronyc -n sources 2>/dev/null | grep -q "10\.20\.20\.1"'

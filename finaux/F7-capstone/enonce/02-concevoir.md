@@ -9,7 +9,7 @@ Prérequis de la phase : F7-S01 et F7-S02 fusionnés ; réponses du GHSV lues ([
 ### F7-S03 — L'architecture cible de production  `RED` `★★★★`
 
 > **Ticket PLAT-3703** — *De : Karim Benali* — *Copie : Sophie Laurent, Julien Petit, Claire Morel*
-> J'ai lu `exigences.md` : 300 req/s avec un nœud en moins, la même chose à PAR2 en PRA, des pièces jointes, des journaux pendant un an, Internet en façade, et un IdP qui n'est pas le nôtre. Dessine-moi la **vraie** production : les deux sites, le matériel, ce qui tourne où, comment le trafic entre, comment on bascule. Et le dimensionnement, à partir de **nos** mesures, pas d'un abaque de constructeur : je veux voir le coût d'une requête mesuré sur la recette et le calcul qui en sort un nombre de serveurs. Termine par la liste honnête de ce qui change par rapport au lab, et des points uniques de défaillance qui restent.
+> J'ai lu `exigences.md` : ta capacité cible avec un nœud en moins, la même chose à PAR2 en PRA, des pièces jointes, des journaux pendant un an, Internet en façade, et un IdP qui n'est pas le nôtre. Dessine-moi la **vraie** production : les deux sites, le matériel, ce qui tourne où, comment le trafic entre, comment on bascule. Et le dimensionnement, à partir de **nos** mesures, pas d'un abaque de constructeur : je veux voir le coût d'une requête mesuré sur la recette et le calcul qui en sort un nombre de serveurs. Termine par la liste honnête de ce qui change par rapport au lab, et des points uniques de défaillance qui restent.
 
 **Objectifs pédagogiques**
 - Concevoir une architecture de production sur deux sites à partir d'exigences chiffrées et d'une plateforme existante.
@@ -21,7 +21,7 @@ Prérequis de la phase : F7-S01 et F7-S02 fusionnés ; réponses du GHSV lues ([
 
 **Contexte technique**
 - Référence de charge de MédiAgenda (M29-E14) : `plateforme/resilience`, `charge/references/mediagenda-recette.json` ; script `charge/distribue/mediagenda-recette.js` (paramètres `TAUX_CIBLE`, `PALIER`) ; verdict lu dans Prometheus (RB-295). La recette de MédiAgenda est pilotée par un HPA (2 à 4 pods, M28) : pour mesurer un **coût par requête**, il faut savoir combien de pods tournaient et ce qu'ils consommaient pendant chaque palier.
-- Mélange de requêtes attendu chez le GHSV : hypothèse H-01 de ton analyse (le parcours du M29 écrit à chaque itération : il est plus lourd que la pointe du GHSV).
+- Mélange de requêtes attendu chez le GHSV : ton hypothèse de S01 (R-01 ne donne pas la répartition ; le parcours du M29 écrit à chaque itération : il est plus lourd que la pointe du GHSV).
 - Hébergement : les salles de MédiSphère sont dans des centres de données certifiés HDS pour l'activité 1 (hypothèse du final) ; MédiSphère y loue des baies (espace, énergie, refroidissement, accès Internet de l'hébergeur en option).
 - Dans le lab, aucun service n'est exposé à Internet, `idp01` et `kms01` sont uniques, PAR2 est un nœud Proxmox unique de 16 Go, l'interconnexion est un tunnel WireGuard sur un réseau domestique.
 - Le nom public est celui du GHSV (`rendez-vous.ghsv.example`, annexe A1) ; en cas de PRA, les noms de service de MédiSphère basculent par CNAME (F5).
@@ -33,7 +33,7 @@ Prérequis de la phase : F7-S01 et F7-S02 fusionnés ; réponses du GHSV lues ([
    - **par site** : matériel (serveurs, stockage, réseau, sécurité périmétrique), virtualisation, Kubernetes, données, identité, secrets, observabilité, sauvegarde ;
    - l'**exposition Internet** : noms, certificats, protection contre le déni de service, filtrage, limites de débit ;
    - la **bascule** du GHSV vers PAR2 et le retour ;
-   - le **dimensionnement** : du coût par requête mesuré à la capacité NF-07 et NF-08, des volumes NF-09 au stockage brut, avec chaque facteur justifié ; la part de la plateforme que consomme le GHSV ;
+   - le **dimensionnement** : du coût par requête mesuré aux capacités cibles de `exigences.md` (PAR1 et repli), des volumes à cinq ans au stockage brut, avec chaque facteur justifié ; la part de la plateforme que consomme le GHSV ;
    - **ce qui change par rapport au lab**, élément par élément ;
    - les **points uniques de défaillance** qui restent, et pourquoi on les accepte (ou pas) ;
    - les hypothèses.
@@ -61,7 +61,7 @@ Le coût par requête se lit dans Prometheus pendant un palier stable : CPU cons
 
 <details><summary>Indice 2</summary>
 
-Fais le calcul dans l'ordre : capacité à tenir (NF-07) × coût par requête → vCPU utiles ; ÷ utilisation cible → vCPU à réserver ; + ce qui ne dépend pas de la charge (plan de contrôle, opérateurs, observabilité, Keycloak, OpenBao) ; puis N+1 sur les hyperviseurs. Tu constateras que la charge du GHSV pèse peu : ce qui dimensionne la production, c'est la redondance, le site de repli à pleine capacité et le stockage. Compare avec ce que le F5 a mis à PAR2.
+Fais le calcul dans l'ordre : capacité à tenir (ta capacité cible de S02) × coût par requête → vCPU utiles ; ÷ utilisation cible → vCPU à réserver ; + ce qui ne dépend pas de la charge (plan de contrôle, opérateurs, observabilité, Keycloak, OpenBao) ; puis N+1 sur les hyperviseurs. Tu constateras que la charge du GHSV pèse peu : ce qui dimensionne la production, c'est la redondance, le site de repli à pleine capacité et le stockage. Compare avec ce que le F5 a mis à PAR2.
 </details>
 
 <details><summary>Indice 3</summary>
@@ -214,7 +214,7 @@ La sensibilité se fait en faisant varier une hypothèse à la fois (± 30 % ou 
 
 **Travail demandé**
 1. Rédige `docs/capstone/planning.md` : jalons datés de la soutenance au 30 juin 2027 (et le premier test de PRA), lots de travail, dépendances (internes, GHSV, fournisseurs), **chemin critique**, travaux lancés avant la notification et leur risque, ce qui ne sera pas prêt au 1er mars et la réponse proposée, **RACI** des activités principales (MédiSphère et GHSV).
-2. Rédige `docs/capstone/risques.md` : au moins dix risques `R-nn` (projet, technique, sécurité, conformité, fournisseurs, humains, financiers), chacun avec probabilité, impact, criticité, propriétaire, réponse (éviter, réduire, transférer, accepter), actions, indicateur de déclenchement.
+2. Rédige `docs/capstone/risques.md` : au moins dix risques `RSQ-nn` (pas `R-nn` : ces identifiants sont ceux des réponses du GHSV) (projet, technique, sécurité, conformité, fournisseurs, humains, financiers), chacun avec probabilité, impact, criticité, propriétaire, réponse (éviter, réduire, transférer, accepter), actions, indicateur de déclenchement.
 3. Rédige `docs/capstone/run.md` : niveaux de support et horaires, astreinte (rotation, effectif, rémunération ou récupération, escalade), traitement des P1 à P3 (EXP-02), rituels (comités, revue de capacité, revue des accès), rapport mensuel, changements chez le GHSV, montée en compétences de l'équipe (formation, binômes, exercices) et recrutements.
 4. MR relue par Nadia et Claire, fusionnée sur `main`.
 
@@ -225,14 +225,14 @@ La sensibilité se fait en faisant varier une hypothèse à la fois (± 30 % ou 
 
 **Critères de réussite**
 - [ ] `docs/capstone/planning.md` est sur `main`, avec des jalons datés couvrant au moins le 1er mars et le 30 juin 2027, un chemin critique et une matrice RACI.
-- [ ] `docs/capstone/risques.md` est sur `main`, avec au moins dix risques `R-nn`, chacun avec probabilité, impact et propriétaire.
+- [ ] `docs/capstone/risques.md` est sur `main`, avec au moins dix risques `RSQ-nn`, chacun avec probabilité, impact et propriétaire.
 - [ ] `docs/capstone/run.md` est sur `main` et traite le support (dont le samedi), l'astreinte, les priorités P1 à P3, le rapport mensuel et la montée en compétences.
 
 **Vérification** : `lab/bin/check F7 6` (présence et contenu minimal ; la qualité se juge avec le corrigé).
 
 <details><summary>Indice 1</summary>
 
-Le chemin critique ne passe probablement pas par l'infrastructure (elle existe, et le GHSV est petit) mais par le **développement** (S01 : ≈ 155 jours) et par les **dépendances du GHSV** (export de l'outil actuel, enregistrement du client OIDC, DPI en recette). Commence par le 1er mars et remonte. Qu'est-ce qui doit être vrai le 26 février, jour du go/no-go de la vague 1 ?
+Le chemin critique ne passe probablement pas par l'infrastructure (elle existe, et le GHSV est petit) mais par le **développement** (ton estimation de S01) et par les **dépendances du GHSV** (export de l'outil actuel, enregistrement du client OIDC, DPI en recette). Commence par le 1er mars et remonte. Qu'est-ce qui doit être vrai le 26 février, jour du go/no-go de la vague 1 ?
 </details>
 
 <details><summary>Indice 2</summary>

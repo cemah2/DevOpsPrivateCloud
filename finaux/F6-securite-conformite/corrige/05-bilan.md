@@ -3,11 +3,8 @@
 > ⚠️ Corrigé — à lire après avoir cherché. `LIBRE` : solution de référence.
 
 **Validé hors du lab** (à la rédaction, 23/10/2026) :
-- `etat-preuves.sh` : `bash -n` et `shellcheck -x` ;
+- `ms-etat-preuves` : `bash -n` et `shellcheck -x` ;
 - SoA (extrait) et état des preuves : Markdown/logique relus, non exécutés sur une plateforme F6.
-
-**Points non testés en conditions réelles** : génération de l'état depuis `preuves-conformite` (dépend de
-`ms-preuves`, F6-S02) ; précision de l'antériorité (horodatage du RGW). Signale tes retours.
 
 **Fichiers** : [`fichiers/F6-S14/`](fichiers/F6-S14/).
 
@@ -17,22 +14,25 @@
 
 **Solution** (solution de référence)
 
-Fichiers : [`soa.md` (extrait F6)](fichiers/F6-S14/medisphere/docs/conformite/soa.extrait-F6.md), [`etat-preuves.sh`](fichiers/F6-S14/outils/bin/etat-preuves.sh), [`etat-preuves.md` (exemple généré)](fichiers/F6-S14/medisphere/docs/conformite/etat-preuves.md).
+Fichiers : [`soa.md` (extrait F6)](fichiers/F6-S14/medisphere/docs/conformite/soa.extrait-F6.md), [`ms-etat-preuves`](fichiers/F6-S14/outils/bin/ms-etat-preuves), [`etat-preuves.md` (exemple généré)](fichiers/F6-S14/medisphere/docs/conformite/etat-preuves.md).
 
-1. **Clôture des écarts** : les six écarts de l'audit sont au statut `clos`, chacun avec son champ
-   `preuve` pointant un préfixe de `preuves-conformite/ECA-36xx/`. Les quatre du périmètre F6 (3601,
-   3602, 3603, 3605) sont fermés par les phases 3 et 4 ; 3604 (revue des accès) et 3606 (transferts hors
-   EEE) par leurs scénarios de phases 1-2. Chaque preuve est collectée par `ms-preuves` (automatique),
-   déposée dans le compartiment verrouillé (inaltérable, horodatée), **avant** la date de l'audit de
-   suivi.
+1. **Clôture des écarts** : les six écarts de l'audit sont au statut `clos`. L'en-tête de chaque fiche
+   donne `clos-le` et, dans `preuve`, le **lot `ms-preuves`** (`lots/AAAA/MM/JJ/<LOT>/`) qui contient les
+   preuves de clôture (identifiants `P-…` cités dans la section « Preuve de clôture ») : collecté par un
+   pipeline (automatique), signé, déposé dans le compartiment verrouillé (inaltérable, horodaté par le
+   serveur), et **daté au plus tard du jour de la clôture**. Les quatre du périmètre technique (3601, 3602,
+   3603, 3605) sont fermés par les phases 3 et 4 ; 3604 (revue des accès) se ferme avec la deuxième revue
+   mensuelle (lot qui contient P-IAM-06 de décembre), 3606 (transferts hors EEE) avec la cartographie
+   publiée et les avenants signés (pièces documentaires citées, lot qui contient la version publiée).
 2. **SoA à jour** : `soa.extrait-F6.md` montre la forme — une ligne par mesure (applicable O/N +
-   justification, mise en œuvre, **lien de preuve**). Les mesures touchées par le F6 (A.8.15, A.8.16,
-   A.8.8, A.5.24-26, A.8.13, A.8.24, et HDS activités 5-6) renvoient à leur mise en œuvre et à une preuve
-   **existante**.
-3. **État des preuves généré** : `etat-preuves.sh` croise le registre des écarts, la SoA et le contenu de
-   `preuves-conformite` (dates, verrouillage) ; il produit `etat-preuves.md` et **échoue** si une preuve
-   manque, a vieilli (au-delà d'un seuil par type), n'est pas verrouillée, ou si sa collecte n'est pas
-   planifiée. C'est la vue de l'auditrice.
+   justification, mise en œuvre, **lien de preuve**). Les mesures touchées par le F6 (8.15, 8.16,
+   8.8, 5.24-5.28, 8.13, 8.24, et HDS activités 5-6) renvoient à leur mise en œuvre et à des preuves
+   **existantes** (identifiants du catalogue, lot de clôture de l'écart).
+3. **État des preuves généré** : `bin/ms-etat-preuves` (pipeline planifié `preuves:etat`, après la
+   collecte) lit l'en-tête des fiches d'écart et le compartiment `preuves-conformite` ; il produit
+   `etat-preuves.md` et **échoue** si le lot d'un écart clos manque, est postérieur à la clôture ou n'est
+   plus sous rétention, si le compartiment n'est pas en `COMPLIANCE`, ou si le dernier lot quotidien a plus
+   de 36 h (collecte en panne). C'est la vue de l'auditrice.
 4. **Étiquette** `conformite-v1` posée une fois tout sur `main` et `lab/bin/check F6 1` à `F6 14` verts.
 
 **Explications**
@@ -69,5 +69,8 @@ par mesure signale les collectes qui se dégradent avant qu'elles ne manquent.
 
 ## Points non testés en conditions réelles (phase 5)
 
-- Génération de l'état depuis `preuves-conformite` : dépend de `ms-preuves` (F6-S02).
-- Précision de l'antériorité : dépend de l'horodatage des objets du RGW.
+- `ms-etat-preuves` : relu, `shellcheck` propre, non exécuté contre un vrai compartiment ; la date d'un
+  lot vient de son nom (horloge du runner, synchronisée sur `gw01`), la date serveur de l'objet (RGW)
+  la confirme : à comparer sur ton lab.
+- Clôture de ECA-3604 et ECA-3606 : décrite, sans fichier de référence (dépend de ta revue de décembre et
+  de tes avenants).

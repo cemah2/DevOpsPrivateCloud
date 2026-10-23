@@ -1,6 +1,6 @@
-# Exercice de table — réponse à incident (2026)
+# Exercice de table — réponse à incident (janvier 2027)
 
-> `plateforme/medisphere` — `docs/securite/incidents/exercices/2026-exercice-table.md` (F6-S10, SEC-3610).
+> `plateforme/medisphere` — `docs/securite/incidents/exercices/2027-01-exercice-table.md` (F6-S10, SEC-3610).
 > Animé par Sophie Laurent (RSSI). Participants : astreinte Plateforme, Karim Benali, Nadia Roussel,
 > Thomas Renaud (DPO), Claire Morel. Durée : 90 min, sur table (aucune action sur le lab).
 
@@ -27,11 +27,11 @@ annoncé d'intervention. » Le groupe déroule RB-360 à voix haute, chronométr
 
 | Trou | Gravité | Action | Responsable | Échéance |
 |---|---|---|---|---|
-| Le numéro de téléphone du DPO n'était pas dans la trousse d'astreinte | moyen | Ajouter contacts RSSI/DPO à la trousse (F3) | astreinte | 2026-11-20 |
-| Personne ne savait où était l'identité de dépôt des preuves | fort | `verifier-kit-forensique.sh` en CI + doc dans RB-361 | Karim | 2026-11-15 |
-| Hésitation sur « qui décide de notifier la CNIL » | fort | RB-360 §5 clarifié : DPO décide, RSSI qualifie | Sophie | 2026-11-10 |
-| Doute sur le signalement CERT Santé | moyen | Vérifier le périmètre sur Légifrance, noter dans RB-360 | Thomas | 2026-12-01 |
-| Point de contrôle de conteneur jamais essayé | moyen | Éprouver sur `wb-essais`, écrire le résultat dans RB-361 | Karim | 2026-11-18 |
+| Le numéro de téléphone du DPO n'était pas dans la trousse d'astreinte | moyen | Ajouter contacts RSSI/DPO à la trousse (F3) | astreinte | 2027-01-22 |
+| Personne ne savait où était l'identité de dépôt des preuves | fort | `ms-verifier-kit-forensique` en CI + doc dans RB-361 | Karim | 2027-01-12 |
+| Hésitation sur « qui décide de notifier la CNIL » | fort | RB-360 §5 clarifié : DPO décide, RSSI qualifie | Sophie | 2027-01-07 |
+| Doute sur le signalement CERT Santé | moyen | Vérifier le périmètre sur Légifrance, noter dans RB-360 | Thomas | 2027-02-01 |
+| Point de contrôle de conteneur jamais essayé | moyen | Éprouver sur `wb-essais`, écrire le résultat dans RB-361 | Karim | 2027-01-12 |
 
 ## Conclusion
 

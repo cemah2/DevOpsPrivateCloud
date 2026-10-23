@@ -1,6 +1,8 @@
-# Fichier de site de PAR2 (miroir de mediagenda/deploiement sur adm02, lu par Argo CD de k8s-par2) :
+# plateforme/k8s — sites/par2/mediagenda-prod/50-mediagenda-db-par2.yaml (fichier de site de S06) :
 # EXTRAIT de la spécification du Cluster « mediagenda-db-par2 » pendant le retour (F5-S12, RB-351 §C3, D2).
-# L'emplacement exact est celui de ton fichier de site de S06 ; seules ces sections changent.
+# Comme en S06 et S09 : commit dans le miroir de plateforme/k8s sur adm02 (versé dans GitLab en D3), puis
+# « kubectl apply --server-side » depuis adm02 (ce Cluster n'est pas géré par Argo CD) ; seules ces
+# sections changent.
 #
 # Pendant le PRA (S09), PAR2 était primaire : replica.primary: mediagenda-db-par2 (promotion SANS jeton).
 #

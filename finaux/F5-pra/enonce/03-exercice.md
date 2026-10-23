@@ -35,7 +35,7 @@ Prérequis de la phase : phases 1 et 2 terminées (`lab/bin/check F5 3` à `lab/
 4. Écris le compte rendu : constat, chronologie, cause, réparation, et surtout **prévention** : quel contrôle de préparation (automatique, alerté) l'aurait vu avant la répétition. Corrige RB-350 si une étape manquait.
 
 **Critères de réussite**
-- [ ] `s3-02` réplique de nouveau depuis `s3-01` (unité `filer.sync` active).
+- [ ] `s3-02` réplique de nouveau depuis `s3-01` (unités `filer.sync` actives).
 - [ ] Le nœud `k8s-par2-n01` est `Ready` et planifiable.
 - [ ] La VM 1055 (`bao-par2`) ne porte aucun verrou et est arrêtée (veille).
 - [ ] `mediagenda-db-par2` est une réplique saine ; dns03 et reg02 répondent.
@@ -80,7 +80,7 @@ Après la réparation, demande-toi pourquoi aucune alerte n'a sonné : le retard
 - Le sinistre est **simulé par isolement** : `lab/bin/break F5 9`, lancé depuis `adm01` par la personne qui joue « le destin » (toi, si tu es seul : lance-le à une heure tirée au hasard). La bordure de PAR1 coupe la liaison `wg0` vers PAR2, le VPN `wg1` de PAR1 et les accès au lab depuis le LAN (sauf `pve01`). **Aucune VM de PAR1 n'est arrêtée** : PAR1 continue de tourner, seul, sans que personne le voie.
 - Le contrôle préalable refuse l'injection si PAR2 n'est pas prêt, si le témoin ne tourne pas, si la sonde `ms-sonde-pra` est arrêtée, si `wg1` de `hp01` manque, ou si `pve01` ne joint pas `gw01` **et** `gw02` (l'annulation, en S12, se fait depuis `pve01`).
 - **Règle du jeu** : à partir de T0, PAR1 n'existe plus. Ni VPN de PAR1, ni `adm01`, ni `pve01` (« il est dans la salle »). Seule exception : une urgence réelle du lab, décidée par écrit dans la main courante avec l'accord de Sophie — et l'exercice est alors noté comme interrompu.
-- T0 est écrit par l'injection dans `/var/lib/workbook/f5-t0` de `adm02` (et dans la main courante de ton clone de travail, s'il existe). C'est l'heure de référence du RTO et du RPO.
+- T0 est écrit par l'injection dans `/var/lib/workbook/f5-t0` de `adm02` et de `gw01` (et dans la main courante de ton clone de travail, s'il existe). C'est l'heure de référence du RTO et du RPO.
 - **Mesures** : la sonde `ms-sonde-pra` de `adm02` écrit toutes les 15 s `horodatage_utc,cible,code_http,latence_ms,site` dans `/var/lib/ms-sonde-pra/mesures.csv`. RTO d'une application = première réponse 2xx servie par `par2` sur son nom global − T0. RPO de MédiAgenda = horodatage du dernier témoin `PRA-TEMOIN` écrit à PAR1 avant T0 − horodatage du dernier témoin retrouvé à PAR2.
 - Objectifs de référence (S01, à remplacer par les tiens) : MédiAgenda RTO 4 h / RPO 15 min ; MédiDoc RTO 8 h / RPO 1 h ; Legacy-RDV RTO 8 h / RPO 24 h ; MédiNotif RTO 8 h (S11). Le check lit les objectifs dans `WB_F5_RTO_MEDIAGENDA_MIN`, `WB_F5_RTO_MEDIDOC_MIN`, `WB_F5_RTO_RDV_MIN` (minutes).
 - Pendant le PRA, la documentation se tient dans le **miroir** de `plateforme/medisphere` sur `adm02` (branche `main`, poussée depuis ton clone de travail, comme le prévoit RB-350). La main courante : `docs/pra/journal/<AAAA-MM-JJ>.md`, une ligne `- HH:MM INC-6109 [type] texte`, types `ouverture`, `état`, `action`, `décision`, `mesure`, `clôture`.
@@ -207,7 +207,7 @@ Trois familles à vérifier, dans l'ordre du moins cher au plus cher : le temps 
 
 Objectifs :
 1. **Sauvegarder PAR2** : la base de PAR2 archive en continu et a une sauvegarde de base postérieure à T0 ; les VMs de PAR2 ont une sauvegarde postérieure à T0 ; décide et écris ce qui protège ces copies d'une perte de `hp01` lui-même.
-2. **Superviser a minima** : disponibilité des trois noms globaux, santé et archivage de la base de PAR2, mémoire et disque de `hp01` ; des alertes qui arrivent à quelqu'un pendant la crise.
+2. **Superviser a minima** (la supervision minimale prévue en S01, mise en service et complétée) : disponibilité des trois noms globaux, santé et archivage de la base de PAR2, mémoire et disque de `hp01` ; des alertes qui arrivent à quelqu'un pendant la crise.
 3. **MédiNotif** : reprise dans son objectif, puis rejeu des notifications perdues, avec une règle écrite (fenêtre, doublons acceptés ou non, données personnelles jamais journalisées) validée par Julien.
 4. **Les demandes des métiers** : une réponse écrite et datée pour chacune, avec sa justification (périmètre du PRA de S01, risque, capacité de PAR2).
 5. **Le journal** : main courante tenue (messages d'état au rythme de `cellule-de-crise.md`), et `docs/pra/exercices/2026-exercice-1/mode-degrade.md` : ce qui est ouvert et fermé, les décisions, les sauvegardes, la supervision, les réponses aux demandes.

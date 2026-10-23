@@ -1,19 +1,24 @@
 # sites/par2/stockage — stockage LOCAL de k8s-par2 (F5-S06) : pas de Ceph à PAR2. Release Helmfile de
 # l'environnement par2 seulement (releases/35-stockage-local.yaml.gotmpl). local-path-provisioner
-# (Rancher, Apache 2.0) : volumes en répertoires du nœud (/opt/local-path-provisioner) ; aucune
-# réplication (un nœud) : la protection des données de la base est son archive (cnpg-k8s-par2).
-# ⚠️ Version et source du chart à relever et épingler au moment de la MR (dépôt du projet sur GitHub,
-# chart dans deploy/chart/local-path-provisioner) : non relevées par ce corrigé.
+# (Rancher, Apache 2.0) v0.0.37 (annexes/versions-finaux-F5-F7.md) : volumes en répertoires du nœud
+# (/opt/local-path-provisioner) ; aucune réplication (un nœud) : la protection des données de la base
+# est son archive (cnpg-k8s-par2).
+# Le projet ne publie pas de dépôt Helm : le manifeste officiel de l'étiquette v0.0.37
+# (deploy/local-path-storage.yaml) est copié TEL QUEL dans composants/local-path-provisioner/ (empreinte
+# notée dans la MR) ; Helmfile l'applique comme un chart (dossier de manifestes) et le corrige ici :
+# classe par défaut, reclaimPolicy Retain (un PVC supprimé par erreur ne détruit pas les données).
 {{- if .Values.composants.stockageLocal }}
 releases:
   - name: local-path-provisioner
     namespace: local-path-storage
-    chart: <SOURCE-DU-CHART-LOCAL-PATH-PROVISIONER>
-    version: <VERSION-ÉPINGLÉE>
+    chart: ../composants/local-path-provisioner      # manifeste v0.0.37, sans modification
     labels: {groupe: stockage, composant: local-path}
-    values:
-      - storageClass:
+    strategicMergePatches:
+      - apiVersion: storage.k8s.io/v1
+        kind: StorageClass
+        metadata:
           name: local-path
-          defaultClass: true
-          reclaimPolicy: Retain
+          annotations:
+            storageclass.kubernetes.io/is-default-class: "true"
+        reclaimPolicy: Retain
 {{- end }}

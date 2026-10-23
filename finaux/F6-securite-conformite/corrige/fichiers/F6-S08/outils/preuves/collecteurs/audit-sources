@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# audit-sources — P-AUD-01 (F6-S08) : pour chacune des six sources du locataire « audit » de Loki, le
+# nombre de lignes reçues sur 24 h et l'heure de la dernière. Une source muette est un angle mort.
+# Identité : aucune (Loki lu dans le cluster, locataire audit en lecture) ; LOKI_URL facultatif.
+# (dans le dépôt : à côté des collecteurs de S02 ; ici, corrigé du F6-S02)
+# shellcheck source=../../../../F6-S02/outils/preuves/collecteurs/_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+L="${LOKI_URL:-http://loki.apps.par1.medisphere.internal:3100}"
+res="[]"
+for sel in '{job="kubernetes-audit"}' '{service="openbao"}' '{service="keycloak"}' \
+  '{service="freeipa"}' '{service="gitlab"}' '{service="proxmox"}'; do
+  r="$(curl -sf --max-time "$DELAI_HTTP" -G -H 'X-Scope-OrgID: audit' \
+    --data-urlencode "query=sum(count_over_time(${sel}[24h]))" "$L/loki/api/v1/query")" || r='{}'
+  d="$(curl -sf --max-time "$DELAI_HTTP" -G -H 'X-Scope-OrgID: audit' --data-urlencode "query=$sel" \
+    --data-urlencode since=24h --data-urlencode limit=1 --data-urlencode direction=backward \
+    "$L/loki/api/v1/query_range")" || d='{}'
+  res="$(jq -c --arg s "$sel" --argjson r "$r" --argjson d "$d" '. + [{source: $s,
+    lignes_24h: (($r.data.result[0].value[1] // "0") | tonumber),
+    derniere_ns: ($d.data.result[0].values[0][0] // null)}]' <<<"$res")"
+done
+entete_preuve | jq -S --argjson r "$res" '. + {sources: $r, muettes: [$r[] | select(.lignes_24h == 0) | .source]}'
+jq -e 'all(.[]; .lignes_24h > 0)' >/dev/null <<<"$res"

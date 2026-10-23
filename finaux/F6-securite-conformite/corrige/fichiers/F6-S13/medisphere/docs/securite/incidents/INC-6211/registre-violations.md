@@ -7,8 +7,8 @@
 | Champ | Valeur |
 |---|---|
 | Référence | INC-6211 |
-| Date de l'événement | 2026-11-26, 07:50 UTC (shell ouvert) |
-| Date de prise de connaissance | 2026-11-26, 07:52 UTC (alerte Falco) |
+| Date de l'événement | 2027-01-20, 07:50 UTC (shell ouvert) |
+| Date de prise de connaissance | 2027-01-20, 07:52 UTC (alerte Falco) |
 | Nature | Activité anormale dans un conteneur de `mediagenda-recette` : shell interactif, lecture d'un jeton de compte de service, tentative de connexion sortante vers une adresse non prévue (simulation d'exfiltration) |
 | Type d'atteinte | Confidentialité (tentative) ; intégrité : non ; disponibilité : non |
 | Catégories de personnes concernées | **Aucune** (données de recette fictives/pseudonymisées) |

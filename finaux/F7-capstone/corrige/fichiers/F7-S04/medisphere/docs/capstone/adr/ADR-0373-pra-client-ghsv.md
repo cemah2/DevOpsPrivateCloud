@@ -16,7 +16,7 @@ ENF-06 : RTO 4 h, RPO 15 min sur un second site. ENF-07 : aucun rendez-vous conf
 
 1. **Même mécanisme que le F5**, décliné pour le locataire : réplica continu du `Cluster` du GHSV dans `k8s-par2` ; objets du GHSV copiés vers `s3-02` ; applications du locataire à 0 réplica dans `k8s-par2`, prêtes à monter (images dans `reg02`, configuration par les miroirs d'`adm02`) ; capacité réservée (NF-08).
 2. **RPO** : `archive_timeout` ramené à **1 min** pour le `Cluster` du GHSV (RPO technique visé ≤ 5 min, engagement 15 min) ; témoin de RPO dans `ghsv-prod`. Effet à mesurer : nombre d'objets archivés (un segment de 16 Mo par minute, compressé).
-3. **ENF-07 par réconciliation** (procédure intégrée à RB-374, runbook du PRA du client, F7-S10) : après une bascule, la fenêtre [dernier témoin retrouvé à PAR2 ; début de l'indisponibilité] est réconciliée avec trois sources :
+3. **ENF-07 par réconciliation** (principe dans `pra-ghsv.md` et `engagements.md` de F7-S10 ; procédure détaillée dans le runbook d'exploitation du service, RB-370, écrit à la notification) : après une bascule, la fenêtre [dernier témoin retrouvé à PAR2 ; début de l'indisponibilité] est réconciliée avec trois sources :
    - le **DPI**, qui a reçu un `201` pour chaque rendez-vous qu'il a créé ou dont il a été notifié : extraction de ses rendez-vous de la fenêtre, comparée à `listerRendezVous` sur PAR2 ;
    - le **journal des confirmations** (messages publiés par MédiAgenda vers MédiNotif, M27-E08) : la file de PAR1 est perdue avec le site, mais les accusés d'envoi du fournisseur de SMS et de courriel (horodatage, identifiant de rendez-vous) ne le sont pas ;
    - les **journaux d'accès** répliqués (horodatage des `POST` en `201`, sans donnée de santé).
@@ -35,10 +35,10 @@ ENF-06 : RTO 4 h, RPO 15 min sur un second site. ENF-07 : aucun rendez-vous conf
 
 ## Conséquences
 
-- Procédure de réconciliation (RB-374) à écrire et à répéter ; la sonde de RPO et le rapport de réconciliation entrent dans le rapport de test (ENF-08).
+- Procédure de réconciliation (RB-370) à écrire et à répéter ; la sonde de RPO et le rapport de réconciliation entrent dans le rapport de test (ENF-08).
 - Dépendance au DPI : H-10 (le DPI rejoue ses écritures en échec) à confirmer à la notification ; sinon, l'extraction du DPI devient l'unique source pour ses rendez-vous.
 - Capacité de PAR2 achetée (architecture, §5.3) : c'est le coût principal de cette décision (S05).
-- Dans le lab : la bascule du locataire `ghsv` peut se démontrer sur la base de la topologie du F5 (F7-S10/S11), PAR2 restant à la capacité du lab (écart écrit).
+- **Preuve de concept du lab** (F7-S10) : réplica continu de la base du GHSV dans `k8s-par2` (topologie distribuée du F5), témoin de RPO propre au GHSV et **essai de reprise isolé** (grappe restaurée à part, sans promotion ni bascule) ; ni Keycloak ni capacité de production à PAR2 (écarts écrits) ; la bascule réelle du locataire se fait au test annuel (ENF-08).
 
 ## Révision
 

@@ -70,10 +70,21 @@ temoin() {
 
 # 2. La réplication des objets tourne (unité qui lance « weed filer.sync »).
 filersync() {
-  if ssh_ "$S3_02" 'u=$(for f in /etc/systemd/system/*.service; do grep -qs "filer.sync" "$f" && basename "$f"; done | head -n1); [ -n "$u" ] && systemctl is-active --quiet "$u"' 2>/dev/null; then
-    noter filer_sync 1 "unité filer.sync active sur s3-02"
+  # Unités simples ou instances (activées ou chargées) d'une unité modèle « @ » : toutes doivent tourner.
+  local etat
+  etat="$(ssh_ "$S3_02" 'for f in /etc/systemd/system/*.service; do
+      grep -qs "filer.sync" "$f" || continue; b=${f##*/}
+      case "$b" in
+        *@.service) p=${b%.service}
+          find /etc/systemd/system -path "*.wants/*" -name "${p}?*.service" -printf "%f\n" 2>/dev/null
+          systemctl list-units --all --type=service --no-legend --plain "${p}*" 2>/dev/null | awk "{ print \$1 }" ;;
+        *) echo "$b" ;;
+      esac
+    done | sort -u | while read -r u; do systemctl is-active --quiet "$u" && echo "ok $u" || echo "ko $u"; done' 2>/dev/null)" || etat=""
+  if [[ -n "$etat" ]] && ! grep -q '^ko ' <<<"$etat"; then
+    noter filer_sync 1 "unités filer.sync actives sur s3-02"
   else
-    noter filer_sync 0 "aucune unité filer.sync active sur s3-02"
+    noter filer_sync 0 "unité filer.sync absente ou arrêtée sur s3-02 : $(grep '^ko ' <<<"$etat" | cut -d' ' -f2 | paste -sd' ' -)"
   fi
 }
 

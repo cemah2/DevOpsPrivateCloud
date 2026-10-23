@@ -65,6 +65,18 @@ Une violation de données personnelles se notifie à la **CNIL dans les 72 heure
 
 ---
 
+## MédiSphère vue par un auditeur
+
+Quelques faits de la fiction, que la plateforme ne montre pas et dont tu auras besoin dès S01 :
+
+- **Les salles** : PAR1 et PAR2 sont des cages louées chez **DataCampus**, opérateur de colocation (fictif) certifié HDS pour l'**activité 1** (bâtiment, énergie, froid, accès physique). Tout ce qui est dans les cages — serveurs, baies, réseau de baie, disques — appartient à MédiSphère.
+- **Les clients** : cabinets, centres de santé et établissements, responsables de traitement des données de leurs patients ; MédiSphère est leur hébergeur et leur sous-traitant.
+- **Les fournisseurs « autour » de la plateforme** : **HelpNow**, outil de tickets en SaaS du support ; **SMS-Express**, qui envoie les rappels de MédiNotif ; la messagerie et la bureautique du SI interne (un autre prestataire, sans donnée de santé). Et une habitude d'équipe : un ingénieur du support assure deux semaines d'astreinte par an **depuis le Maroc**, par le VPN. Thomas Renaud en détaille les usages en S07.
+
+Ce que MédiSphère fait certifier, et sur quelles activités, c'est la première question de S01. (À la fin du final, la réponse est stable : le F7 la reprend telle quelle devant un client.)
+
+---
+
 ## Les personnages de ce final
 
 | Personnage | Rôle | Ce qu'il ou elle attend |
@@ -131,15 +143,37 @@ Tes dates réelles seront autres : les checks ne vérifient pas des dates de la 
 | `docs/conformite/revue-acces/AAAA-MM.md` | revue des accès du mois | S03 |
 | `docs/conformite/audit-2026/audit-technique.md`, `audit-2026/technique/` | audit technique outillé et résultats bruts | S05 |
 | `docs/conformite/audit-2026/rapport-ecarts.md` | rapport d'écarts de l'audit à blanc | S07 |
-| `docs/conformite/ecarts/ECA-36xx.md` | une fiche par écart (`-<sujet>` facultatif après le numéro) | S04, S07, puis S08-S14 |
+| `docs/conformite/ecarts/ECA-36xx[-<sujet>].md` | une fiche par écart, **le même fichier** de l'ouverture à la clôture | S04, S07, puis S08-S14 |
+| `docs/conformite/journaux-audit.md`, `vulnerabilites.md`, `etat-preuves.md` | politique de journalisation, de traitement des vulnérabilités, état des preuves (généré) | S08, S09, S14 |
 | `docs/conformite/plan-remediation.md` | plan de remédiation priorisé | S07 |
 | `docs/conformite/transferts-hors-eee.md` | cartographie des transferts hors EEE | S07 |
 | `docs/securite/incidents/INC-6211/` | dossier de l'incident | S11-S13 |
-| `docs/securite/runbooks/RB-360-reponse-incident.md`, `RB-361-forensique-conteneur.md` | runbooks de réponse | S10 |
+| `docs/securite/incidents/runbooks/RB-360-reponse-incident.md`, `RB-361-forensique-conteneur.md` | runbooks de réponse (rangés comme ceux du M24 et du M26 : `docs/securite/<thème>/runbooks/`) | S10 |
+| `docs/securite/incidents/exercices/` | comptes rendus d'exercices | S10 |
 
 **Format de la SoA** (les checks le lisent) : un tableau Markdown par thème, une ligne par mesure, colonnes dans cet ordre : `| Mesure | Intitulé | Applicable | Justification | Mise en œuvre | Preuve |`. Première colonne : l'identifiant de l'annexe A (`5.1` … `8.34`, `A.5.1` accepté) ; troisième : `Oui` ou `Non` ; une exclusion (`Non`) porte sa justification dans la quatrième colonne.
 
-**Fiche d'écart** `ECA-36xx.md` : sections **Constat**, **Référence** (mesure(s) ISO 27001 `x.y`, exigence HDS), **Preuves** (ce qui a été observé, où, quand), **Gravité** (majeur, mineur, observation), **Cause**, **Correction** (immédiate), **Action corrective** (ce qui empêche le retour), **Responsable**, **Échéance**, **Statut** (`ouvert`, `en cours`, `clos`) et, à la clôture, **Preuve de clôture**. Numérotation : `ECA-3601` à `ECA-3606` pour les écarts de l'audit (S07) ; `ECA-3611` et suivants pour ceux que tu trouves en S04.
+**Fiche d'écart** `ECA-36xx[-<sujet>].md` (les checks lisent l'en-tête) : un **en-tête YAML**, identique pour une fiche ouverte ou close, puis les sections.
+
+```yaml
+---
+id: ECA-3601
+titre: "Journaux d'audit centralisés mais non inaltérables"
+origine: audit-2026 (Auditia Santé, Hélène Mercier)    # ou : F6-S04 (auditeur interne)
+mesures: [8.15, 5.33]                                    # annexe A d'ISO/IEC 27001:2022, exigences HDS
+gravite: majeur                                          # majeur | mineur | observation
+statut: ouvert                                           # ouvert | en cours | clos
+ouvert-le: 2026-11-18
+echeance: 2026-12-11
+responsable: karim.benali
+remediation: SEC-3608                                    # ticket qui porte la correction
+clos-le:                                                 # AAAA-MM-JJ, à la clôture
+preuve:                                                  # à la clôture : lots/AAAA/MM/JJ/<LOT>/ (lot ms-preuves)
+valideur:                                                # à la clôture : qui a accepté la preuve
+---
+```
+
+Sections : **Constat**, **Référence** (mesure(s) ISO 27001 `x.y`, exigence HDS), **Preuves** (ce qui a été observé, où, quand), **Gravité** (majeur, mineur, observation), **Cause**, **Correction** (immédiate), **Action corrective** (ce qui empêche le retour), **Responsable**, **Échéance**, **Statut** et **Preuve de clôture** (le lot cité dans l'en-tête et les identifiants `P-…` qu'il contient). On ferme un écart en citant un lot `ms-preuves` **déjà déposé** : sa date précède celle de la clôture. Numérotation : `ECA-3601` à `ECA-3606` pour les écarts de l'audit (S07) ; `ECA-3611` et suivants pour ceux que tu trouves en S04.
 
 **Tickets** : `SEC-36xx`, `PLAT-36xx`, `INC-62xx` (`xx` = numéro du scénario) ; ADR `ADR-0360…` ; runbooks `RB-360…`.
 
@@ -147,26 +181,36 @@ Tes dates réelles seront autres : les checks ne vérifient pas des dates de la 
 
 ---
 
-## Variables de `lab/lab.env`
+## Identités et variables des contrôles
 
-Toutes facultatives : les défauts conviennent au lab.
+Les checks lisent tout avec des identités de **lecture**. Trois fichiers d'identité S3 de plus, sur `adm01`, au format des autres (`AWS_ACCESS_KEY_ID=…` et `AWS_SECRET_ACCESS_KEY=…`, mode 600, dossier `~/.config/workbook/`). Chacun se remplit **depuis OpenBao** le jour où l'utilisateur RGW est créé, sans que les clés passent par l'écran ni par l'historique du shell (même méthode que `rgw-compartiment.sh` au F2-S08) :
+
+| Fichier | Utilisateur RGW | Clés rangées dans OpenBao | Droits | Créé en |
+|---|---|---|---|---|
+| `s3-preuves-conformite-lecture.env` | `preuves-lecture` | `kv/plateforme/preuves/rgw-lecture` | lister et lire `preuves-conformite` | S02 |
+| `s3-preuves-conformite-depot.env` | `preuves` | `kv/plateforme/preuves/rgw-ecriture` | écrire dans `preuves-conformite` (kit forensique, collecte manuelle) | S02, utilisé en S10-S12 |
+| `s3-archive-audit-lecture.env` | `archive-audit-lecture` | `kv/plateforme/archive-audit/rgw-lecture` | lister et lire `archive-audit` | S08 |
+
+Variables de `lab/lab.env`, toutes facultatives (les défauts conviennent au lab ; modèle dans `lab/lab.env.example`, section F6) :
 
 | Variable | Défaut | Utilisée par |
 |---|---|---|
 | `WB_F6_PROJET_DOC` | `plateforme/medisphere` | tous les checks |
 | `WB_F6_DOC` | `docs/conformite` | tous les checks |
-| `WB_F6_PROJET_OUTILS` | `plateforme/outils` | S02, S03 |
+| `WB_F6_PROJET_OUTILS` | `plateforme/outils` | S02, S03, S14 |
 | `WB_F6_RGW_URL` | `https://rgw.par1.medisphere.internal` | S02, S08, S14 |
-| `WB_F6_PREUVES_BUCKET` | `preuves-conformite` | S02, S08, S14 |
-| `WB_F6_PREUVES_ENV` | `~/.config/workbook/s3-preuves-conformite-lecture.env` (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` de l'utilisateur RGW **`preuves-lecture`**, mode 600) | S02, S08, S14 |
+| `WB_F6_PREUVES_BUCKET` | `preuves-conformite` | S02, S08-S10, S14 |
+| `WB_F6_PREUVES_ENV` | `~/.config/workbook/s3-preuves-conformite-lecture.env` | S02, S08-S10, S14 |
 | `WB_F6_RETENTION_MIN` | `365` (jours, en `COMPLIANCE`) | S02 |
 | `WB_F6_LOT_AGE_MAX_H` | `36` | S02 |
-| `WB_F6_PASSERELLES` | `gw01 gw02` | S04 (check et panne) |
+| `WB_F6_PASSERELLES` | `gw01 gw02` | S04, S11, S12 (checks et pannes) |
 | `WB_F6_EXTERNES` | `marc.vidal yanis.perrin` | S03, S04 |
-| `WB_F6_S04_NB` | `4` (de 3 à 7) | S04 (panne : nombre d'écarts injectés) |
-| `WB_F6_INCIDENTS`, `WB_F6_INCIDENT`, `WB_F6_RECETTE_NS`, `WB_F6_C2_VMID`, `WB_F6_C2_IP` | `docs/securite/incidents`, `INC-6211`, `mediagenda-recette`, `3601`, `10.10.99.66` | S10-S13 |
+| `WB_F6_S04_NB`, `WB_F6_S04_ECARTS` | `4` (de 3 à 7), vide (liste forcée, ex. `1,3,5,7`) | S04 (panne) |
+| `WB_F6_ARCHIVE_BUCKET`, `WB_F6_ARCHIVE_ENV` | `archive-audit`, `~/.config/workbook/s3-archive-audit-lecture.env` | S08 |
+| `WB_F6_INCIDENTS`, `WB_F6_INCIDENT`, `WB_F6_RECETTE_NS` | `docs/securite/incidents`, `INC-6211`, `mediagenda-recette` | S10-S13 |
+| `WB_F6_C2_VMID`, `WB_F6_C2_IP`, `WB_F6_C2_PORT`, `WB_F6_C2_GW`, `WB_F6_C2_BRIDGE`, `WB_F6_TPL` | `3601`, `10.10.99.66`, `4444`, `10.10.99.1`, `vsandbox`, `9000` | S11, S12 (panne et checks) |
 
-Les checks relisent aussi `WB_GITLAB_*`, `WB_K8S_KUBECONFIG`, `WB_IPA_*`, `WB_AM_URL`, `WB_LOKI_URL`, `WB_PROM_URL`, `WB_MAILPIT_*`, `WB_OPENBAO_*`, `WB_PVE_HOST`, `WB_TIMEOUT` ; les pannes `WB_K8S_ADMIN_KUBECONFIG` et `WB_GITLAB_ADMIN_TOKEN_FILE`.
+Les checks relisent aussi `WB_GITLAB_*`, `WB_K8S_KUBECONFIG`, `WB_IPA_*`, `WB_AM_URL`, `WB_LOKI_URL`, `WB_GRAFANA_*`, `WB_MAILPIT_*`, `WB_PVE_HOST`, `WB_TIMEOUT` ; les pannes `WB_K8S_ADMIN_KUBECONFIG` et `WB_GITLAB_ADMIN_TOKEN_FILE`.
 
 **Outils sur `adm01`** : `curl`, `jq`, `yq` (mikefarah v4), `kubectl` (compte `wb-checks`), `aws` (AWS CLI v2), `ldapsearch`, `sha256sum`, `cosign` (vérification des signatures, facultatif : contrôle ignoré et dit ignoré s'il manque), `ssh` vers `gw01`/`gw02` (`sudo -n nft list`). Ceux de l'audit technique (S05) : `oscap` (sur les VM), `kube-bench` (Job), `kubescape`, `trivy`, `ssh-audit`, `lynis` — installés au M26.
 

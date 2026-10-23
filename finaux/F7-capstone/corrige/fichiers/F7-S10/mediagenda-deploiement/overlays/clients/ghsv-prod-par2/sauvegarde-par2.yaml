@@ -1,13 +1,17 @@
 # mediagenda/deploiement — overlays/clients/ghsv-prod-par2/sauvegarde-par2.yaml (F7-S10, PLAT-3710)
-# Magasin d'archives vu de PAR2 : le compartiment cnpg-ghsv de s3-02 (copie de celui de s3-01 par
-# filer.sync, F5-S04). Identité SeaweedFS de s3-02 « cnpg-ghsv » ; clés dans bao-par2 (restauré pendant
-# un PRA) et, en veille, dans un Secret créé par l'amorçage de k8s-par2 (F5-S05 : enveloppe de reprise).
+# Archives de la base du client vues de PAR2 : même point d'accès (s3-02), deux compartiments, comme les
+# ObjectStores cnpg-s3-par1 / cnpg-s3-par2 de MédiAgenda (F5-S06, sites/par2/mediagenda-prod/60-objectstores.yaml).
+# Identité SeaweedFS de s3-02 « cnpg-ghsv-par2 » : Read/List sur cnpg-ghsv (copie de PAR1), Read/Write/List
+# sur cnpg-ghsv-par2. Clés : Secret cnpg-ghsv-s3 créé par l'amorçage de k8s-par2 (F5-S05/S06 : enveloppe de
+# reprise), puis par bao-par2 pendant un PRA. serverName JAMAIS ici (paramètre du plugin côté Cluster).
+#
+# cnpg-ghsv-par1 : copie de l'archive de PAR1 (filer.sync), en LECTURE, sans retentionPolicy (elle
+# effacerait dans la copie).
 apiVersion: barmancloud.cnpg.io/v1
 kind: ObjectStore
 metadata:
-  name: cnpg-ghsv-par2
+  name: cnpg-ghsv-par1
 spec:
-  retentionPolicy: "30d"
   configuration:
     destinationPath: s3://cnpg-ghsv/
     endpointURL: https://s3-02.par2.medisphere.internal:8333
@@ -22,6 +26,35 @@ spec:
         name: cnpg-ghsv-s3
         key: ACCESS_SECRET_KEY
     wal:
+      maxParallel: 2
+---
+# cnpg-ghsv-par2 : archive PROPRE à PAR2 (WAL reçus en veille, puis production pendant un PRA ; relue par
+# PAR1 au retour, RB-351).
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: cnpg-ghsv-par2
+spec:
+  retentionPolicy: "14d"
+  configuration:
+    destinationPath: s3://cnpg-ghsv-par2/
+    endpointURL: https://s3-02.par2.medisphere.internal:8333
+    endpointCA:
+      name: medisphere-ca
+      key: ca.crt
+    s3Credentials:
+      accessKeyId:
+        name: cnpg-ghsv-s3
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: cnpg-ghsv-s3
+        key: ACCESS_SECRET_KEY
+    wal:
       compression: gzip
+      maxParallel: 2
     data:
       compression: gzip
+  instanceSidecarConfiguration:
+    resources:
+      requests: {cpu: 20m, memory: 64Mi}
+      limits: {memory: 256Mi}

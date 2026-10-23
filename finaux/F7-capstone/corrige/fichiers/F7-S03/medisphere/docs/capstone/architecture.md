@@ -58,7 +58,7 @@ flowchart LR
 **Flux**
 - **Patients** : `rendez-vous.ghsv.example` (zone du GHSV) est un CNAME vers `ghsv.clients.medisphere.example` (zone publique de MédiSphère, TTL 60 s), qui pointe l'adresse publique de PAR1, ou de PAR2 en PRA. TLS terminé sur les répartiteurs (certificat public ACME), re-chiffré jusqu'à la Gateway.
 - **DPI** : même nom (`/api/v1`), jeton OAuth 2.0 *client credentials* émis par notre Keycloak (client `ghsv-dpi`, portées `rdv:lecture` et `rdv:ecriture`, ADR-0372), plus liste d'adresses sources du GHSV sur les répartiteurs.
-- **Agents** : interface des agents → Keycloak (royaume `medisphere`, fournisseur d'identité `ghsv`) → IdP du GHSV (MFA chez lui) → retour ; aucun mot de passe d'agent chez nous.
+- **Agents** : interface des agents → Keycloak (royaume `medisphere`, fournisseur d'identité `ghsv-idp`) → IdP du GHSV (MFA chez lui) → retour ; aucun mot de passe d'agent chez nous.
 - **Données vers PAR2** : WAL et sauvegardes de base par le stockage objet (topologie distribuée CloudNativePG du F5), objets (pièces jointes, sauvegardes Velero) copiés vers `s3-02`, images vers `reg02`, dépôts Git vers les miroirs d'`adm02`.
 
 ## 3. PAR1 — site principal
@@ -72,7 +72,7 @@ flowchart LR
 | Réseau interne | 2 commutateurs 25 GbE (MLAG), VLAN du plan d'adressage du lab, réseau Ceph dédié | existant |
 | Kubernetes | `k8s-par1` : 3 nœuds de contrôle, 8 travailleurs (16 vCPU, 64 Go) ; Cilium (BGP vers les routeurs), Gateway `gw-par1`, Capsule, Kyverno, Falco/Tetragon | locataire `ghsv` (ADR-0370) |
 | Données du GHSV | `Cluster` CloudNativePG dédié dans `ghsv-prod` : 3 instances (1 primaire, 2 réplicas, un synchrone dans le site), pooler PgBouncer ×2 ; Valkey dédié (cache) ; compartiment RGW dédié aux pièces jointes (nom proposé `ghsv-pieces-jointes`), chiffrement côté serveur par la clé `transit/ghsv-*` (ADR-0371) | |
-| Identité | Keycloak en grappe de **3 nœuds** (base PostgreSQL en haute disponibilité) : royaume `medisphere` (personnels, fournisseur d'identité `ghsv` pour les agents, client `ghsv-dpi`) et royaume dédié `ghsv-patients` (comptes locaux, ADR-0372) | dans le lab : `idp01` seul (M24) |
+| Identité | Keycloak en grappe de **3 nœuds** (base PostgreSQL en haute disponibilité) : royaume `medisphere` (personnels, fournisseur d'identité `ghsv-idp` pour les agents, client `ghsv-dpi`) et royaume dédié `ghsv-patients` (comptes locaux, ADR-0372) | dans le lab : `idp01` seul (M24) |
 | Secrets | OpenBao 3 nœuds + `kms01` (auto-descellement) ; moteur `transit` : clés `ghsv-*` | |
 | Observabilité | Prometheus ×2 + Thanos, Loki avec un **locataire de journaux `ghsv`** (rétention 365 j) et copie quotidienne en verrouillage d'objets (F6), Alertmanager, Grafana (dossier GHSV pour le rapport mensuel) | |
 | Sauvegardes | PBS à PAR2 (VMs), Velero et Barman Cloud vers le stockage objet, copie hors site (§4) | |

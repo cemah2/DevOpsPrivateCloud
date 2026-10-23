@@ -12,7 +12,7 @@ Le service est hébergé par MédiSphère, en France, dans deux salles distincte
 
 | Engagement | Ce que cela veut dire pour le groupement | Ce qui le garantit |
 |---|---|---|
-| Disponibilité de **99,9 %** par mois | au plus 43 minutes d'interruption non programmée par mois | sondes indépendantes toutes les 30 secondes, calcul publié chaque mois, méthode validée en comité de suivi |
+| Disponibilité de **99,9 %** par mois | au plus 40 à 45 minutes d'interruption non programmée par mois (selon la longueur du mois) | sondes indépendantes toutes les 30 secondes, calcul publié chaque mois, méthode validée en comité de suivi |
 | Temps de réponse : 95 % des demandes en moins de 0,3 seconde | l'attente ne se voit pas | mesure permanente, publiée dans le rapport mensuel |
 | Reprise en **4 heures** (RTO) si une salle est détruite | le service revient sur la seconde salle dans la matinée | exercice réel réalisé en 2026, test annuel en présence du groupement |
 | Perte de données de **15 minutes** au plus (RPO) | les rendez-vous des 15 dernières minutes avant un sinistre sont repris depuis le DPI | réplication continue mesurée minute par minute |

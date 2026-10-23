@@ -5,17 +5,25 @@
 # par jetons (demotionToken / promotionToken, RB-350 et RB-351) ; sans jeton, l'ancien primaire est à
 # reconstruire. Côté PAR1, la grappe mediagenda-db de ghsv-prod reçoit le bloc symétrique (correctif
 # de l'overlay ghsv-prod, extrait plus bas dans le corrigé de F7-S10).
+# Différence avec MédiAgenda : au F5, mediagenda-db-par2 vit dans plateforme/k8s (sites/par2/mediagenda-prod/,
+# appliqué depuis adm02, hors d'Argo CD). Ici, la base du client reste dans son overlay (un client = un
+# dossier), protégée contre l'élagage et la suppression par Argo CD (annotation ci-dessous). Les deux
+# choix se défendent ; garde celui de ton F5 si tu préfères un seul mécanisme.
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
   name: mediagenda-db-par2
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   description: "Réplique de secours (PAR2) de la base MédiAgenda du client GHSV"
   instances: 1
-  imageName: reg02.par2.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie@sha256:<EMPREINTE-POSTGRESQL>
+  # Même image que la base du client à PAR1 et que mediagenda-db-par2 du F5 (tirée d'Internet par hp01 :
+  # pas de cache Harbor à PAR2), épinglée par empreinte.
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.6-minimal-trixie@sha256:<EMPREINTE-POSTGRESQL>
   storage:
-    # Pas de Ceph à PAR2 : classe locale de k8s-par2 (F5-S06).
-    storageClass: <CLASSE-DE-STOCKAGE-K8S-PAR2>
+    # Pas de Ceph à PAR2 : local-path-provisioner de k8s-par2 (F5-S06, sites/par2/stockage).
+    storageClass: local-path
     size: 4Gi
   resources:
     requests: {cpu: 50m, memory: 256Mi}
@@ -28,8 +36,8 @@ spec:
   bootstrap:
     recovery:
       source: mediagenda-db-prod
-  # Archivage de PAR2 (servira quand PAR2 sera primaire) : compartiment cnpg-ghsv de s3-02, autre
-  # nom de serveur.
+  # Archive PROPRE à PAR2 (compartiment cnpg-ghsv-par2 de s3-02), comme cnpg-k8s-par2 au F5 : jamais la
+  # copie de l'archive de PAR1 (filer.sync y écrit, une rétention y effacerait).
   plugins:
     - name: barman-cloud.cloudnative-pg.io
       isWALArchiver: true
@@ -37,12 +45,13 @@ spec:
         barmanObjectName: cnpg-ghsv-par2
         serverName: mediagenda-db-par2
   externalClusters:
-    # Le primaire de PAR1, tel qu'il archive (sur s3-01, répliqué vers s3-02 par filer.sync).
+    # Le primaire de PAR1, tel qu'il archive (cnpg-ghsv de s3-01, copié vers s3-02 par filer.sync) : lu
+    # par l'ObjectStore cnpg-ghsv-par1, en lecture.
     - name: mediagenda-db-prod
       plugin:
         name: barman-cloud.cloudnative-pg.io
         parameters:
-          barmanObjectName: cnpg-ghsv-par2
+          barmanObjectName: cnpg-ghsv-par1
           serverName: mediagenda-db-prod
     - name: mediagenda-db-par2
       plugin:

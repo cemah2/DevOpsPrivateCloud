@@ -6,7 +6,7 @@
 
 ## Résumé
 
-Le 2026-11-26, une activité anormale a été détectée dans un conteneur de l'API de MédiAgenda en recette :
+Le 2027-01-20, une activité anormale a été détectée dans un conteneur de l'API de MédiAgenda en recette :
 shell interactif, lecture d'un jeton de compte de service, tentative de connexion sortante vers une
 adresse non prévue. Confiné en 20 minutes, éradiqué, clos le jour même. Aucune donnée réelle touchée,
 aucun impact production.
@@ -53,10 +53,10 @@ production depuis le F3).
 
 | Action | Mécanisme visé | Responsable | Échéance |
 |---|---|---|---|
-| Contrôle de dérive des NetworkPolicy (sortie large = alerte) | règle réseau non vue | Karim | 2026-12-10 |
-| `exec` humain hors bris de glace interdit en recette (`prod-gestes-interactifs` étendu) | accès interactif | astreinte | 2026-12-05 |
-| Jeton de compte de service non monté quand inutile (norme C6) sur les API de recette | jeton réutilisable | Julien | 2026-12-15 |
-| Règle Falco/Tetragon dédiée « reconnaissance API depuis un pod applicatif » | détection plus précoce | Sophie | 2026-12-20 |
+| Contrôle de dérive des NetworkPolicy (sortie large = alerte) | règle réseau non vue | Karim | 2027-02-05 |
+| `exec` humain hors bris de glace interdit en recette (`prod-gestes-interactifs` étendu) | accès interactif | astreinte | 2027-01-29 |
+| Jeton de compte de service non monté quand inutile (norme C6) sur les API de recette | jeton réutilisable | Julien | 2027-02-10 |
+| Règle Falco/Tetragon dédiée « reconnaissance API depuis un pod applicatif » | détection plus précoce | Sophie | 2027-02-12 |
 | Revue de la durée de vie des NetworkPolicy à chaque MR | règle oubliée | Karim | continu |
 
 ## Suivi

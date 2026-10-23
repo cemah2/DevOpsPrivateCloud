@@ -48,7 +48,8 @@ Le certificat HDS de MédiSphère doit être renouvelé sous le nouveau référe
 |---|---|---|---|
 | Compartiment de preuves | `preuves-conformite` (RGW de `ceph-par1`, verrouillage d'objets) | `https://rgw.par1.medisphere.internal` | S02, S08 |
 | Outil de collecte | `ms-preuves` (`plateforme/outils`) | — | S02, S14 |
-| « C2 » simulé | `c2-simule01`, VMID 3601, VLAN 99 | 10.10.99.66 | S11, S12 |
+| Archive des journaux d'audit | `archive-audit` (RGW de `ceph-par1`, verrouillage d'objets `COMPLIANCE`) | `https://rgw.par1.medisphere.internal` | S08, S12 |
+| « C2 » simulé | `c2-simule01`, VMID 3601, VNet `vsandbox` (VLAN 99), port 4444 | 10.10.99.66 | S11, S12 |
 | Espace de l'incident | `mediagenda-recette` (jamais la production) | — | S11-S13 |
 
 L'incident est **simulé sans code malveillant** : le script d'injection rejoue des commandes ordinaires (shell, lecture d'un jeton, connexion sortante vers le « C2 » qui ne fait que journaliser, binaire factice). Versions et textes réglementaires : [`annexes/versions-finaux-F5-F7.md`](../../annexes/versions-finaux-F5-F7.md). Détails figés : [`PLAN.md`](../../PLAN.md) §4.15.

@@ -25,13 +25,13 @@ Prérequis de la phase : phase 1 terminée (SoA, `ms-preuves` en service, revue 
 - Le lab doit être sain avant l'injection : API de `k8s-par1` joignable, espaces `mediagenda-recette` et `kyverno-exceptions` présents, aucune injection précédente de ce scénario. L'injection ne touche ni la production, ni les données.
 - Injection : `lab/bin/break F6 4` (depuis `adm01`). Elle pose **un lot d'écarts** tirés au hasard (le message d'Hélène en donne le **nombre**) ; `WB_F6_S04_NB` (3 à 7, défaut 4) règle leur nombre. Abandon : `lab/bin/break F6 4 --annuler` (ne défait que ce qui est encore dans l'état injecté).
 - Les écarts sont des **dérives récentes**, postérieures à ta revue des accès (S03) et aux premiers lots de preuves (S02).
-- Formalisation : une fiche `docs/conformite/ecarts/ECA-3611.md`, `ECA-3612.md`… par écart trouvé (format dans [`00-introduction.md`](00-introduction.md)).
+- Formalisation : une fiche `docs/conformite/ecarts/ECA-3611[-<sujet>].md`, `ECA-3612…`… par écart trouvé (en-tête YAML et sections : [`00-introduction.md`](00-introduction.md)).
 
 **Travail demandé**
 1. Lance `lab/bin/break F6 4` et lis le message d'Hélène.
 2. Audite : trouve chaque écart, date-le, identifie qui (ou quoi) l'a introduit.
 3. Corrige chaque écart par le bon chemin, et vérifie que la correction tient.
-4. Formalise : une fiche ECA par écart, statut `clos` avec sa preuve de clôture ; et pour chacun, ce qui l'aurait détecté plus tôt (et, si rien ne l'aurait fait, la détection à ajouter).
+4. Formalise : une fiche ECA par écart, close avec sa preuve de clôture (le lot `ms-preuves` qui montre l'état corrigé) ; et pour chacun, ce qui l'aurait détecté plus tôt (et, si rien ne l'aurait fait, la détection à ajouter).
 
 **Critères de réussite**
 - [ ] Aucun compte de prestataire parti n'est actif ; la bordure n'a aucune règle active absente de sa configuration persistée ; toute dérogation Kyverno a une échéance et figure au registre ; aucune ConfigMap d'un espace applicatif ne contient de mot de passe ou de jeton ; aucune planification Velero n'est suspendue ; aucun compte de service applicatif n'est `cluster-admin` ; aucun silence d'Alertmanager ne couvre les alertes de sécurité ni ne dure plus de sept jours.
@@ -68,7 +68,7 @@ Une correction qui tient se fait au bon endroit : un objet posé à la main se r
 - Relier les constats techniques aux mesures de la SoA et aux écarts.
 
 **Prérequis** : F6-S01 (SoA) ; M26-E03 (Lynis, ssh-audit), E04 (OpenSCAP, profils adaptés, exceptions), E05 (kube-bench, kubescape), E24 (analyses hebdomadaires, compartiment `conformite`), E30 (vulnérabilités des images en service) ; M13 (Trivy, Harbor).
-**Durée indicative** : 5 à 6 h.
+**Durée indicative** : 4 à 5 h.
 
 **Contexte technique**
 - Outils et versions installés au M26 : OpenSCAP 1.4 et contenu ComplianceAsCode 0.1.82 (profils adaptés `…_medisphere`, registre `docs/securite/durcissement/exceptions.md`) ; kube-bench 0.16 (référentiel `cis-1.12` forcé : aucun pour 1.36) ; kubescape 4 ; Trivy (rôle `outils_supply_chain`) et l'analyse de Harbor ; ssh-audit 3.9 ; Lynis 3.1.7.
@@ -189,7 +189,7 @@ Pas de vérification automatique : les réponses argumentées sont dans le corri
 
 **Travail demandé**
 1. Rédige `docs/conformite/audit-2026/rapport-ecarts.md` : synthèse pour la direction, méthode et périmètre de l'audit à blanc, **points forts** (il y en a), liste des écarts ECA-3601 à 3606 **et** de ceux trouvés en S04 (déjà clos), avec leur gravité argumentée (non-conformité majeure, mineure, observation).
-2. Rédige une fiche par écart `docs/conformite/ecarts/ECA-3601.md` à `ECA-3606.md` (format de l'introduction) : constat, référence (mesure ISO, exigence HDS), preuves, gravité, cause, correction et action corrective envisagées, responsable, échéance, statut.
+2. Rédige une fiche par écart, `docs/conformite/ecarts/ECA-3601[-<sujet>].md` à `ECA-3606[-<sujet>].md` (en-tête YAML et sections de l'introduction) : constat, référence (mesure ISO, exigence HDS), preuves, gravité, cause, correction et action corrective envisagées, responsable, échéance, statut. Ce fichier vivra jusqu'à la clôture.
 3. Rédige `docs/conformite/plan-remediation.md` : pour chaque écart, le risque (vraisemblance × impact, et pourquoi), la priorité qui en découle, les actions, le responsable, l'échéance, la preuve de clôture attendue ; l'ordre de traitement et sa justification ; ce qui est accepté temporairement et par qui.
 4. Rédige `docs/conformite/transferts-hors-eee.md` : pour chaque fournisseur ou accès, s'il y a transfert ou accès depuis un pays tiers, ou soumission à une loi extra-européenne ; la base et les garanties ; les mesures (techniques, contractuelles) ; la décision ; ce qui doit être **publié** et ce qui doit être **dit aux clients** ; validation par Thomas.
 5. MR relue par Sophie, Thomas et Claire, fusionnée sur `main`.
@@ -201,7 +201,7 @@ Pas de vérification automatique : les réponses argumentées sont dans le corri
 
 **Critères de réussite**
 - [ ] `rapport-ecarts.md` est sur `main` avec synthèse, méthode, points forts, ECA-3601 à 3606 et les écarts de S04, gravités majeur/mineur argumentées.
-- [ ] `ecarts/ECA-3601.md` à `ECA-3606.md` existent avec constat, preuve, mesure ISO, exigence, gravité.
+- [ ] Les fiches `ECA-3601` à `ECA-3606` existent avec l'en-tête YAML, constat, preuve, mesure ISO, exigence, gravité.
 - [ ] `plan-remediation.md` couvre les six écarts avec risque, priorité, action, responsable et échéance.
 - [ ] `transferts-hors-eee.md` couvre chaque fournisseur et accès de la liste, avec pays, garanties, mesures, et la validation du DPO.
 

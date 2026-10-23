@@ -15,7 +15,7 @@ Dans l'offre : prise de rendez-vous des patients (web et API), interface des age
 | ENF-02 pointe 150 req/s | dimensionnement par coût mesuré par requête × facteur écrit | `architecture.md` §5 | P-07 (référence de charge M29, charge `demo-ghsv`) | **à confirmer** en préproduction : le lab ne tient pas 150 req/s (§5) |
 | ENF-03 99,9 %/mois hors maintenances | sondes externes (30 s), calcul calendaire, maintenances conformes retirées | `engagements.md` | P-08 (rapport mensuel), P-09 (SLO) | confirmé (méthode) ; valeur réelle : à mesurer en production |
 | ENF-05 95 % < 300 ms | seau 0,3 s ajouté à l'histogramme ; centile 99,9 % < 1 s proposé (R-10) | `engagements.md` | P-08, P-10 (k6 : écart client/serveur) | confirmé (méthode) |
-| ENF-06 RTO 4 h / RPO 15 min | réplication continue vers PAR2, témoin de RPO, essai isolé | ADR-0373 | P-11 (essai de reprise : RPO `<MIN>`, reprise `<MIN>`), P-12 (exercice PRA du F5) | confirmé pour les données ; **ouvert** pour l'identité à PAR2 (§6, R-1) |
+| ENF-06 RTO 4 h / RPO 15 min | réplication continue vers PAR2, témoin de RPO, essai isolé | ADR-0373 | P-11 (essai de reprise : RPO `<MIN>`, reprise `<MIN>`), P-12 (exercice PRA du F5) | confirmé pour les données ; **ouvert** pour l'identité à PAR2 (§5, RSQ-17) |
 | ENF-07 aucun rendez-vous perdu | rejeu depuis le DPI de la fenêtre perdue | ADR-0373 | — | ouvert : procédure à valider avec le GHSV |
 | ESC-03 données dans l'EEE | deux salles en France ; aucun accès hors EEE hors ESC-12 | `analyse-cdc.md` | P-13 (cartographie des transferts, F6) | confirmé ; réserve ESC-12 |
 | ESC-04 agents par l'IdP du GHSV, MFA, révocation < 15 min | courtier OIDC, refus des agents sur nos outils, session de 15 min | ADR-0372 | P-14 (constat de cloisonnement), P-15 (révocation chronométrée) | confirmé |
@@ -34,7 +34,7 @@ Deux salles en France, PAR1 (production) et PAR2 (repli tiède), reliées par un
 
 | Données | Cible | Preuve de concept | Écart |
 |---|---|---|---|
-| Base (champs identifiants) | chiffrement applicatif par `transit/ghsv-donnees` (ADR-0371) | volume chiffré LUKS (clé de la plateforme) | **oui** : développement DEV-37xx du lot de construction |
+| Base (champs identifiants) | chiffrement applicatif par `transit/ghsv-donnees` (ADR-0371) | volume chiffré LUKS (clé de la plateforme) | **oui** : développement DEV-3704 du lot de construction |
 | Archives de la base, pièces jointes | SSE-KMS par `transit/ghsv-sauvegardes` (compatibilité RGW à confirmer) | compartiment dédié, non chiffré par une clé du client | **oui** |
 | Exports | enveloppe `transit/ghsv-exports`, manifeste signé | idem | non |
 
@@ -46,18 +46,18 @@ Tant que les écarts existent, la destruction en fin de contrat se fait par dest
 |---|---|---|---|
 | Capacité | 1 hyperviseur, 3 travailleurs, quelques req/s | serveurs dimensionnés (`architecture.md` §5) | **conditionné** à une campagne de charge en préproduction (avril 2027), écrite dans le planning |
 | Exposition | réseau privé, noms `.internal` | Internet, anti-DDoS, domaine du GHSV | méthode identique, mesures à refaire |
-| Identité à PAR2 | absente (PRA v1 du F5) | instance Keycloak de repli | **non tenu aujourd'hui** : écrit comme écart et chiffré (R-1) |
+| Identité à PAR2 | absente (PRA v1 du F5) | instance Keycloak de repli | **non tenu aujourd'hui** : écrit comme écart et chiffré (RSQ-17) |
 | Écrans patients et agents | absents | produits existants de MédiSphère | hors démonstration ; RGAA à auditer |
 
 ## 6. Réversibilité
 
 Export complet en format ouvert (JSON Lines et CSV aux champs de l'API v1, annexe technique, manifeste signé), chiffré, remis par un canal séparé ; relecture par un tiers à chaque essai annuel ; destruction prouvée sous 30 jours après validation (RB-371, ADR-0374). Ce qui reste chez nous après la fin du contrat : journaux de sécurité pseudonymisés jusqu'à leur échéance d'un an, documents contractuels.
 
-## 7. Risques résiduels principaux
+## 7. Risques résiduels principaux (identifiants de `risques.md`)
 
 | ID | Risque | Traitement |
 |---|---|---|
-| R-1 | Pas d'authentification à PAR2 pendant un PRA (agents et DPI) | Keycloak de repli à PAR2 restauré depuis PBS, intégré au RB-350 avant la mise en production |
-| R-2 | Capacité réelle non démontrée dans le lab | campagne de charge en préproduction ; clause de revue au comité de suivi |
-| R-3 | Clés du client non appliquées à la base et aux archives | développement du chiffrement applicatif, SSE-KMS ; destruction physique en attendant |
-| R-4 | Notification tardive (R-01 de `risques.md`) | travaux préparatoires engagés à nos risques sur le lot commun |
+| RSQ-17 | Pas d'authentification à PAR2 pendant un PRA (agents et DPI) | Keycloak de repli à PAR2 restauré depuis PBS, intégré au RB-350 avant la mise en production |
+| RSQ-13 | Capacité réelle non démontrée dans le lab | campagne de charge en préproduction ; clause de revue au comité de suivi |
+| RSQ-18 | Clés du client non appliquées à la base et aux archives | développement du chiffrement applicatif, SSE-KMS ; destruction physique en attendant |
+| RSQ-01 | Notification tardive | travaux préparatoires engagés à nos risques sur le lot commun |

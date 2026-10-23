@@ -1,3 +1,19 @@
+---
+id: ECA-3606
+titre: "Cartographie des transferts hors EEE absente"
+origine: audit-2026 (Auditia Santé, Hélène Mercier)
+mesures: [5.23, 5.19, 5.20, 5.21, 5.22, 5.31, 5.34, HDS souveraineté]
+gravite: majeur
+statut: en cours
+ouvert-le: 2026-11-18
+echeance: 2027-01-31
+responsable: thomas.renaud
+remediation: SEC-3607
+clos-le:
+preuve:
+valideur:
+---
+
 # ECA-3606 — Cartographie des transferts hors EEE absente
 
 > Audit à blanc (Auditia Santé), constat du 2026-11-18, formalisé en F6-S07 (SEC-3607).
@@ -35,3 +51,6 @@ Cartographie publiée : 2026-11-27 ; avenants : 2027-01-31.
 
 ## Statut
 en cours
+
+## Preuve de clôture
+_(à la clôture : lot `ms-preuves` cité dans l'en-tête, et ce qu'il contient)_

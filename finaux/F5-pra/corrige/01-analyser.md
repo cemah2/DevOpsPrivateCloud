@@ -18,7 +18,7 @@ Démarche :
 2. **Les impacts dans le temps**, service par service, à 1 h, 4 h, 1 jour, 3 jours, chiffrés à partir de la volumétrie donnée (≈ 9 000 rendez-vous par jour, 30 % en deux heures : ≈ 22 prises par minute en pointe). Le chiffre utile n'est pas « combien de rendez-vous par heure » mais **à partir de quand le contournement manuel ne tient plus** : pour MédiAgenda, la saturation des standards à la demi-journée.
 3. **DMIA et PDMA** (durée d'interruption et perte de données maximales admissibles) déduites des impacts ; puis **RTO et RPO** posés **sous** elles, avec une marge, et rattachés à une capacité technique qui les rend tenables.
 4. **Le RPO de MédiAgenda se calcule** sur le chemin d'une écriture : validation → segment de WAL archivé au plus `archive_timeout` (5 min, valeur de CloudNativePG) après → objet dans `s3-01` (secondes) → copié par `filer.sync` (secondes à une minute, à mesurer en S04) → rejoué. Pire cas ≈ 7 min ; l'objectif de 15 min garde une marge. Le RPO de référence est donc **justifié**, pas seulement accepté.
-5. **Le périmètre** : MédiVisio et Data sont tranchés **par écrit** (hors v1, avec la condition qui les ferait entrer). La CI, l'observabilité et l'identité sont traitées comme des services avec leur propre mode dégradé (gel des livraisons, sonde minimale, bris de glace).
+5. **Le périmètre** : MédiVisio et Data sont tranchés **par écrit** (hors v1, avec la condition qui les ferait entrer). La CI, l'observabilité et l'identité sont traitées comme des services avec leur propre mode dégradé (gel des livraisons ; supervision **minimale** de PAR2 : la sonde en permanence, Prometheus, Alertmanager et Mailpit de secours sur `adm02` mis en service pendant un PRA ; bris de glace).
 6. **La définition de la reprise** : une création de rendez-vous réussie par le **nom global**, portant `X-MediSphere-Site: par2`, observée par la sonde **et** par un utilisateur hors du lab. On distingue trois horloges (T0, T décision, T reprise) : l'exercice mesurera les deux durées.
 
 **Explications**
@@ -37,7 +37,7 @@ Démarche :
 - Confondre RTO et DMIA (« on accepte 4 h, donc le RTO est de 4 h ») : aucune marge pour la décision.
 - Oublier la **perte** de données dans la BIA (seulement l'arrêt) : c'est elle qui fixe le RPO.
 - Une fin de reprise non mesurable (« les applications sont reparties »).
-- Mettre « tout » dans le périmètre : `hp01` ne le porte pas, et le jour J on ne sait plus par quoi commencer.
+- Mettre « tout » dans le périmètre : `hp01` ne le porte pas, et le jour J on ne sait plus par quoi commencer. À l'inverse, exclure **toute** supervision : le site de repli tourne alors à l'aveugle, et le premier incident pendant le PRA est signalé par un patient.
 - Laisser MédiVisio et Data sans réponse écrite : les équipes le découvriront le jour du sinistre.
 
 **En production chez MédiSphère**

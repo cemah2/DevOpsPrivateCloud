@@ -18,6 +18,10 @@
 #            l'échéance, par personne, administrateur du compartiment compris. Demande une confirmation.
 # etat       configuration du verrouillage, versionnage, politique, quota (sans secret).
 #
+# Le même script crée l'archive des journaux d'audit (F6-S08, SEC-3608) :
+#   COMPARTIMENT=archive-audit PROPRIETAIRE=archive-audit LECTEUR=archive-audit-lecture \
+#   KV_BASE=plateforme/archive-audit QUOTA=50G rgw-preuves.sh creer
+#
 # Codes retour : 0 succès, 1 erreur, 2 usage, 3 refus (confirmation absente).
 set -euo pipefail
 
@@ -25,6 +29,9 @@ usage() { sed -n 's/^# Usage : /Usage : /p; s/^#         rgw-preuves/        rgw
 (($# >= 1)) || usage
 
 COMPARTIMENT="${COMPARTIMENT:-preuves-conformite}"
+PROPRIETAIRE="${PROPRIETAIRE:-preuves}"          # utilisateur RGW d'écriture (propriétaire du compartiment)
+LECTEUR="${LECTEUR:-preuves-lecture}"            # utilisateur RGW de lecture (auditeurs, contrôles)
+KV_BASE="${KV_BASE:-plateforme/preuves}"         # clés dans OpenBao : <KV_BASE>/rgw-ecriture et rgw-lecture
 QUOTA="${QUOTA:-20G}"
 CEPH_ADMIN="${WB_CEPH_ADMIN:-ceph01}"
 RGW_URL="${RGW_URL:-https://rgw.par1.medisphere.internal}"
@@ -62,7 +69,7 @@ en_tant_que() {
     aws --endpoint-url "$RGW_URL" "$@"
   )
 }
-ecr() { en_tant_que plateforme/preuves/rgw-ecriture "$@"; }
+ecr() { en_tant_que "$KV_BASE/rgw-ecriture" "$@"; }
 
 regle() { # regle MODE JOURS — rétention par défaut des nouveaux objets
   ecr s3api put-object-lock-configuration --bucket "$COMPARTIMENT" --object-lock-configuration \
@@ -72,10 +79,10 @@ regle() { # regle MODE JOURS — rétention par défaut des nouveaux objets
 case "$1" in
   creer)
     (($# == 1)) || usage
-    utilisateur preuves plateforme/preuves/rgw-ecriture "Preuves de conformité : collecte" 1
-    utilisateur preuves-lecture plateforme/preuves/rgw-lecture "Preuves de conformité : lecture (audit)" -1   # -1 : aucune création de compartiment
-    rgw quota set --quota-scope=user --uid=preuves --max-size="$QUOTA"
-    rgw quota enable --quota-scope=user --uid=preuves
+    utilisateur "$PROPRIETAIRE" "$KV_BASE/rgw-ecriture" "$COMPARTIMENT : écriture" 1
+    utilisateur "$LECTEUR" "$KV_BASE/rgw-lecture" "$COMPARTIMENT : lecture (audit)" -1   # -1 : aucune création de compartiment
+    rgw quota set --quota-scope=user --uid="$PROPRIETAIRE" --max-size="$QUOTA"
+    rgw quota enable --quota-scope=user --uid="$PROPRIETAIRE"
     if ecr s3api head-bucket --bucket "$COMPARTIMENT" >/dev/null 2>&1; then
       echo "compartiment $COMPARTIMENT : existe déjà"
     else
@@ -86,18 +93,18 @@ case "$1" in
       regle GOVERNANCE 1
       echo "rétention par défaut : GOVERNANCE 1 jour (phase d'essai)"
     fi
-    # Lecture pour « preuves-lecture » : objets, versions, rétentions, configuration du verrou.
+    # Lecture pour l'utilisateur de lecture : objets, versions, rétentions, configuration du verrou.
     # Format de principal d'un utilisateur RGW sans locataire : arn:aws:iam:::user/<uid>.
-    ecr s3api put-bucket-policy --bucket "$COMPARTIMENT" --policy "$(jq -nc --arg b "$COMPARTIMENT" '{
+    ecr s3api put-bucket-policy --bucket "$COMPARTIMENT" --policy "$(jq -nc --arg b "$COMPARTIMENT" --arg l "$LECTEUR" '{
       Version: "2012-10-17",
       Statement: [{
         Sid: "LecturePreuves", Effect: "Allow",
-        Principal: {AWS: ["arn:aws:iam:::user/preuves-lecture"]},
+        Principal: {AWS: ["arn:aws:iam:::user/\($l)"]},
         Action: ["s3:ListBucket", "s3:ListBucketVersions", "s3:GetObject", "s3:GetObjectVersion",
                  "s3:GetObjectRetention", "s3:GetObjectLegalHold", "s3:GetBucketObjectLockConfiguration",
                  "s3:GetBucketVersioning"],
         Resource: ["arn:aws:s3:::\($b)", "arn:aws:s3:::\($b)/*"]}]}')"
-    echo "politique de lecture posée pour preuves-lecture"
+    echo "politique de lecture posée pour $LECTEUR"
     "$0" etat
     ;;
   retention)
@@ -118,7 +125,7 @@ case "$1" in
     ecr s3api get-object-lock-configuration --bucket "$COMPARTIMENT"
     ecr s3api get-bucket-versioning --bucket "$COMPARTIMENT"
     ecr s3api get-bucket-policy --bucket "$COMPARTIMENT" --query Policy --output text | jq -c '.Statement[] | {Sid, Principal, n_actions: (.Action | length)}'
-    rgw user info --uid=preuves | jq '{user_id, max_buckets, user_quota}'
+    rgw user info --uid="$PROPRIETAIRE" | jq '{user_id, max_buckets, user_quota}'
     ;;
   *) usage ;;
 esac

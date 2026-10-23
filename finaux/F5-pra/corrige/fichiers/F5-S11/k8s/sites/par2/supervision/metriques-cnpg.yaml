@@ -2,8 +2,9 @@
 # Fichier de SITE (PAR2 seulement) : publie l'exportateur de l'instance de mediagenda-db-par2 (port 9187)
 # au Prometheus minimal de adm02, faute de Prometheus dans k8s-par2 (mémoire du nœud, S01).
 #   - adresse fixe 10.20.20.210 du pool lb-par2, annoncée en L2 par Cilium ;
-#   - externalTrafficPolicy: Local : nœud unique, et l'adresse source (adm02) est conservée pour la
-#     politique réseau ci-dessous ;
+#   - externalTrafficPolicy: Cluster (défaut) : les annonces L2 de Cilium ne prennent pas en charge
+#     « Local » ; sur un nœud unique, le serveur est local et l'adresse source (adm02) reste visible pour
+#     la politique réseau ci-dessous (à vérifier, corrigé de S11, « Points non testés ») ;
 #   - seul adm02 (10.20.20.10) entre, et seulement sur 9187 (les métriques ne contiennent aucune donnée
 #     de patient, mais révèlent la charge et les noms des bases).
 # Appliqué avec la couche de base de PAR2 (Helmfile, environnement par2), pas par Argo CD.
@@ -18,7 +19,6 @@ metadata:
     lbipam.cilium.io/ips: "10.20.20.210"
 spec:
   type: LoadBalancer
-  externalTrafficPolicy: Local
   selector:
     cnpg.io/cluster: mediagenda-db-par2
   ports:

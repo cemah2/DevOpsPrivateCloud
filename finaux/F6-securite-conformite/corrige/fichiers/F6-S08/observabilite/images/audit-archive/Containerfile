@@ -1,0 +1,13 @@
+# plateforme/observabilite — images/audit-archive/Containerfile (F6-S08, SEC-3608)
+# Construite par le gabarit image.yml (M12, BuildKit sans privilège), analysée par Harbor, signée par la
+# CI (transit/cosign-medisphere, M25) et publiée en registry.par1.medisphere.internal/plateforme/audit-archive:vX.Y.Z.
+# Base reconstruite par MédiSphère (bibliotheque/debian, M12) ; AWS CLI v2 du paquet Debian 13.
+FROM registry.par1.medisphere.internal/bibliotheque/debian:13
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl jq awscli gzip openssl \
+ && rm -rf /var/lib/apt/lists/*
+COPY medisphere-racine.crt /usr/local/share/ca-certificates/medisphere-racine.crt
+RUN update-ca-certificates
+COPY outils/archiver-audit /usr/local/bin/archiver-audit
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/archiver-audit"]

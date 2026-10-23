@@ -1,0 +1,9 @@
+---
+# host_vars/git01/alloy.yml — F6-S08 (SEC-3608) : événements d'audit de GitLab au locataire audit.
+# audit_json.log (gitlab-rails) : une ligne JSON par événement d'audit (connexion, changement de droits,
+# jeton créé ou révoqué, compte bloqué ou débloqué…) ; l'édition Free n'en écrit qu'une partie (voir
+# docs/conformite/journaux-audit.md, « limites »). Le dossier des journaux d'Omnibus n'est lisible que
+# par root et git : même capacité de lecture seule qu'ipa01 (M24-E26).
+alloy_audit_fichiers:
+  - {chemin: /var/log/gitlab/gitlab-rails/audit_json.log, service: gitlab, fichier: audit_json, horodatage: time}
+alloy_lecture_fichiers_proteges: true

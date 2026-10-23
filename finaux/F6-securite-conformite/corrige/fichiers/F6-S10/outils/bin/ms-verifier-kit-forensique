@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ms-verifier-kit-forensique — le kit de réponse à incident est-il PRÊT ? (F6-S10, SEC-3610, ECA-3605)
+#
+# plateforme/outils — bin/ms-verifier-kit-forensique. Lancé par le pipeline planifié « kit:verifier »
+# (runner01, chaque nuit) et à la main avant un exercice. « Prêt » est une propriété vérifiable, pas une
+# déclaration : ce script la prouve, et il doit pouvoir passer au rouge.
+#
+# Usage : ms-verifier-kit-forensique [--bris-de-glace]
+#
+# Contrôles :
+#   1. image d'outils forensiques présente dans Harbor et signée par la clé MédiSphère (cosign verify) ;
+#   2. identité de dépôt des preuves : elle ÉCRIT un objet d'essai dans preuves-conformite, et la
+#      suppression de CETTE VERSION est REFUSÉE (verrouillage). Rien n'est jamais effacé : l'objet
+#      d'essai (quelques octets, préfixe verif-kit/) reste jusqu'à son échéance ;
+#   3. modèles présents (chronologie, manifeste) dans le clone de plateforme/medisphere ;
+#   4. --bris-de-glace (à la main seulement, annoncé, RB-240) : le kubeconfig de bris de glace répond en
+#      LECTURE. Jamais dans le pipeline : son usage déclenche l'alerte critique AuditBrisDeGlace (M24).
+#
+# Variables (défauts adaptés au lab) :
+#   MS_KIT_IMAGE          image d'outils (registry.par1.medisphere.internal/plateforme/outils-forensique:v1.0.0)
+#   MS_KIT_CLE_COSIGN     clé publique Cosign (défaut : <clone medisphere>/docs/registre/cosign.pub)
+#   MS_KIT_MEDISPHERE     clone de plateforme/medisphere (défaut : ./medisphere)
+#   MS_KIT_RGW_URL        https://rgw.par1.medisphere.internal
+#   MS_KIT_COMPARTIMENT   preuves-conformite
+#   MS_KIT_BRIS_KUBECONFIG  kubeconfig de bris de glace (seulement avec --bris-de-glace)
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY   identité de dépôt « preuves » (CI : OpenBao, rôle ci-preuves ;
+#                         à la main : ~/.config/workbook/s3-preuves-conformite-depot.env chargé avant)
+#
+# Codes retour : 0 kit prêt, 1 kit NON prêt, 2 usage ou outil manquant.
+# =============================================================================
+set -euo pipefail
+
+IMAGE="${MS_KIT_IMAGE:-registry.par1.medisphere.internal/plateforme/outils-forensique:v1.0.0}"
+MEDISPHERE="${MS_KIT_MEDISPHERE:-./medisphere}"
+CLE="${MS_KIT_CLE_COSIGN:-$MEDISPHERE/docs/registre/cosign.pub}"
+RGW="${MS_KIT_RGW_URL:-https://rgw.par1.medisphere.internal}"
+BUCKET="${MS_KIT_COMPARTIMENT:-preuves-conformite}"
+MODELES="$MEDISPHERE/docs/securite/incidents/modeles"
+BRIS=0
+
+case "${1:-}" in
+  "") ;;
+  --bris-de-glace) BRIS=1 ;;
+  *) echo "Usage : $0 [--bris-de-glace]" >&2; exit 2 ;;
+esac
+for c in cosign aws jq openssl; do
+  command -v "$c" >/dev/null 2>&1 || { echo "outil manquant : $c" >&2; exit 2; }
+done
+export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}"
+export AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
+
+echec=0
+ok() { echo "OK : $1"; }
+ko() { echo "KO : $1"; echec=1; }
+
+# 1. Image d'outils signée par MédiSphère (sans journal de transparence, comme au M13/M25).
+if [[ ! -r "$CLE" ]]; then
+  ko "clé publique Cosign illisible : $CLE"
+elif cosign verify --key "$CLE" --insecure-ignore-tlog=true "$IMAGE" >/dev/null 2>&1; then
+  ok "image d'outils présente et signée : $IMAGE"
+else
+  ko "image d'outils absente ou signature invalide : $IMAGE"
+fi
+
+# 2. Dépôt des preuves : écriture possible, suppression de la version refusée.
+if [[ -z "${AWS_ACCESS_KEY_ID:-}" || -z "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
+  ko "identité de dépôt des preuves absente (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)"
+else
+  s3() { aws --endpoint-url "$RGW" "$@"; }
+  cle="verif-kit/$(date -u +%Y%m%dT%H%M%SZ).txt"
+  tmp="$(mktemp)"
+  trap 'rm -f -- "$tmp"' EXIT
+  printf 'verif-kit %s\n' "$(date -u +%FT%TZ)" >"$tmp"
+  if r="$(s3 s3api put-object --bucket "$BUCKET" --key "$cle" --body "$tmp" \
+    --content-md5 "$(openssl dgst -md5 -binary "$tmp" | openssl base64)" 2>/dev/null)" &&
+    v="$(jq -r '.VersionId // empty' <<<"$r")" && [[ -n "$v" ]]; then
+    ok "dépôt des preuves : écriture possible ($cle, version $v)"
+    # Une suppression SANS version ne ferait que poser un marqueur de suppression (compartiment versionné) :
+    # c'est la suppression de la VERSION que le verrouillage doit refuser.
+    if s3 s3api delete-object --bucket "$BUCKET" --key "$cle" --version-id "$v" >/dev/null 2>&1; then
+      ko "le verrouillage ne protège pas : la version $v de $cle a été SUPPRIMÉE"
+    else
+      ok "dépôt des preuves : suppression de la version refusée (verrouillage d'objets actif)"
+    fi
+  else
+    ko "dépôt des preuves : écriture impossible ou compartiment non versionné ($BUCKET)"
+  fi
+fi
+
+# 3. Modèles présents.
+for m in chronologie manifeste; do
+  if compgen -G "$MODELES/*$m*" >/dev/null; then
+    ok "modèle présent : $m"
+  else
+    ko "modèle manquant dans $MODELES : $m"
+  fi
+done
+
+# 4. Bris de glace : à la main seulement.
+if ((BRIS)); then
+  k="${MS_KIT_BRIS_KUBECONFIG:-}"
+  if [[ -n "$k" && -r "$k" ]] && kubectl --kubeconfig "$k" --request-timeout=10s auth can-i get nodes >/dev/null 2>&1; then
+    ok "bris de glace Kubernetes : répond en lecture (usage à consigner selon RB-240)"
+  else
+    ko "bris de glace Kubernetes : kubeconfig absent, illisible ou refusé (MS_KIT_BRIS_KUBECONFIG)"
+  fi
+else
+  echo "-- : bris de glace non éprouvé (lancement automatique) : il s'éprouve à la main, en lecture, selon RB-240"
+fi
+
+if ((echec)); then
+  echo "== Kit forensique NON prêt =="
+  exit 1
+fi
+echo "== Kit forensique prêt =="

@@ -38,7 +38,7 @@ source "$WB_ROOT/lab/lib/pannes-lib.sh"
 source "$WB_ROOT/finaux/F5-pra/checks/_f5-exercice.sh"
 
 _S09_CHRONO_MIN="${WB_F5_CHRONO_S09_MIN:-240}"
-_S09_DEPOT_ADM02="${WB_F5_DEPOT_PAR2_DISTANT:-}"   # vide : ~/medisphere de admin sur adm02
+_S09_DEPOT_ADM02="${WB_F5_DEPOT_PAR2:-}"   # vide : ~/medisphere de admin sur adm02 (même variable que les checks)
 _S09_WB_ADM02="${WB_F5_WORKBOOK_ADM02:-DevOpsPrivateCloud}"   # relatif au $HOME de admin sur adm02
 _S09_INJECTION=0
 _S09_REFUS=0

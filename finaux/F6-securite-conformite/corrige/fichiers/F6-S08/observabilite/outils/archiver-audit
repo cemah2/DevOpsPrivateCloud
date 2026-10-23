@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# =============================================================================
+# archiver-audit — archive quotidienne du locataire « audit » de Loki (F6-S08, SEC-3608, ECA-3601)
+#
+# plateforme/observabilite — outils/archiver-audit, embarqué dans l'image plateforme/audit-archive
+# (images/audit-archive/Containerfile) et lancé par le CronJob journaux/audit-archive de plateforme/k8s.
+#
+# Usage : archiver-audit [AAAA-MM-JJ]        (défaut : la veille, en UTC)
+#
+# Pour la période (un jour UTC) :
+#   1. lit dans Loki chaque source du locataire audit (sélecteurs ci-dessous), par pages, et écrit un
+#      fichier <source>.jsonl.gz (une ligne JSON par entrée : horodatage ns, étiquettes, ligne) ;
+#   2. écrit manifeste.json (période, objets : nom, SHA-256, lignes, octets) ;
+#   3. signe le SHA-256 du manifeste par transit d'OpenBao (clé audit-archive, méthode kubernetes
+#      « k8s-par1 », rôle audit-archive) → manifeste.sig ;
+#   4. dépose le tout dans s3://archive-audit/<AAAA-MM-JJ>/ (signature EN DERNIER), sous la rétention
+#      par défaut du compartiment (COMPLIANCE, 365 jours), et vérifie que chaque objet la porte.
+# Refuse (code 3) une période déjà archivée : on n'écrase jamais, on ne complète jamais.
+#
+# Variables : LOKI_URL, LOKI_TENANT (audit), RGW_URL, ARCHIVE_BUCKET (archive-audit), BAO_ADDR,
+#   BAO_ROLE (audit-archive), BAO_AUTH (k8s-par1), TRANSIT_CLE (audit-archive),
+#   BAO_JWT_FICHIER (jeton projeté, audience openbao.medisphere.internal),
+#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (utilisateur RGW archive-audit, Secret fourni par ESO).
+# Codes retour : 0 succès, 1 erreur, 2 usage, 3 refus (période déjà archivée, objet sans rétention).
+# =============================================================================
+set -euo pipefail
+
+LOKI_URL="${LOKI_URL:-http://loki.journaux.svc:3100}"
+LOKI_TENANT="${LOKI_TENANT:-audit}"
+RGW_URL="${RGW_URL:-https://rgw.par1.medisphere.internal}"
+BUCKET="${ARCHIVE_BUCKET:-archive-audit}"
+BAO_ADDR="${BAO_ADDR:-https://openbao.par1.medisphere.internal:8200}"
+BAO_ROLE="${BAO_ROLE:-audit-archive}"
+BAO_AUTH="${BAO_AUTH:-k8s-par1}"
+TRANSIT_CLE="${TRANSIT_CLE:-audit-archive}"
+BAO_JWT_FICHIER="${BAO_JWT_FICHIER:-/var/run/secrets/openbao/token}"
+PAGE=5000
+export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}"
+export AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
+
+# Sources du locataire audit : nom de fichier → sélecteur (étiquettes de la liste fermée du M22).
+declare -A SOURCES=(
+  [kubernetes]='{job="kubernetes-audit"}'
+  [openbao]='{service="openbao"}'
+  [keycloak]='{service="keycloak"}'
+  [freeipa]='{service="freeipa"}'
+  [gitlab]='{service="gitlab"}'
+  [proxmox]='{service="proxmox"}'
+)
+
+log() { printf '%s archiver-audit %s\n' "$(date -u +%FT%TZ)" "$*" >&2; }
+die() { log "ERREUR $1"; exit "${2:-1}"; }
+for c in curl jq aws gzip sha256sum openssl; do
+  command -v "$c" >/dev/null 2>&1 || die "outil manquant : $c"
+done
+
+periode="${1:-$(date -u -d yesterday +%F)}"
+[[ "$periode" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || die "période invalide : $periode (AAAA-MM-JJ)" 2
+debut_ns="$(date -u -d "$periode" +%s)000000000"
+fin_ns="$(date -u -d "$periode + 1 day" +%s)000000000"
+s3() { aws --endpoint-url "$RGW_URL" "$@"; }
+
+s3 s3api head-object --bucket "$BUCKET" --key "$periode/manifeste.json" >/dev/null 2>&1 &&
+  die "la période $periode est déjà archivée : rien n'est remplacé" 3
+
+travail="$(mktemp -d)"
+trap 'rm -rf -- "$travail"' EXIT
+
+# 1. Extraction, page par page (direction forward ; la page suivante repart après la dernière entrée).
+objets="[]"
+for nom in $(printf '%s\n' "${!SOURCES[@]}" | sort); do
+  sel="${SOURCES[$nom]}"
+  brut="$travail/$nom.jsonl"
+  : >"$brut"
+  depuis="$debut_ns"
+  while :; do
+    r="$(curl -sf --max-time 120 -G -H "X-Scope-OrgID: $LOKI_TENANT" \
+      --data-urlencode "query=$sel" --data-urlencode "start=$depuis" --data-urlencode "end=$fin_ns" \
+      --data-urlencode "limit=$PAGE" --data-urlencode direction=forward \
+      "$LOKI_URL/loki/api/v1/query_range")" || die "Loki ne répond pas pour $nom"
+    jq -c '.data.result[] | .stream as $e | .values[] | {ns: .[0], etiquettes: $e, ligne: .[1]}' <<<"$r" |
+      sort -t'"' -k4,4n >>"$brut"
+    n="$(jq '[.data.result[].values | length] | add // 0' <<<"$r")"
+    ((n >= PAGE)) || break
+    dernier="$(jq -r '[.data.result[].values[][0] | tonumber] | max' <<<"$r")"
+    depuis="$((dernier + 1))"
+  done
+  lignes="$(wc -l <"$brut")"
+  gzip -9n "$brut"
+  f="$nom.jsonl.gz"
+  objets="$(jq -c --arg n "$f" --arg h "$(sha256sum "$travail/$f" | cut -d' ' -f1)" \
+    --argjson l "$lignes" --argjson o "$(stat -c %s "$travail/$f")" \
+    '. + [{nom: $n, sha256: $h, lignes: $l, octets: $o}]' <<<"$objets")"
+  log "$nom : $lignes ligne(s)"
+done
+
+# 2. Manifeste.
+jq -n --arg p "$periode" --arg g "$(date -u +%FT%TZ)" --arg t "$LOKI_TENANT" --argjson o "$objets" \
+  '{periode: $p, genere_utc: $g, locataire: $t, objets: $o}' >"$travail/manifeste.json"
+
+# 3. Signature par transit (jamais de clé hors du coffre) : SHA-256 du manifeste, pré-haché.
+jeton="$(jq -n --arg r "$BAO_ROLE" --rawfile j "$BAO_JWT_FICHIER" '{role: $r, jwt: ($j | rtrimstr("\n"))}' |
+  curl -sf --max-time 15 --data @- "$BAO_ADDR/v1/auth/$BAO_AUTH/login" | jq -r '.auth.client_token // empty')" ||
+  die "connexion à OpenBao refusée (rôle $BAO_ROLE)"
+[[ -n "$jeton" ]] || die "aucun jeton OpenBao"
+condense="$(openssl dgst -sha256 -binary "$travail/manifeste.json" | openssl base64 -A)"
+jq -n --arg i "$condense" '{input: $i, prehashed: true, hash_algorithm: "sha2-256"}' |
+  curl -sf --max-time 15 -K <(printf 'header = "X-Vault-Token: %s"\n' "$jeton") --data @- \
+    "$BAO_ADDR/v1/transit/sign/$TRANSIT_CLE" | jq -er '.data.signature' >"$travail/manifeste.sig" ||
+  die "signature refusée (transit/$TRANSIT_CLE)"
+curl -sf --max-time 10 -X POST -K <(printf 'header = "X-Vault-Token: %s"\n' "$jeton") \
+  "$BAO_ADDR/v1/auth/token/revoke-self" >/dev/null || true
+
+# 4. Dépôt (objets, manifeste, signature en dernier) et contrôle de la rétention de chaque objet.
+for f in $(jq -r '.objets[].nom' "$travail/manifeste.json") manifeste.json manifeste.sig; do
+  md5="$(openssl dgst -md5 -binary "$travail/$f" | openssl base64)"
+  r="$(s3 s3api put-object --bucket "$BUCKET" --key "$periode/$f" --body "$travail/$f" --content-md5 "$md5")" ||
+    die "dépôt impossible : $periode/$f"
+  v="$(jq -r '.VersionId // empty' <<<"$r")"
+  s3 s3api head-object --bucket "$BUCKET" --key "$periode/$f" ${v:+--version-id "$v"} |
+    jq -e '(.ObjectLockMode // "") == "COMPLIANCE" and (.ObjectLockRetainUntilDate // "") != ""' >/dev/null ||
+    die "objet déposé SANS rétention COMPLIANCE : $periode/$f (configuration du compartiment ?)" 3
+done
+log "période $periode archivée : $(jq '.objets | length' "$travail/manifeste.json") source(s), manifeste signé"

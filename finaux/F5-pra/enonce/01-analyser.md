@@ -31,12 +31,12 @@ Prérequis de la phase : [`00-introduction.md`](00-introduction.md) lu, état d'
 
 **Travail demandé**
 1. Rédige `docs/pra/bia.md` : pour chaque service métier, les impacts dans le temps (1 h, 4 h, 1 jour, 3 jours) sur les patients, les cabinets, la conformité et la réputation ; la **durée maximale d'interruption admissible** et la **perte de données maximale admissible** ; les dépendances métier (qui ne peut rien faire sans qui) ; les procédures manuelles possibles en attendant.
-2. Rédige `docs/pra/objectifs.md` : par service, RTO, RPO, mode dégradé accepté pendant le PRA (capacité, fonctions coupées, performance), et la **capacité technique** qui rend chaque objectif tenable (ou l'écart, et ce qu'il coûterait de le combler) ; le **périmètre** du PRA v1, avec ce qui en est exclu et pourquoi (MédiVisio, Data, CI, OpenStack, observabilité) ; les hypothèses (quel sinistre ? PAR1 perdu entièrement, PAR2 intact, équipe joignable) ; la **définition de la reprise** (à quel instant l'horloge du RTO s'arrête).
+2. Rédige `docs/pra/objectifs.md` : par service, RTO, RPO, mode dégradé accepté pendant le PRA (capacité, fonctions coupées, performance), et la **capacité technique** qui rend chaque objectif tenable (ou l'écart, et ce qu'il coûterait de le combler) ; le **périmètre** du PRA v1, avec ce qui en est exclu et pourquoi (MédiVisio, Data, CI, OpenStack, observabilité complète), et la **supervision minimale** de PAR2 que tu prévois pendant un PRA (ce qu'elle surveille, qui reçoit les alertes, ce qu'elle coûte en mémoire) ; les hypothèses (quel sinistre ? PAR1 perdu entièrement, PAR2 intact, équipe joignable) ; la **définition de la reprise** (à quel instant l'horloge du RTO s'arrête).
 3. MR relue par Julien (MédiAgenda), Nadia (exploitation), Sophie (conformité), approuvée par Claire.
 
 **Critères de réussite**
 - [ ] `docs/pra/bia.md` est sur `main` et traite au moins MédiAgenda, MédiDoc, Legacy-RDV et MédiNotif, avec des impacts dans le temps et une durée maximale d'interruption pour chacun.
-- [ ] `docs/pra/objectifs.md` est sur `main` avec un RTO et un RPO par service, le mode dégradé, le périmètre (exclusions motivées, dont MédiVisio et Data) et la définition de la fin de reprise.
+- [ ] `docs/pra/objectifs.md` est sur `main` avec un RTO et un RPO par service, le mode dégradé, le périmètre (exclusions motivées, dont MédiVisio et Data), la supervision minimale de PAR2 et la définition de la fin de reprise.
 
 **Vérification** : `lab/bin/check F5 1` (présence et contenu minimal ; la qualité se juge avec le corrigé).
 

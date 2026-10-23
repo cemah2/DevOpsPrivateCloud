@@ -18,8 +18,8 @@
 | 09:42 | Relevé du témoin sur la réplique de PAR2 | dernier `PRA-TEMOIN` vu à PAR2 : **07:58** ; PAR1 en écrit un par minute | requête de RB-356 |
 | 09:44 | INC-6108 ouvert | « RPO actuel » ≈ 1 h 46 : l'objectif est de 15 min | main courante de répétition |
 | 09:50 | Diagnostic | `kubectl cnpg status mediagenda-db-par2` : la réplique rejoue, mais le dernier WAL **disponible** dans `cnpg-k8s-par1` de `s3-02` date de 07:57 ; `s3-01` en a reçu jusqu'à 09:49 | sortie de `aws s3api list-objects-v2` des deux côtés |
-| 09:55 | Cause | sur `s3-02`, l'unité `filer-sync@cnpg-k8s-par1` est `inactive (dead)` et **désactivée** depuis 07:58 (`systemctl status`, `journalctl -u`) : coupée pour la montée de SeaweedFS de `s3-02`, jamais relancée | journal systemd |
-| 09:57 | Réparation | `systemctl enable --now` de l'unité ; `filer.sync` reprend à son point de contrôle | journal : rattrapage des événements depuis 07:58 |
+| 09:55 | Cause | sur `s3-02`, l'unité `seaweedfs-filer-sync@cnpg-k8s-par1` est `inactive (dead)` depuis 07:58, toujours activée (`systemctl status`, `journalctl -u`) : coupée pour la montée de SeaweedFS de `s3-02`, jamais relancée | journal systemd |
+| 09:57 | Réparation | `systemctl start` de l'unité ; `filer.sync` reprend à son point de contrôle | journal : rattrapage des événements depuis 07:58 |
 | 10:06 | Rattrapage | dernier témoin vu à PAR2 : 10:04 (retard 2 min) | requête de RB-356 |
 | 10:10 | Répétition rejouée | RB-355 (3501, `bao-par2`), démarrage d'essai des applications à PAR2, relevé du témoin : vert | durées ci-dessous |
 | 11:40 | Remise en veille | 3501 détruite, `bao-par2` arrêté, applications de PAR2 à 0 réplica | `check F5 8` vert |
@@ -29,7 +29,7 @@ Durées mesurées à la répétition (référence pour le jour J) : RB-355 compl
 ## 2. Cause
 
 Le processus qui copie l'archive de la base vers PAR2 était arrêté depuis près de deux heures, **sans aucune alerte** :
-- la supervision du flux regardait l'unité systemd « en échec » (`failed`), pas une unité arrêtée proprement et désactivée ;
+- la supervision du flux regardait l'unité systemd « en échec » (`failed`), pas une unité arrêtée propremente ;
 - la mesure du retard côté destination (S04) ne portait que sur `medidoc-documents`, pas sur l'archive de la base ;
 - la montée de SeaweedFS de `s3-02` n'avait pas de fiche de changement : personne n'avait écrit « relancer la réplication ».
 

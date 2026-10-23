@@ -26,6 +26,8 @@ En fin de marché (ou à la demande du GHSV), MédiSphère doit livrer sous 30 j
 4. **Destruction** (ERV-04) : après validation de l'export par le GHSV : suppression des espaces, bases, compartiments et du royaume `ghsv-patients` à PAR1 et PAR2 ; **destruction des clés** `transit/ghsv-*` (ADR-0371), qui rend illisibles les sauvegardes, WAL archivés et copies hors site qu'on ne peut pas effacer sélectivement ; procès-verbal daté (actions, horodatages des journaux d'audit, empreintes des preuves).
 5. **Conservé au-delà de 30 jours** (R-17), écrit dans le plan de réversibilité : journaux de sécurité et d'administration de **notre** plateforme qui mentionnent le GHSV, pseudonymisés (aucune donnée de patient), jusqu'à leur échéance d'un an (traçabilité HDS, preuves d'audit) ; documents contractuels et rapports mensuels (sans donnée de santé), selon les durées légales.
 
+**Preuve de concept du lab** (F7-S07) : `ms-reversibilite` est lancé depuis `adm01` par une personne du groupe `ghsv` (politique `ghsv-reversibilite`, sans `decrypt`), pas encore par un pipeline protégé (rôle JWT et runner qui joint la base : cible de production) ; aucun champ chiffré à déchiffrer (pas de `transit/ghsv-donnees` dans le lab) ; ni comptes de patients, ni pièces jointes, ni journaux dans l'archive (`patients.jsonl`, `pieces-jointes/` et `journaux/` sont déclarés absents dans son manifeste : le lab n'a ni royaume `ghsv-patients` ni pièces jointes) ; la relecture est faite par toi dans une VM jetable (VMID 3701), pas par l'équipe Data.
+
 ## Options étudiées
 
 | Option | Pour | Contre | Décision |

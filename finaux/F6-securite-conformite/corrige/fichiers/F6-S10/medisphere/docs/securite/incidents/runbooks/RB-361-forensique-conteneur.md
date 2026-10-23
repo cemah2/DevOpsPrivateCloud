@@ -15,8 +15,9 @@ perdus. On regarde de l'**extérieur** ; on ne lance rien dans le conteneur susp
 
 ## 1. Préparation
 
-- Kit forensique vérifié (`outils/bin/verifier-kit-forensique.sh`) : image d'outils signée
-  (`netshoot`/`busybox` de la bibliothèque), identité de dépôt des preuves, modèles.
+- Kit forensique vérifié (`bin/ms-verifier-kit-forensique` de `plateforme/outils`, chaque nuit) : image
+  d'outils signée `registry.par1.medisphere.internal/plateforme/outils-forensique:v1.0.0`, identité de
+  dépôt des preuves, modèles.
 - Dossier de travail en mémoire sur `adm01` : `D=$(mktemp -d "$XDG_RUNTIME_DIR/inc.XXXXXX")`.
 - Variables : `export NS=<ESPACE> POD=<POD> C=<CONTENEUR>`.
 
@@ -25,7 +26,7 @@ perdus. On regarde de l'**extérieur** ; on ne lance rien dans le conteneur susp
 | # | Pièce | Commande (lecture seule) |
 |---|---|---|
 | 1 | État du pod et du nœud | `kubectl -n $NS get pod $POD -o yaml > $D/pod.yaml` ; `kubectl get node <NŒUD> -o yaml > $D/noeud.yaml` |
-| 2 | Processus et connexions (conteneur éphémère, même espace de processus) | `kubectl -n $NS debug -it pod/$POD --image=registry.par1.medisphere.internal/dockerhub/nicolaka/netshoot:v0.16 --target=$C --profile=restricted -- sh -c 'ps -ef; ss -tnap; cat /proc/1/cmdline \| tr "\0" " "' > $D/processus.txt` |
+| 2 | Processus et connexions (conteneur éphémère, même espace de processus) | `kubectl -n $NS debug -it pod/$POD --image=registry.par1.medisphere.internal/plateforme/outils-forensique:v1.0.0 --target=$C --profile=restricted -- sh -c 'ps -ef; ss -tnap; cat /proc/1/cmdline \| tr "\0" " "' > $D/processus.txt` |
 | 3 | Fichiers déposés (sans les exécuter) | depuis le conteneur éphémère : `ls -la /proc/1/root/tmp` ; `kubectl cp` du fichier **depuis le conteneur éphémère** (`/proc/1/root/tmp/<FICHIER>`) |
 | 4 | Journaux du conteneur | `kubectl -n $NS logs $POD --all-containers --timestamps > $D/logs.txt` (`--previous` s'il a redémarré) |
 | 5 | Événements de sécurité | export Loki (locataire `audit`) : `{service=~"falco\|tetragon"} \|= "$POD"` et `{job="kubernetes-audit"} \|= "$POD"` en JSON |

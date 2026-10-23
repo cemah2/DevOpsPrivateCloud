@@ -1,8 +1,8 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2016  # filtres jq entre apostrophes
-# _f6-conformite.sh — fonctions partagées par les vérifications des phases 1 et 2 du final F6
-# (check-S01 à check-S07 : préparer l'audit, auditer). Sourcé, jamais lancé seul. Préfixe _f6c_
-# (les phases 3 à 5 ont leur propre fichier, _f6-incident.sh, préfixe _f6i_ : mêmes variables).
+# _f6-conformite.sh — socle commun des vérifications du final F6 : sourcé par check-S01 à check-S07,
+# et par _f6-incident.sh (phases 3 à 5, préfixe _f6i_), qui ne redéfinit ni les variables ni les
+# fonctions d'ici. Sourcé, jamais lancé seul. Préfixe _f6c_.
 #
 # Lecture seule :
 #   - GitLab en GET (jeton des checks) : documents de docs/conformite/ de plateforme/medisphere, code de
@@ -26,6 +26,7 @@
 #   WB_F6_LOT_AGE_MAX_H   âge maximal du dernier lot de preuves, en heures (défaut : 36)
 #   WB_F6_PASSERELLES     passerelles de la bordure                (défaut : « gw01 gw02 »)
 #   WB_F6_EXTERNES        identifiants des personnes d'AxiomDev    (défaut : « marc.vidal yanis.perrin »)
+# (variables propres aux phases 3 à 5 : en tête de _f6-incident.sh)
 # + WB_GITLAB_*, WB_K8S_KUBECONFIG, WB_IPA_*, WB_AM_URL, WB_TIMEOUT (lab/lib/check-lib.sh).
 
 _f6c_doc_projet="${WB_F6_PROJET_DOC:-plateforme/medisphere}"
@@ -38,6 +39,9 @@ _f6c_retention_min="${WB_F6_RETENTION_MIN:-365}"
 _f6c_lot_age_max="${WB_F6_LOT_AGE_MAX_H:-36}"
 _f6c_passerelles="${WB_F6_PASSERELLES:-gw01 gw02}"
 _f6c_externes="${WB_F6_EXTERNES:-marc.vidal yanis.perrin}"
+
+# AWS CLI v2 contre le RGW : région par défaut, pas de somme CRC ajoutée d'office (ms-preuves fait de même).
+export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}" AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
 
 # --- GitLab (lecture) ------------------------------------------------------------------------------
 
@@ -94,6 +98,50 @@ _f6c_compte_docs() {
   _f6c_arbre "$_f6c_doc_projet" "$d" | awk -F/ -v m="$2" '$NF ~ m' | wc -l
 }
 
+# --- Fiches d'écart (docs/conformite/ecarts/ECA-36xx[-sujet].md) -----------------------------------
+# En-tête YAML commun aux fiches ouvertes et closes (format de 00-introduction.md) :
+#   ---
+#   id: ECA-3601
+#   statut: ouvert | en cours | clos
+#   clos-le: AAAA-MM-JJ                       (vide tant que l'écart est ouvert)
+#   remediation: SEC-3608                     (ticket de la remédiation)
+#   preuve: lots/AAAA/MM/JJ/<LOT>/            (lot ms-preuves de preuves-conformite ; vide si ouvert)
+#   valideur: sophie.laurent
+#   ---
+
+# _f6c_fiche_ecart NNNN — contenu de la fiche ECA-NNNN (le premier fichier ECA-NNNN[-…].md), vide si absente.
+_f6c_fiche_ecart() {
+  local f
+  f="$(_f6c_arbre "$_f6c_doc_projet" "$_f6c_doc_dir/ecarts" | grep -E "/ECA-$1([-_.][^/]*)?\.md\$" | head -n 1)"
+  [[ -n "$f" ]] || return 0
+  _f6c_fichier "$_f6c_doc_projet" "$f" 2>/dev/null || true
+}
+
+# _f6c_champ_ecart TEXTE CLÉ — valeur d'un champ de l'en-tête YAML (entre les deux premières lignes « --- »).
+_f6c_champ_ecart() {
+  awk -v k="$2" 'NR == 1 && $0 != "---" { exit } NR > 1 && $0 == "---" { exit }
+    NR > 1 { i = index($0, ":"); if (i && substr($0, 1, i - 1) == k) { v = substr($0, i + 1); sub(/^[ \t]+/, "", v); sub(/[ \t]+#.*$/, "", v); gsub(/^"|"$/, "", v); print v; exit } }' <<<"$1"
+}
+
+# _f6c_ecart_clos NNNN — la fiche ECA-NNNN est sur main, en-tête « statut: clos », « clos-le » daté,
+# « preuve » qui désigne un lot ms-preuves ; si l'identité de lecture des preuves est présente, ce lot
+# existe dans le compartiment et il est daté au plus tard du jour de la clôture.
+_f6c_ecart_clos() {
+  local t statut clos preuve lot
+  t="$(_f6c_fiche_ecart "$1")"
+  [[ -n "$t" ]] || return 1
+  statut="$(_f6c_champ_ecart "$t" statut)"
+  clos="$(_f6c_champ_ecart "$t" clos-le)"
+  preuve="$(_f6c_champ_ecart "$t" preuve)"
+  [[ "$statut" == clos && "$clos" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
+  preuve="${preuve#s3://"$_f6c_bucket"/}"
+  [[ "$preuve" =~ ^lots/[0-9]{4}/[0-9]{2}/[0-9]{2}/([0-9]{8})T[0-9]{6}Z-[a-z]+/?$ ]] || return 1
+  lot="${BASH_REMATCH[1]}"
+  ((lot <= ${clos//-/})) || return 1
+  _f6c_preuves_identite || return 0
+  _f6c_s3 s3api head-object --bucket "$_f6c_bucket" --key "${preuve%/}/lot.json" >/dev/null
+}
+
 # _f6c_pipelines_planifies_ok PROJET [N=5] — au moins un pipeline planifié réussi parmi les N derniers
 # pipelines planifiés de main, et le plus récent n'a pas échoué.
 _f6c_pipelines_planifies_ok() {
@@ -135,18 +183,23 @@ _f6c_soa_manquantes() {
 
 _f6c_preuves_identite() { [[ -r "$_f6c_preuves_env" ]]; }
 
-# _f6c_s3 ARGS… — commande aws avec l'identité de lecture (sous-shell : rien ne fuit dans le check).
-_f6c_s3() {
-  _f6c_preuves_identite || return 1
+# _f6c_s3_id FICHIER ARGS… — commande aws avec l'identité S3 du FICHIER (AWS_ACCESS_KEY_ID,
+# AWS_SECRET_ACCESS_KEY), chargée dans un sous-shell : rien ne fuit dans le check.
+_f6c_s3_id() {
+  local f="$1"
+  shift
+  [[ -r "$f" ]] || return 1
   (
     set -a
     # shellcheck disable=SC1090
-    source "$_f6c_preuves_env"
+    source "$f"
     set +a
-    export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}" AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
     aws --endpoint-url "$_f6c_rgw" "$@" 2>/dev/null
   )
 }
+
+# _f6c_s3 ARGS… — commande aws avec l'identité de LECTURE des preuves.
+_f6c_s3() { _f6c_s3_id "$_f6c_preuves_env" "$@"; }
 
 # _f6c_verrou — configuration du verrouillage d'objets du compartiment (JSON).
 _f6c_verrou() { _f6c_s3 s3api get-object-lock-configuration --bucket "$_f6c_bucket"; }
@@ -184,4 +237,20 @@ _f6c_bordure_conforme() {
     grep -qF -- "$c" <<<"$persiste" || return 1
   done < <(grep -o 'comment "[^"]*"' <<<"$actif" | sort -u)
   return 0
+}
+
+# _f6c_recette_api_saine ESPACE — l'API de MédiAgenda sert dans ESPACE : le Rollout « mediagenda » (M20,
+# s'il est lisible par le compte des checks) a toutes ses répliques disponibles, et au moins un pod d'API
+# prêt appartient à un ReplicaSet (un pod isolé, sorti de son contrôleur, ne compte pas). Le Deployment
+# n'est pas regardé : sous un Rollout « workloadRef », il est à 0 réplica.
+_f6c_recette_api_saine() {
+  local r
+  r="$(kube -n "$1" get rollouts.argoproj.io mediagenda -o json 2>/dev/null || true)"
+  if [[ -n "$r" ]]; then
+    jq -e '(.status.availableReplicas // 0) >= (.spec.replicas // 1)' >/dev/null 2>&1 <<<"$r" || return 1
+  fi
+  kube -n "$1" get pods -l app.kubernetes.io/name=mediagenda,app.kubernetes.io/component=api -o json 2>/dev/null |
+    jq -e 'any(.items[]; any(.metadata.ownerReferences[]?; .kind == "ReplicaSet")
+                       and ((.metadata.labels // {})["medisphere.internal/quarantaine"] // "") != "oui"
+                       and .status.phase == "Running" and all(.status.containerStatuses[]?; .ready))' >/dev/null 2>&1
 }

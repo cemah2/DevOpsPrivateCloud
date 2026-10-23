@@ -48,7 +48,7 @@ _s10_prealable() {
   done
   remote "$_f5e_s302" "chronyc tracking 2>/dev/null | grep -q 'Leap status *: Normal'" 2>/dev/null \
     || { echo "  - s3-02 : horloge non synchronisée" >&2; ko=1; }
-  dig +short +time=3 +tries=1 "@$_F5E_DNS03" s3-02.par2.medisphere.internal A 2>/dev/null | grep -q . \
+  dig +short +time=3 +tries=1 "@$_f5p_dns03" s3-02.par2.medisphere.internal A 2>/dev/null | grep -q . \
     || { echo "  - dns03 ne résout pas s3-02.par2.medisphere.internal" >&2; ko=1; }
   sudo -n test ! -e "$_S10_DROPIN" 2>/dev/null || { echo "  - adm02 : $_S10_DROPIN existe déjà (ou sudo -n refusé)" >&2; ko=1; }
   if ((ko)); then
@@ -146,7 +146,7 @@ verifier_S10() {
       (($(date +%s) + 900 < d))
       ;;
     2)
-      ! dig +short +time=3 +tries=1 "@$_F5E_DNS03" s3-02.par2.medisphere.internal A 2>/dev/null | grep -q '^[0-9]'
+      ! dig +short +time=3 +tries=1 "@$_f5p_dns03" s3-02.par2.medisphere.internal A 2>/dev/null | grep -q '^[0-9]'
       ;;
     3)
       sudo -n sshd -T -C user=miroir,host=k8s-par2-n01,addr=10.20.20.50 2>/dev/null | grep -qi '^allowusers'

@@ -5,14 +5,12 @@
 > traitée**. Les `LIBRE` (S10, S12) donnent une solution de référence ; le `RED` (S13) est argumenté.
 
 **Validé hors du lab** (à la rédaction, 23/10/2026) :
-- `break-S11.sh`, `verifier-kit-forensique.sh` : `bash -n` et `shellcheck -x` ;
+- `break-S11.sh`, `ms-verifier-kit-forensique` : `bash -n` et `shellcheck -x` ;
 - logique de l'injection relue contre les règles Falco du M26 (shell interactif, lecture du jeton,
   connexion sortante non prévue) et la politique de quarantaine (M26-E33) ;
 - manifestes (NetworkPolicy injectée, runbooks) : YAML/Markdown valides.
 
-**Points non testés en conditions réelles** : voir la fin de l'énoncé (point de contrôle de conteneur,
-`exec` sur la recette, signalement CERT Santé). La création/destruction de `c2-simule01` par l'injection
-et le minutage des alertes n'ont pas été rejoués sur une plateforme F6 complète.
+**Points non testés en conditions réelles** : en fin de corrigé. Signale tes retours.
 
 **Fichiers** : [`fichiers/F6-S10/`](fichiers/F6-S10/), [`fichiers/F6-S12/`](fichiers/F6-S12/),
 [`fichiers/F6-S13/`](fichiers/F6-S13/). Panne : [`pannes/break-S11.sh`](pannes/break-S11.sh).
@@ -23,7 +21,7 @@ et le minutage des alertes n'ont pas été rejoués sur une plateforme F6 compl�
 
 **Solution** (solution de référence)
 
-Fichiers : [`RB-360-reponse-incident.md`](fichiers/F6-S10/medisphere/docs/securite/incidents/runbooks/RB-360-reponse-incident.md), [`RB-361-forensique-conteneur.md`](fichiers/F6-S10/medisphere/docs/securite/incidents/runbooks/RB-361-forensique-conteneur.md), [`verifier-kit-forensique.sh`](fichiers/F6-S10/outils/bin/verifier-kit-forensique.sh), [`2026-exercice-table.md`](fichiers/F6-S10/medisphere/docs/securite/incidents/exercices/2026-exercice-table.md), [`ECA-3605.md`](fichiers/F6-S10/medisphere/docs/conformite/ecarts/ECA-3605.md).
+Fichiers : [`RB-360-reponse-incident.md`](fichiers/F6-S10/medisphere/docs/securite/incidents/runbooks/RB-360-reponse-incident.md), [`RB-361-forensique-conteneur.md`](fichiers/F6-S10/medisphere/docs/securite/incidents/runbooks/RB-361-forensique-conteneur.md), [`ms-verifier-kit-forensique`](fichiers/F6-S10/outils/bin/ms-verifier-kit-forensique), [`2027-01-exercice-table.md`](fichiers/F6-S10/medisphere/docs/securite/incidents/exercices/2027-01-exercice-table.md), [`ECA-3605-reponse-incident.md`](fichiers/F6-S10/medisphere/docs/conformite/ecarts/ECA-3605-reponse-incident.md).
 
 1. **Trois niveaux de runbook, pas un de plus** : RB-262 (M26) reste le détail « conteneur compromis »
    (isolement, collecte, escalade). RB-360 est le niveau **au-dessus** : quand déclencher, gravités,
@@ -31,11 +29,15 @@ Fichiers : [`RB-360-reponse-incident.md`](fichiers/F6-S10/medisphere/docs/securi
    réglementaire (quand on se pose la question CNIL/clients/CERT Santé, qui décide). RB-361 est le
    niveau **en dessous** : le détail de la collecte forensique d'un conteneur (reprise et généralisation
    de la section 4 de RB-262). Les trois se citent ; on ne duplique rien.
-2. **Le kit se vérifie, il ne se déclare pas** : `verifier-kit-forensique.sh` contrôle que l'image
-   d'outils (`netshoot`/`busybox` de la bibliothèque) existe et que sa signature Cosign est valide, que
-   l'identité de dépôt `preuves-conformite` **écrit** un fichier d'essai et **échoue** à le supprimer
-   (verrouillage), que les modèles (chronologie, manifeste) sont présents, et que chaque compte de bris
-   de glace **répond en lecture** (jamais en écriture). Lancé à froid, il doit pouvoir passer au rouge.
+2. **Le kit se vérifie, il ne se déclare pas** : `bin/ms-verifier-kit-forensique` (`plateforme/outils`,
+   pipeline planifié `kit:verifier` sur `runner01`) contrôle que l'image d'outils
+   `plateforme/outils-forensique:v1.0.0` (netshoot recopié par empreinte dans Harbor et signé par la CI
+   avec `transit/cosign-medisphere`) existe et que sa signature est valide, que l'identité de dépôt
+   (`preuves`) **écrit** un objet d'essai et **échoue** à en supprimer la **version** (une suppression
+   sans version ne ferait que poser un marqueur de suppression dans un compartiment versionné : le test
+   serait faux), et que les modèles (chronologie, manifeste) sont présents. Le bris de glace ne s'éprouve
+   **pas** dans le pipeline (son usage fait sonner `AuditBrisDeGlace`, M24) : option `--bris-de-glace`, à
+   la main, annoncée, en lecture (RB-240). Lancé à froid, le contrôle doit pouvoir passer au rouge.
 3. **Capture éprouvée** : sur un pod d'essai (`wb-essais`), tentative de point de contrôle du kubelet
    (`POST /checkpoint/<ns>/<pod>/<conteneur>`) ; si le runtime l'implémente (containerd + CRIU), on
    obtient l'archive dans `/var/lib/kubelet/checkpoints/` ; sinon `500`, et on **replie** sur la copie du
@@ -44,8 +46,9 @@ Fichiers : [`RB-360-reponse-incident.md`](fichiers/F6-S10/medisphere/docs/securi
 4. **Exercice de table** : un scénario (« un shell inattendu dans un conteneur de prod ») joué sur table,
    chronométré, qui révèle les trous (qui appelle le DPO la nuit ? où est l'identité de dépôt des
    preuves ? qui décide de la quarantaine ?). Les trous deviennent des actions datées.
-5. **ECA-3605 clos** avec preuve `ms-preuves` (runbooks sur `main`, rapport vert du contrôle du kit,
-   résultat de la capture, compte rendu de l'exercice).
+5. **ECA-3605 clos** : fiche [`ECA-3605-reponse-incident.md`](fichiers/F6-S10/medisphere/docs/conformite/ecarts/ECA-3605-reponse-incident.md),
+   en-tête `statut: clos`, `clos-le`, `preuve:` = le lot `ms-preuves` qui contient P-CTL-01 (dernier
+   `kit:verifier` réussi) ; runbooks, résultat de la capture et compte rendu de l'exercice cités.
 
 **Explications**
 - Un incident ne se prépare pas pendant qu'il a lieu. La valeur de RB-262 était restée théorique
@@ -91,7 +94,7 @@ annoncée.
 **Hypothèses** (dans l'ordre où on les écarte)
 1. Faux positif — un développeur débogue en recette (un `exec` humain déclenche « shell interactif »).
 2. Vrai positif, entrée par une **identité de l'API** (jeton de compte de service fuité).
-3. Vrai positif, une **règle réseau trop large** laisse sortir le trafic vers une destination interdite.
+3. Vrai positif, des **règles de sortie trop larges** laissent le trafic atteindre une destination interdite.
 
 **Commandes de diagnostic** (dans l'ordre ; lecture seule, rien n'est supprimé)
 
@@ -100,14 +103,19 @@ annoncée.
 admin@adm01:~$ kubectl -n mediagenda-recette get pods -o wide
 admin@adm01:~$ kubectl -n mediagenda-recette get pod <POD> -o jsonpath='{.status.containerStatuses[*].image}{"\n"}{.status.containerStatuses[*].restartCount}{"\n"}'
 ```
-*Qui a ouvert le shell* — journal d'audit de l'API (locataire `audit` de Loki) :
+*Qui a ouvert le shell, qui a appelé l'API* — journal d'audit de l'API (locataire `audit` de Loki) :
 ```logql
 {job="kubernetes-audit"} | json | objectRef_subresource="exec" | objectRef_name="<POD>"
+{job="kubernetes-audit"} | json | user_username=~"system:serviceaccount:mediagenda-recette:.*" | line_format "{{.verb}} {{.objectRef_resource}} {{.userAgent}} {{.sourceIPs}}"
 ```
-- Si l'identité est un **humain** (`kubernetes-admin`, un compte FreeIPA) avec un ticket `CHG-`/`INC-` :
-  piste du faux positif. Ici, aucun ticket → vrai positif.
-- Si l'identité est un **compte de service** (`system:serviceaccount:mediagenda-recette:…`) faisant en
-  plus `auth can-i --list` et `get pods` : **vecteur 1** (jeton fuité).
+> Dans le lab, l'`exec` apparaît au nom de l'identité d'administration qui a lancé `lab/bin/break` (comme
+> en F6-S04) : en vrai, ce serait l'identité de l'attaquant ou celle qu'il a volée. Aucun ticket `CHG-`
+> ni `INC-` ne l'annonce → ce n'est pas une intervention légitime : vrai positif.
+- Si le **compte de service** de l'API (`system:serviceaccount:mediagenda-recette:…`) fait des requêtes
+  de reconnaissance (`selfsubjectrulesreviews` de `auth can-i --list`, `list pods`) avec un `userAgent`
+  **`kubectl/…`** (MédiAgenda n'utilise pas `kubectl`) et depuis une adresse qui n'est pas celle du pod
+  (`sourceIPs` : un nœud de contrôle, c'est-à-dire un appel entré par la VIP de l'API, venu de
+  l'extérieur du cluster) : son jeton est utilisé ailleurs que dans son pod → **vecteur 1** (jeton fuité).
 *Ce qui a été lancé* — Falco et Tetragon :
 ```logql
 {service="falco", k8s_pod_name="<POD>"} | json
@@ -121,23 +129,30 @@ admin@adm01:~$ hubble observe --pod mediagenda-recette/<POD> --to-ip 10.10.99.66
 ```
 - **Vecteur 1** : verdict `DROPPED` (le refus par défaut de l'espace tient) → la connexion **n'aboutit
   pas** ; le C2 ne journalise rien.
-- **Vecteur 2** : verdict `FORWARDED` → une politique autorise la sortie. La trouver :
+- **Vecteur 2** : verdict `FORWARDED` → une politique autorise la sortie. La trouver, puis chercher ce
+  qui la laisse passer **après** le cluster (la bordure refuse par défaut VLAN 40 → VLAN 99) :
   ```
   admin@adm01:~$ kubectl -n mediagenda-recette get networkpolicy
   admin@adm01:~$ kubectl -n mediagenda-recette get networkpolicy legacy-sortie-large -o yaml
+  admin@gw01:~$ sudo nft -a list chain inet filter forward | grep -n 10.10.99.66
+      ip saddr { 10.10.40.0/24, 10.240.0.0/16 } ip daddr 10.10.99.66 tcp dport 4444 counter packets 12 bytes 720 accept comment "legacy-sortie-recette" # handle 91
+  admin@gw01:~$ sudo grep -c legacy-sortie-recette /etc/nftables.conf
+  0
   ```
-  L'annotation montre une vieille MR (`MR !218 (2026-03)`, « sortie temporaire, jamais retirée ») :
-  **vecteur 2** (politique réseau trop large).
+  L'annotation de la politique montre une vieille MR (`MR !218 (2026-03)`, « sortie temporaire, jamais
+  retirée ») ; la règle jumelle de la bordure est active sur `gw01` **et** `gw02`, absente de la
+  configuration persistée et du code : **vecteur 2** (règles de sortie trop larges, à deux couches).
 
 **Cause racine** (par variante)
 - **Variante 1 — jeton de compte de service fuité** : un jeton du compte de service de recette a été
   lu dans le pod puis utilisé contre l'API (reconnaissance). La connexion sortante vers le C2 a été
   jetée par le refus réseau par défaut. Portée : ce que le jeton ouvre (droits du compte de service),
   **pas** de donnée sortie.
-- **Variante 2 — politique réseau trop large** : une NetworkPolicy oubliée (`legacy-sortie-large`)
-  autorisait la sortie vers `10.10.99.0/24` ; la connexion vers le C2 a abouti (le C2 l'a journalisée).
-  Rien n'a été envoyé (inoffensif), mais le canal était ouvert. Portée : exfiltration **possible** par
-  ce canal.
+- **Variante 2 — règles de sortie trop larges** : une NetworkPolicy oubliée (`legacy-sortie-large`)
+  autorisait les pods d'API à sortir vers `10.10.99.0/24`, et une règle posée à chaud sur la bordure
+  (`legacy-sortie-recette`) laissait passer jusqu'à `10.10.99.66:4444` ; la connexion vers le C2 a abouti
+  (le C2 l'a journalisée). Rien n'a été envoyé (inoffensif), mais le canal était ouvert. Portée :
+  exfiltration **possible** par ce canal.
 
 **Correctif** (confinement en S11 ; éradication en S12)
 Confiner sans détruire, identique pour les deux variantes (RB-262) :
@@ -146,8 +161,11 @@ admin@adm01:~$ kubectl -n mediagenda-recette label pod <POD> medisphere.internal
 admin@adm01:~$ kubectl -n mediagenda-recette get pod <POD> -o jsonpath='{.status.containerStatuses[0].restartCount}'   # inchangé
 admin@adm01:~$ kubectl -n mediagenda-recette get rs -l app.kubernetes.io/name=mediagenda,app.kubernetes.io/component=api -o jsonpath='{.items[*].spec.selector}'
 admin@adm01:~$ kubectl -n mediagenda-recette label pod <POD> app.kubernetes.io/component-   # sort le pod du ReplicaSet
+admin@adm01:~$ kubectl -n mediagenda-recette get rollout mediagenda   # (kubectl argo rollouts get rollout mediagenda)
 ```
-Le contrôleur recrée un pod sain ; le suspect reste orphelin, isolé, hors du Service. Ouvrir INC-6211,
+Le ReplicaSet du Rollout `mediagenda` (M20) recrée un pod sain ; le suspect reste orphelin, isolé, hors
+des Services (stable et canary sélectionnent `component: api`). Le conteneur n'a pas redémarré
+(`restartCount` inchangé : le check le compare à la valeur notée à l'injection). Ouvrir INC-6211,
 qualifier (`[décision]`), escalader à Sophie (RSSI) et Thomas (DPO), un courriel d'état.
 
 **Prévention**
@@ -155,7 +173,8 @@ qualifier (`[décision]`), escalader à Sophie (RSSI) et Thomas (DPO), un courri
   (`prod-gestes-interactifs` du F3 étendu) ; jeton de compte de service non monté quand inutile
   (norme « charge sûre » C6, M26) ; alerte sur l'usage d'un jeton de compte de service contre l'API
   depuis une adresse inhabituelle.
-- Variante 2 : contrôle de dérive des NetworkPolicy (une règle de sortie large = une alerte) ; revue
+- Variante 2 : contrôle de dérive des NetworkPolicy (une règle de sortie large = une alerte) et de la
+  bordure (ruleset actif ↔ configuration persistée : P-RES-01 et la métrique proposée en F6-S04) ; revue
   des politiques réseau à chaque MR ; refus par défaut vérifié par un test Hubble périodique.
 
 **Chaque variante traitée** : voir ci-dessus (portée et prévention diffèrent ; confinement identique).
@@ -180,15 +199,21 @@ Fichiers : [`chronologie.md`](fichiers/F6-S12/medisphere/docs/securite/incidents
    (le C2 n'a reçu aucun octet utile ; l'injection n'envoie rien). *Non établi* dans les deux cas :
    aucune donnée de patient réelle (recette fictive/pseudonymisée), aucun accès à la production.
 3. **Éradication de la cause** :
-   - vecteur 1 : renouveler le compte de service (nouveau jeton), révoquer ce qu'il ouvrait dans OpenBao
-     (nouveaux identifiants, révocation des baux du moteur `database`) ;
-   - vecteur 2 : retirer `legacy-sortie-large` par MR (`plateforme/k8s` ou le dépôt de l'équipe de
-     recette), vérifier le retour au refus par défaut (Hubble : la connexion repasse `DROPPED`).
+   - vecteur 1 : renouveler le compte de service (voir ci-dessous), révoquer ce qu'il ouvrait dans
+     OpenBao (nouveaux identifiants, révocation des baux du moteur `database` émis pour la recette) ;
+   - vecteur 2 : retirer `legacy-sortie-large` (et la ligne de la vieille MR qui l'a créée, si elle
+     est encore dans un dépôt), retirer la règle `legacy-sortie-recette` des **deux** passerelles par son
+     *handle* (`nft delete rule inet filter forward handle <H>`, comme en F6-S04), vérifier le retour au
+     refus par défaut (Hubble : la connexion repasse `DROPPED` ; compteurs de la bordure figés).
+   - vecteur 1 : un jeton lié ne se révoque pas individuellement ; supprimer et recréer le compte de
+     service invalide **tous** ses jetons (nouvel UID), puis redémarrer proprement l'API de recette.
    Dans les deux cas : supprimer le pod suspect **après** la collecte et l'accord de la RSSI.
 4. **Rotation des secrets exposés** : jeton de compte de service, Secrets montés dans le pod,
    identifiants OpenBao lisibles depuis le pod — tournés ; trace dans la chronologie.
-5. **Retour** : pod sain en service, plus de connexion vers le C2 (détruit à l'annulation), aucune alerte
-   Falco active sur l'espace. Relever les journaux du C2 **puis** `lab/bin/break F6 11 --annuler`.
+5. **Retour** : Rollout `mediagenda` complet, plus de connexion vers le C2, aucune alerte Falco active
+   sur l'espace. Relever les journaux du C2 (`qm guest exec 3601 -- cat /var/log/c2-simule.log` depuis
+   `pve01`, empreinte dans la chronologie) **puis** `lab/bin/break F6 11 --annuler` (destruction du C2 ;
+   retrait de ce que l'injection a posé et que tu n'aurais pas déjà retiré).
 
 **Explications**
 - L'archive d'audit inaltérable (F6-S08) est faite pour ce moment : la chronologie tient parce que ses
@@ -288,6 +313,16 @@ DPO et la RSSI co-signent la décision ; le post-mortem est présenté à la rev
 
 - `ContainerCheckpoint` (point de contrôle de conteneur) : dépend du runtime (containerd + CRIU) ;
   tranché par F6-S10 sur le lab, dans un sens ou l'autre.
-- Création/destruction de `c2-simule01` par l'injection et minutage des alertes Falco → Alertmanager →
-  Mailpit : relus en logique, non rejoués sur une plateforme F6 complète.
+- `ms-verifier-kit-forensique` : image `plateforme/outils-forensique:v1.0.0` à construire (netshoot
+  recopié par empreinte et signé par la CI) ; refus de `delete-object --version-id` par le verrou du RGW.
+- Interception de l'`exec` humain sur la recette (`prod-gestes-interactifs` du F3 étendu) : proposée,
+  non écrite.
+- Création/destruction de `c2-simule01` par l'injection (clone du template 9000 sur le VNet `vsandbox`,
+  écouteur posé par l'agent QEMU) et minutage des alertes Falco → Alertmanager → Mailpit : relus en
+  logique, non rejoués sur une plateforme F6 complète.
+- Variante 2 : adresse source vue par la bordure (adresse du pod ou du nœud selon le masquage de Cilium :
+  la règle injectée accepte les deux) ; règle insérée à chaud sur la passerelle passive.
+- Variante 1 : `sourceIPs` de l'audit pour un appel fait depuis `adm01` à travers la VIP de l'API
+  (HAProxy en mode TCP, sans protocole PROXY : l'adresse du nœud de contrôle qui relaie est attendue, à
+  vérifier) ; le `userAgent` `kubectl/…` reste l'indice le plus net.
 - Signalement CERT Santé (art. L.1111-8-2) : **à vérifier sur Légifrance** (périmètre et circuit exacts).

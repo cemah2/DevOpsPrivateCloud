@@ -17,7 +17,7 @@
 
 | Terme | Définition retenue |
 |---|---|
-| **T0** | instant du sinistre (exercice : heure posée par `lab/bin/break F5 09`, dans `/var/lib/workbook/f5-t0` de `gw01` et dans la main courante) |
+| **T0** | instant du sinistre (exercice : heure posée par `lab/bin/break F5 09`, dans `/var/lib/workbook/f5-t0` de `adm02` et de `gw01`, et dans la main courante) |
 | **T décision** | heure à laquelle Claire déclenche le PRA (main courante, `[décision]`) |
 | **T reprise** (fin de l'horloge du RTO) | première **création réussie** d'un rendez-vous par le nom global `https://mediagenda.medisphere.internal`, réponse portant `X-MediSphere-Site: par2`, vue par la sonde `ms-sonde-pra` (`adm02`) **et** confirmée par Julien depuis un poste qui n'est pas dans le lab |
 | **RTO** (objectif) | T reprise − T0, dans le pire cas accepté ; on mesure aussi T reprise − T décision (durée technique) |
@@ -30,7 +30,7 @@ Le RTO est un **engagement** : il est inférieur à la DMIA de la BIA avec une m
 
 | Service | RTO | RPO | DMIA / PDMA (BIA) | Capacité qui le rend tenable | Mode dégradé accepté pendant le PRA |
 |---|---|---|---|---|---|
-| **MédiAgenda** | **4 h** | **15 min** | 5 h / 1 h | base en réplica continu à PAR2 (topologie distribuée CNPG, archive copiée par `filer.sync`) ; cluster `k8s-par2` tiède, images sur `reg02`, secrets présents en veille ; RB-350 vagues 1 à 4 (≈ 2 h 30 de référence à confirmer à l'exercice) | une instance de l'API, une de la base (pas de réplica local : un incident à PAR2 = arrêt), Valkey vide au départ (cache), pas de canary, pas de supervision complète ; latence p95 ≤ 1 s acceptée (SLO de 250 ms suspendu) ; extraction Data suspendue |
+| **MédiAgenda** | **4 h** | **15 min** | 5 h / 1 h | base en réplica continu à PAR2 (topologie distribuée CNPG, archive copiée par `filer.sync`) ; cluster `k8s-par2` tiède, images sur `reg02`, secrets présents en veille ; RB-350 vagues 1 à 4 (≈ 2 h 30 de référence à confirmer à l'exercice) | une instance de l'API, une de la base (pas de réplica local : un incident à PAR2 = arrêt), Valkey vide au départ (cache), pas de canary, supervision minimale seulement (§4) ; latence p95 ≤ 1 s acceptée (SLO de 250 ms suspendu) ; extraction Data suspendue |
 | **MédiDoc** | **8 h** | **1 h** | 1 jour / 4 h | copie de `medidoc-documents` vers `s3-02` toutes les 15 min (`rclone`), image sur `reg02` | une instance ; dépôts et lecture ; pas de mTLS vers MédiAgenda si l'autorité de services d'OpenBao n'est pas restaurée (décision écrite au déclenchement) |
 | **Legacy-RDV** | **8 h** | **24 h** | 1 jour / 24 h | sauvegarde quotidienne de MariaDB (`mariadb-legacy-rdv`) et sauvegarde Velero des pièces jointes copiées sur `s3-02` ; restauration à la demande | une instance ; pièces jointes restaurées sur stockage local ; ressaisie de la journée par les cabinets |
 | **MédiNotif** | **8 h** | messages en vol perdus | 8 h / — | définitions RabbitMQ en code, déployées à PAR2 au PRA ; rejeu des rappels du jour depuis MédiAgenda | un nœud RabbitMQ, pas de quorum (file quorum à un membre) ; rappels du soir avec retard |
@@ -45,7 +45,7 @@ Le RTO est un **engagement** : il est inférieur à la DMIA de la BIA avec une m
 
 ## 4. Périmètre du PRA v1
 
-Sont **exclus** du PRA v1, par décision écrite : MédiVisio, Data, la CI/CD, OpenStack, Backstage, l'observabilité complète et l'identité (tableau ci-dessous).
+Sont **exclus** du PRA v1, par décision écrite : MédiVisio, Data, la CI/CD, OpenStack, Backstage, l'observabilité **complète** (une supervision minimale de PAR2 est prévue) et l'identité (tableau ci-dessous).
 
 | Élément | Dans le PRA v1 ? | Pourquoi |
 |---|---|---|
@@ -54,7 +54,7 @@ Sont **exclus** du PRA v1, par décision écrite : MédiVisio, Data, la CI/CD, O
 | Data (statistiques) | **non** | aucun usage clinique ; l'extraction pseudonymisée reprend après le retour à PAR1 (rattrapage d'une nuit) ; rien à protéger qui ne soit déjà dans la base de MédiAgenda |
 | CI/CD, Harbor | **non** | gel des livraisons pendant le PRA ; correctif d'urgence possible par les miroirs de `adm02` et une image construite à la main, signée, poussée sur `reg02` (procédure d'exception de RB-350) |
 | OpenStack, Backstage | **non** | pas de service aux patients |
-| Observabilité | **minimale** | sonde `ms-sonde-pra` sur `adm02` (noms globaux, toutes les 15 s), état du réplica et des pods ; pas de Prometheus, Loki ni Grafana à PAR2 (mémoire) |
+| Observabilité | **minimale** | en permanence : sonde `ms-sonde-pra` sur `adm02` (noms globaux, toutes les 15 s) ; pendant un PRA (vague 6 de RB-350, ≈ 0,5 Go de plus pour `adm02`) : Prometheus mononœud, Alertmanager et Mailpit de secours sur `adm02` — disponibilité des noms globaux, santé et archivage de la base de PAR2, mémoire et disque de `hp01`, alertes reçues par la cellule ; pas de Loki, Tempo ni Grafana à PAR2 (mémoire) |
 | Identité (Keycloak, FreeIPA) | **non** | accès à PAR2 par comptes de bris de glace et clés SSH de l'enveloppe ; patients non concernés |
 | Coffre (OpenBao) | **oui, en secours** | `bao-par2` restauré depuis le dernier instantané (RPO ≤ 1 h), descellé par `kms01` restauré |
 

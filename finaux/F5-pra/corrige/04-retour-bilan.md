@@ -14,7 +14,7 @@
 
 **Solution**
 
-Runbook de référence : [`RB-351-retour-par1.md`](fichiers/F5-S12/medisphere/docs/pra/runbooks/RB-351-retour-par1.md) ; fiche : [`CHG-3512-retour-par1.md`](fichiers/F5-S12/medisphere/docs/pra/exercices/2026-exercice-1/CHG-3512-retour-par1.md) ; base : [`60-cnpg-s3-par2.yaml`](fichiers/F5-S12/deploiement/overlays/prod/60-cnpg-s3-par2.yaml), [`pra-retour-par1.extrait.yaml`](fichiers/F5-S12/deploiement/overlays/prod/pra-retour-par1.extrait.yaml), [`mediagenda-db-par2-retour.extrait.yaml`](fichiers/F5-S12/deploiement/sites/par2/mediagenda-db-par2-retour.extrait.yaml) ; preuves (extraits) : [`temoins-par2.extrait.csv`](fichiers/F5-S12/medisphere/docs/pra/mesures/2026-exercice-1/temoins-par2.extrait.csv), [`medidoc-par2.extrait.csv`](fichiers/F5-S12/medisphere/docs/pra/mesures/2026-exercice-1/medidoc-par2.extrait.csv) (les vrais fichiers s'appellent `temoins-par2.csv` et `medidoc-par2.csv`).
+Runbook de référence : [`RB-351-retour-par1.md`](fichiers/F5-S12/medisphere/docs/pra/runbooks/RB-351-retour-par1.md) ; fiche : [`CHG-3512-retour-par1.md`](fichiers/F5-S12/medisphere/docs/pra/exercices/2026-exercice-1/CHG-3512-retour-par1.md) ; base : [`pra-retour-par1.extrait.yaml`](fichiers/F5-S12/mediagenda-deploiement/overlays/prod/pra-retour-par1.extrait.yaml) (`mediagenda/deploiement`), [`50-mediagenda-db-par2.retour.extrait.yaml`](fichiers/F5-S12/k8s/sites/par2/mediagenda-prod/50-mediagenda-db-par2.retour.extrait.yaml) (`plateforme/k8s`, fichier de site de S06), et l'`ObjectStore` `cnpg-s3-par2` de PAR1 déclaré dès S06 ([`objectstore-par2.yaml`](fichiers/F5-S06/mediagenda-deploiement/overlays/prod/objectstore-par2.yaml), identité `cnpg-par1-lecture` de `s3-02`) ; preuves (extraits) : [`temoins-par2.extrait.csv`](fichiers/F5-S12/medisphere/docs/pra/mesures/2026-exercice-1/temoins-par2.extrait.csv), [`medidoc-par2.extrait.csv`](fichiers/F5-S12/medisphere/docs/pra/mesures/2026-exercice-1/medidoc-par2.extrait.csv) (les vrais fichiers s'appellent `temoins-par2.csv` et `medidoc-par2.csv`).
 
 *0. Cartographier les flux avant de toucher quoi que ce soit.* C'est le cœur du scénario :
 
@@ -55,7 +55,7 @@ Le script vérifie lui-même que `mediagenda-db` est clôturé avant de retirer 
   admin@adm01:~/src/deploiement$ git push origin pra/inc-6109        # puis MR vers main (avance rapide)
   ```
   (la lecture du miroir se fait avec une clé autorisée en lecture sur `miroir`, celle de RB-350 ; GitLab n'a pas bougé pendant le PRA, la MR est en avance rapide).
-- **Base** : flux `k8s-par1` → `s3-02:8333` ouvert ; `ObjectStore` `cnpg-s3-par2` ; MR de l'état « B3 » de `pra-retour-par1.extrait.yaml` ; `kubectl delete cluster mediagenda-db -n mediagenda-prod` (les instantanés restent) ; synchronisation de la seule base (`argocd app sync … --resource postgresql.cnpg.io:Cluster:mediagenda-db`). `kubectl cnpg status` : réplique, *designated primary* qui rattrape l'archive de PAR2. Puis l'autorité de la nouvelle base copiée pour OpenBao (F1-S11 : chaque `Cluster` neuf génère sa propre `mediagenda-db-ca`).
+- **Base** : flux `k8s-par1` → `s3-02:8333` ouvert ; `ObjectStore` `cnpg-s3-par2` (déclaré en S06, lu pour la première fois) ; MR de l'état « B3 » de `pra-retour-par1.extrait.yaml` ; `kubectl delete cluster mediagenda-db -n mediagenda-prod` (les instantanés restent) ; synchronisation de la seule base (`argocd app sync … --resource postgresql.cnpg.io:Cluster:mediagenda-db`). `kubectl cnpg status` : réplique, *designated primary* qui rattrape l'archive de PAR2. Puis l'autorité de la nouvelle base copiée pour OpenBao (F1-S11 : chaque `Cluster` neuf génère sa propre `mediagenda-db-ca`).
 - **MédiDoc** : liste des documents déposés à PAR2 depuis T0 (clés `documents/<id>`), copie et contrôle :
   ```
   admin@adm02:~$ aws --profile s3-02 s3api list-objects-v2 --bucket medidoc-documents --prefix documents/ \
@@ -70,7 +70,7 @@ Le script vérifie lui-même que `mediagenda-db` est clôturé avant de retirer 
 ```
 admin@adm02:~$ kubectl get cluster mediagenda-db-par2 -n mediagenda-prod -o jsonpath='{.status.demotionToken}'
 ```
-(vide tant que PAR2 n'a pas fini sa rétrogradation : on attend, on ne force pas). Le jeton va dans la MR de promotion de PAR1 (état « C4 » : `primary` **et** `promotionToken` dans le même commit). PAR1 attend d'avoir rejoué jusqu'au LSN du jeton — il lit le `.partial` de PAR2 dans `cnpg-k8s-par2`, d'où l'importance du flux ouvert en B3 — puis se promeut sur une nouvelle ligne temporelle. DNS :
+(vide tant que PAR2 n'a pas fini sa rétrogradation : on attend, on ne force pas). La rétrogradation elle-même (C3) se fait comme la promotion de S09 : fichier de site `sites/par2/mediagenda-prod/50-mediagenda-db-par2.yaml` modifié et commité dans le miroir de `plateforme/k8s`, puis `kubectl apply --server-side` depuis `adm02`. Le jeton va dans la MR de promotion de PAR1 (état « C4 » : `primary` **et** `promotionToken` dans le même commit). PAR1 attend d'avoir rejoué jusqu'au LSN du jeton — il lit le `.partial` de PAR2 dans `cnpg-k8s-par2`, d'où l'importance du flux ouvert en B3 — puis se promeut sur une nouvelle ligne temporelle. DNS :
 ```
 admin@dns01:~$ sudo pdnsutil zone increase-serial medisphere.internal        # répéter jusqu'à dépasser la série de dns03
 admin@dns03:~$ sudo pdnsutil zone set-kind medisphere.internal secondary
@@ -164,7 +164,7 @@ admin@adm02:~$ curl -s 'http://127.0.0.1:9090/api/v1/query?query=cnpg_pra_temoin
 
 *4. Documentation* : index [`README.md`](fichiers/F5-S14/medisphere/docs/pra/README.md) de `docs/pra/`, documents révisés après le rapport (S13), relecture de RB-350 et RB-351 par quelqu'un qui n'a pas fait l'exercice (Lucas Martin : ses questions deviennent des précisions).
 
-*5. Recette* : PAR2 en veille (`check F5 6` et `check F5 8` verts), `lab/bin/check F5 1` à `14` verts (ceux de S09 à S11 restent ceux du jour de l'exercice : ils décrivent un état de crise), puis :
+*5. Recette* : `WB_F5_SERVEUR_PROD=mediagenda-db-prod-pra1` dans `lab/lab.env` (la base de PAR1 archive sous ce nom depuis le retour), PAR2 en veille (`check F5 6` et `check F5 8` verts), `lab/bin/check F5 1` à `14` verts (ceux de S09 à S11 restent ceux du jour de l'exercice : ils décrivent un état de crise), puis :
 ```
 admin@adm01:~/src/medisphere$ git tag -s pra-v1 -m "PRA v1 : site de repli PAR2 testé (exercice 2026-1, essai trimestriel)" && git push origin pra-v1
 ```
@@ -201,6 +201,6 @@ Le tableau de bord d'astreinte affiche le RPO courant de PAR2, la date du dernie
 - Contenu exact et durée d'apparition de `.status.demotionToken` ; nettoyage du `promotionToken` après promotion (sans effet attendu, à confirmer).
 - `pdns_control retrieve` après passage de `native` à `secondary` sur dns03 (transfert immédiat ou au prochain contrôle de série).
 - Requêtes personnalisées de CloudNativePG sur une **réplique** de topologie distribuée (désignée primaire) et nom exact des métriques (`cnpg_pra_temoin_age_secondes`) ; `cnpg_pg_replication_in_recovery` et `cnpg_pg_replication_lag` des requêtes par défaut.
-- `essai-reprise.sh` : restauration avec la classe de stockage locale de `k8s-par2` (nom `local-path` supposé), droits du compte `pra-essai`, sortie de `kubectl wait --for=condition=Ready` sur un `Cluster` CNPG, flux du runner protégé vers `k8s-par2`.
+- `essai-reprise.sh` : restauration avec la classe de stockage locale `local-path` de `k8s-par2` (S06), droits du compte `pra-essai`, sortie de `kubectl wait --for=condition=Ready` sur un `Cluster` CNPG, flux du runner protégé vers `k8s-par2`.
 - Champ `last_pipeline` de l'API `pipeline_schedules` lisible avec le jeton des checks (sinon le check l'ignore).
 - Transfert de la base de Legacy-RDV de PAR2 vers PAR1 (objets `Backup`/`Restore` de mariadb-operator 26.6 entre deux sites) : décrit, non outillé dans le corrigé.

@@ -29,13 +29,13 @@
 2. Le WAL suivant existe-t-il à PAR1, et à PAR2 ? Compare le dernier objet de `cnpg-k8s-par1/mediagenda-db-prod-day0/wals/` sur `s3-01` et sur `s3-02` (`aws s3api list-objects-v2` avec chaque profil, ou la mesure de retard de S04). PAR1 a des WAL récents, PAR2 s'arrête à la même heure que le témoin.
 3. Le copieur :
    ```
-   admin@s3-02:~$ systemctl list-units --all --type=service | grep -i filer
-   admin@s3-02:~$ systemctl status filer-sync@cnpg-k8s-par1.service     # nom de ton unité de S04
-   admin@s3-02:~$ journalctl -u filer-sync@cnpg-k8s-par1.service --since -3h | tail
+   admin@s3-02:~$ systemctl list-units --all --type=service 'seaweedfs-filer-sync@*'
+   admin@s3-02:~$ systemctl status seaweedfs-filer-sync@cnpg-k8s-par1.service     # nom de ton unité de S04
+   admin@s3-02:~$ journalctl -u seaweedfs-filer-sync@cnpg-k8s-par1.service --since -3h | tail
    ```
-   `inactive (dead)`, `disabled`, arrêt propre (« Stopped … ») sans erreur : quelqu'un l'a arrêté, rien ne l'a relancé.
+   `inactive (dead)`, toujours `enabled`, arrêt propre (« Stopped … ») sans erreur : quelqu'un l'a arrêtée, rien ne l'a relancée (elle ne repartirait qu'au prochain redémarrage de `s3-02`). Les instances des autres compartiments tournent : seule l'archive de la base est figée.
 4. **Cause racine** : la réplication des objets de PAR1 vers PAR2 est arrêtée ; la base de PAR2 n'a plus rien à rejouer ; aucune alerte, parce que la supervision regardait l'état « en échec » et que la mesure du retard côté destination ne couvrait pas l'archive de la base.
-5. **Correctif** : `sudo systemctl enable --now <unité>` ; `filer.sync` reprend à son **point de contrôle** (rien n'est perdu, il rattrape les événements du journal de métadonnées de `s3-01`) ; suivre le rattrapage par l'âge du dernier objet, puis par le témoin à PAR2 (quelques minutes).
+5. **Correctif** : `sudo systemctl start seaweedfs-filer-sync@cnpg-k8s-par1.service` ; `filer.sync` reprend à son **point de contrôle** (rien n'est perdu, il rattrape les événements du journal de métadonnées de `s3-01`) ; suivre le rattrapage par l'âge du dernier objet, puis par le témoin à PAR2 (quelques minutes).
 6. **Prévention** : mesurer le retard **par l'effet** (âge du dernier témoin vu à PAR2, de bout en bout) et l'alerter ; toute intervention sur une VM de PAR2 passe par une fiche dont le retour dit « réplications relancées » ; contrôle de préparation (ci-dessous).
 
 #### Variante 2 — les pods d'essai restent en attente (nœud cordonné)
@@ -89,29 +89,29 @@ admin@adm02:~$ sudo cat /var/lib/workbook/f5-t0                       # T0 écri
 ```
 Main courante : `[état]` T0, `[ouverture]` INC-6109 (gravité 1), `[action]` cellule ouverte. Le critère de RB-350 (PAR1 injoignable depuis PAR2 et de l'extérieur pendant N minutes, pas de retour avant M heures) est vérifié et écrit ; Claire décide : `[décision]` avec l'heure, l'auteur et le point de non-retour accepté. Pendant l'attente, on **prépare** sans rien rendre irréversible : vérification de l'enveloppe, de la mémoire de `hp01`, relevé du dernier témoin sur la réplique (il servira au RPO).
 
-*2. Vague 1 — confiance et secrets (RB-355).* Restauration de `kms01` en **3501** depuis PBS, carte réseau **coupée** au premier démarrage, adresse changée en 10.20.20.24, carte rebranchée sur `vmbr2` ; descellement par les parts de l'enveloppe (seuil Shamir, gardiens présents) ; démarrage de `bao-par2` (1055), restauration du dernier instantané Raft (`bao operator raft snapshot restore` d'après RB-252/RB-355), descellement automatique par le transit de 3501 ; lecture d'un secret de contrôle. Si les applications de PAR2 utilisent les identifiants **dynamiques** de la base : le moteur `db-mediagenda` restauré pointe vers la base de **PAR1** — sa connexion est reconfigurée vers la base de PAR2 (RB-356), sans quoi les ExternalSecrets de PAR2 ne se renouvellent pas.
+*2. Vagues 0 et 1 — isoler, figer, socle (≈ 7 min).* Les réplications entrantes s'arrêtent (leurs sources sont mortes ; au retour, elles ne doivent pas repartir seules), et l'on relève les âges **avant** de toucher à quoi que ce soit :
+```
+admin@s3-02:~$ sudo systemctl stop 'seaweedfs-filer-sync@*' medidoc-copie.timer
+admin@s3-02:~$ cat /var/lib/prometheus/node-exporter/pra_replication.prom     # âges par flux → [mesure]
+```
+Puis le socle : dns03 est **secondaire**, et PowerDNS 5.0 refuse `rrset replace` et `zone increase-serial` sur une zone secondaire (sauf `--force`, qui serait écrasé au prochain transfert si PAR1 revenait). Les zones internes passent en `native` dès maintenant — la zone `par2.medisphere.internal` ne doit pas **expirer** si le PRA dure (une zone secondaire sans primaire meurt au bout de son *expire*), et c'est elle qui fait résoudre `s3-02`, `reg02` et `bao-par2` dans les vagues suivantes :
+```
+admin@dns03:~$ for z in medisphere.internal par1.medisphere.internal par2.medisphere.internal; do sudo pdnsutil zone set-kind "$z" native; done
+admin@dns03:~$ sudo pdnsutil zone list-all          # vérifier le type de chaque zone (inverses comprises)
+admin@adm02:~$ dig +short @10.20.20.11 medisphere.internal SOA
+```
+`native` plutôt que `primary` : personne n'est à notifier pendant le PRA. `adm02` devient la forge (écriture sur les miroirs, commits `PRA INC-6109 : …`), la sonde tourne déjà.
 
-*3. Vague 2 — les noms.* dns03 est **secondaire** : PowerDNS 5.0 refuse `rrset replace` et `zone increase-serial` sur une zone secondaire (sauf `--force`, qui serait écrasé au prochain transfert si PAR1 revenait). On change d'abord le type de zone, puis les enregistrements :
-```
-admin@dns03:~$ sudo pdnsutil zone set-kind medisphere.internal native
-admin@dns03:~$ sudo pdnsutil zone set-kind par2.medisphere.internal native
-admin@dns03:~$ for n in mediagenda medidoc rdv; do
->   sudo pdnsutil rrset replace medisphere.internal $n.medisphere.internal. CNAME 60 $n.apps.par2.medisphere.internal.
-> done
-admin@dns03:~$ sudo pdnsutil zone increase-serial medisphere.internal
-admin@dns03:~$ sudo pdns_control purge 'medisphere.internal$'             # cache de paquets de l'autoritaire
-admin@dns03:~$ sudo rec_control wipe-cache 'medisphere.internal$'          # cache du récurseur
-admin@adm02:~$ dig +short @10.20.20.11 mediagenda.medisphere.internal CNAME
-```
-`native` plutôt que `primary` : personne n'est à notifier pendant le PRA ; `par2.medisphere.internal` passe aussi en `native` pour qu'elle **n'expire pas** si le PRA dure (une zone secondaire sans primaire meurt au bout de son *expire*). Relis la zone (`pdnsutil zone list medisphere.internal`) : `rrset replace` attend un nom **absolu** ou relatif selon les versions — un nom absolu terminé par un point est sans ambiguïté. Les clients gardent l'ancienne réponse au plus 60 s (TTL).
+*3. Vague 2 — secrets (RB-355).* Restauration de `kms01` en **3501** depuis PBS, carte réseau **coupée** au premier démarrage, adresse changée en 10.20.20.24, carte rebranchée sur `vmbr2` ; descellement par les parts de l'enveloppe (seuil Shamir, gardiens présents) ; démarrage de `bao-par2` (1055), restauration du dernier instantané Raft (`bao operator raft snapshot restore` d'après RB-252/RB-355), descellement automatique par le transit de 3501 ; lecture d'un secret de contrôle ; `SecretStore` de `k8s-par2` repointés vers `bao-par2` (RB-356 §4). Le moteur `db-mediagenda` restauré pointe vers la base de **PAR1** : il ne peut être reconfiguré vers la base de PAR2 qu'**après** sa promotion (un réplica ne crée pas d'utilisateurs) — c'est l'étape « vague 2, étape 1 » de RB-350, renvoyée à la vague 3.
 
-*4. Vague 3 — la base (point de non-retour).* Dans le **miroir** de `mediagenda/deploiement` (clone de travail sur `adm02`, poussé comme RB-350 le prévoit), le fichier de site de PAR2 passe `spec.replica.primary` de `mediagenda-db` à `mediagenda-db-par2`, **sans** `promotionToken` (PAR1 n'a pas été rétrogradé : il ne peut pas l'être) ; Argo CD de `k8s-par2` synchronise. Un `kubectl patch` direct serait défait par l'auto-réparation d'Argo CD si le miroir dit l'inverse : la source de vérité de PAR2, c'est le miroir.
+*4. Vague 3 — la base (point de non-retour).* Le `Cluster` `mediagenda-db-par2` n'est pas géré par Argo CD (S06 : appliqué depuis `adm02`, comme le réplica de secours du M27). Dans le clone de travail du **miroir** de `plateforme/k8s` sur `adm02`, le fichier de site `sites/par2/mediagenda-prod/50-mediagenda-db-par2.yaml` passe `spec.replica.primary` de `mediagenda-db` à `mediagenda-db-par2`, **sans** `promotionToken` (PAR1 n'a pas été rétrogradé : il ne peut pas l'être) ; commit et poussée sur le miroir (la source de vérité de PAR2), puis :
 ```
+admin@adm02:~/k8s$ kubectl apply --server-side -f sites/par2/mediagenda-prod/50-mediagenda-db-par2.yaml
 admin@adm02:~$ kubectl cnpg status mediagenda-db-par2 -n mediagenda-prod      # primaire, nouvelle ligne temporelle
 admin@adm02:~$ kubectl get cluster mediagenda-db-par2 -n mediagenda-prod \
     -o jsonpath='{.status.currentPrimary}{"\n"}{.status.timelineID}{"\n"}'
 ```
-L'archivage de PAR2 part dans `cnpg-k8s-par2` (`s3-02`) ; condition `ContinuousArchiving` à `True`. Main courante : `[action]` promotion, et ce qu'elle rend irréversible (PAR1 sera reconstruit, S12).
+L'archivage de PAR2 part dans `cnpg-k8s-par2` (`s3-02`) ; condition `ContinuousArchiving` à `True`. Main courante : `[action]` promotion, et ce qu'elle rend irréversible (PAR1 sera reconstruit, S12). Puis le moteur `db-mediagenda` de `bao-par2` repointé vers `10.20.20.205:5432` (RB-356 §4) et les ExternalSecrets rafraîchis. Legacy-RDV (RTO 8 h) suit, après MédiAgenda : restauration de la sauvegarde MariaDB du jour depuis `mariadb-legacy-rdv` de `s3-02` par un objet `Restore` de mariadb-operator, pièces jointes par Velero.
 
 *5. Mesure du RPO, tout de suite après la promotion* ([`mesures-pra.sh`](fichiers/F5-S09/k8s/outils/pra/mesures-pra.sh), `plateforme/k8s`, `outils/pra/`) :
 ```
@@ -122,9 +122,21 @@ RPO (borne haute)           : 8 min 58 s
 ```
 La valeur exacte (dernier témoin écrit à PAR1 **avant T0**) n'est lisible qu'à PAR1 : au retour (S12). Avec un témoin par minute, l'écart entre la borne et la vérité est d'au plus une minute. `[mesure]` dans la main courante.
 
-*6. Vague 4 — les applications.* Fichiers de site de PAR2 dans les miroirs : MédiAgenda (Rollout et HPA de prod réactivés à PAR2), puis MédiDoc (compartiment `medidoc-documents` de `s3-02`), puis Legacy-RDV (restauration de la sauvegarde MariaDB du jour depuis `mariadb-legacy-rdv` de `s3-02` par un objet `Restore` de mariadb-operator, pièces jointes par Velero), MédiNotif ensuite (S11). Le Job de migrations de MédiAgenda ne trouve rien à appliquer : la base est une copie physique. Valkey repart vide (cache). Contrôle : `/pret` à 200 sur `mediagenda.apps.par2…`, puis création et suppression d'un rendez-vous de contrôle par Julien **depuis un poste hors du lab** (critère de reprise d'`objectifs.md`). `temoin-rpo` réactivé à PAR2 (fichier de site), premier témoin vérifié.
+*6. Vague 4 — les applications.* Fichiers de site de PAR2 dans les miroirs (Argo CD de `k8s-par2`) : MédiAgenda (Rollout `mediagenda` et HPA de prod réactivés à PAR2), puis MédiDoc (`medidoc-recette`, compartiment `medidoc-documents` de `s3-02`), Legacy-RDV, MédiNotif ensuite (S11). Le Job de migrations de MédiAgenda ne trouve rien à appliquer : la base est une copie physique. Valkey repart vide (cache). Contrôle **en direct**, avant de toucher aux noms : `/pret` à 200 sur `mediagenda.apps.par2…`, puis création et suppression d'un rendez-vous de contrôle par Julien. `temoin-rpo` réactivé à PAR2 (fichier de site) **après** le relevé du RPO, premier témoin vérifié.
 
-*7. RTO et preuves.*
+*7. Vague 5 — les noms.* Sur dns03 (zones natives depuis la vague 1) :
+```
+admin@dns03:~$ sudo pdnsutil rrset replace medisphere.internal mediagenda.medisphere.internal. CNAME 60 mediagenda.apps.par2.medisphere.internal.
+admin@dns03:~$ sudo pdnsutil rrset replace medisphere.internal medidoc.medisphere.internal. CNAME 60 medidoc-recette.apps.par2.medisphere.internal.
+admin@dns03:~$ sudo pdnsutil rrset replace medisphere.internal rdv.medisphere.internal. CNAME 60 legacy-rdv.apps.par2.medisphere.internal.
+admin@dns03:~$ sudo pdnsutil zone increase-serial medisphere.internal
+admin@dns03:~$ sudo pdns_control purge 'medisphere.internal$'             # cache de paquets de l'autoritaire
+admin@dns03:~$ sudo rec_control wipe-cache 'medisphere.internal$'          # cache du récurseur
+admin@adm02:~$ dig +short @10.20.20.11 mediagenda.medisphere.internal CNAME
+```
+Relis la zone (`pdnsutil zone list medisphere.internal`) : `rrset replace` attend un nom **absolu** ou relatif selon les versions — un nom absolu terminé par un point est sans ambiguïté. Les clients gardent l'ancienne réponse au plus 60 s (TTL).
+
+*8. RTO et preuves.*
 ```
 admin@adm02:~/k8s$ outils/pra/mesures-pra.sh rto
 mediagenda.medisphere.internal     reprise 11:19:45  RTO 73 min
@@ -137,12 +149,12 @@ Le check prend la première réponse 2xx « par2 » de la sonde ; `objectifs.md`
 
 - **Pourquoi l'isolement plutôt que l'arrêt** : arrêter `pve01` serait plus réaliste et bien plus risqué (le lab entier) ; l'isolement rend PAR1 invisible depuis PAR2 et pour les « patients », tout en le gardant intact pour le retour. Le prix : PAR1 **continue d'écrire** (témoin, archivage vers `s3-01`) — exactement ce qu'il ferait dans un sinistre partiel. C'est le cas difficile du retour (S12).
 - **Promotion sans jeton** : en topologie distribuée, un jeton de rétrogradation garantit que le nouveau primaire a rejoué jusqu'au dernier LSN de l'ancien ; sans lui, on promeut ce qu'on a — un basculement. Les écritures de PAR1 entre le dernier WAL arrivé à PAR2 et T0 (le RPO) et **toutes** celles d'après T0 n'existent pas à PAR2, et l'ancien primaire a divergé : il ne pourra que être reconstruit.
-- **Le DNS est une dépendance de tout** : avant la base même, pour que `s3-02`, `reg02` et `bao-par2` se résolvent à PAR2 (zone `par2`, servie par dns03) ; après la base, pour que les patients arrivent (zone globale).
+- **Le DNS est une dépendance de tout** : en vague 1, pour que `s3-02`, `reg02` et `bao-par2` continuent de se résoudre à PAR2 (zone `par2` passée en native) ; en vague 5 seulement, après la vérification en direct, pour que les patients arrivent (noms globaux).
 - **Le RTO se mesure de T0**, pas de la décision : le temps de décider fait partie de ce que subissent les patients. RB-350 le sait (critère temporel), le rapport le dira (T décision − T0).
 
 **Alternatives**
 - Bascule DNS **avant** la promotion (page de maintenance servie par PAR2) : les patients voient « maintenance » au lieu d'une erreur pendant la reprise ; plus propre, demande une route de maintenance prête à PAR2.
-- Promotion par `kubectl patch` puis mise à jour du miroir : plus rapide de quelques minutes ; acceptable si RB-350 le prévoit **et** si Argo CD est mis en pause sur l'Application pendant l'intervalle (sinon il remet l'état du miroir).
+- Promotion par `kubectl patch` puis mise à jour du miroir : plus rapide de quelques minutes ; acceptable si RB-350 le prévoit **et** si le commit suit aussitôt (sinon le prochain `kubectl apply` du fichier de site, au retour par exemple, rétrograde la base sans jeton).
 - `primary` au lieu de `native` pour les zones de dns03 : utile si un second DNS de secours devait suivre dns03.
 
 **Pièges classiques**
@@ -239,7 +251,7 @@ admin@adm02:~$ kubectl get backups.postgresql.cnpg.io -n mediagenda-prod
 ```
 Les VMs du pool `par2` : une sauvegarde vzdump vers le PBS de `hp01` (stockage PBS de l'hyperviseur de PAR2, namespace `par2`) — **sans** modifier `ds-lab` ni la configuration de PBS (seulement un travail de sauvegarde côté Proxmox VE de `hp01`). Tout est sur les disques de `hp01` : la vraie question est la copie **hors** de `hp01`, à décider et à écrire (disque chiffré de l'enveloppe, compartiment chiffré chez un tiers HDS…), avec le risque accepté.
 
-*2. Superviser a minima.* Paquets Debian sur `adm02` (`prometheus`, `prometheus-alertmanager`, `prometheus-blackbox-exporter`) et Mailpit de secours : [`prometheus.yml`](fichiers/F5-S11/adm02/prometheus/prometheus.yml), [`regles-pra.yml`](fichiers/F5-S11/adm02/prometheus/regles-pra.yml), [`alertmanager.yml`](fichiers/F5-S11/adm02/prometheus/alertmanager.yml), [`blackbox.yml`](fichiers/F5-S11/adm02/prometheus/blackbox.yml), [`mailpit.service`](fichiers/F5-S11/adm02/systemd/mailpit.service) ; exportateur de la base publié par [`metriques-cnpg.yaml`](fichiers/F5-S11/k8s/sites/par2/supervision/metriques-cnpg.yaml) (`LoadBalancer` 10.20.20.210, réservé à `adm02`). Valide avant de lancer : `promtool check config`, `promtool check rules`, `amtool check-config`. **Essaie** une alerte (arrêt de 4 min d'une application, ou règle de test) jusqu'au courriel dans Mailpit. Mémoire : ≈ 300 Mio ; décision écrite si `adm02` passe de 1 à 1,5 Go.
+*2. Superviser a minima.* C'est la supervision minimale que prévoit `objectifs.md` §4 pour un PRA (vague 6 de RB-350) : on la met en service et on la complète. Paquets Debian sur `adm02` (`prometheus`, `prometheus-alertmanager`, `prometheus-blackbox-exporter`) et Mailpit de secours : [`prometheus.yml`](fichiers/F5-S11/adm02/prometheus/prometheus.yml), [`regles-pra.yml`](fichiers/F5-S11/adm02/prometheus/regles-pra.yml), [`alertmanager.yml`](fichiers/F5-S11/adm02/prometheus/alertmanager.yml), [`blackbox.yml`](fichiers/F5-S11/adm02/prometheus/blackbox.yml), [`mailpit.service`](fichiers/F5-S11/adm02/systemd/mailpit.service) ; exportateur de la base publié par [`metriques-cnpg.yaml`](fichiers/F5-S11/k8s/sites/par2/supervision/metriques-cnpg.yaml) (`LoadBalancer` 10.20.20.210, réservé à `adm02`). Valide avant de lancer : `promtool check config`, `promtool check rules`, `amtool check-config`. **Essaie** une alerte (arrêt de 4 min d'une application, ou règle de test) jusqu'au courriel dans Mailpit. Mémoire : ≈ 300 Mio ; décision écrite si `adm02` passe de 1 à 1,5 Go.
 
 *3. MédiNotif.* RabbitMQ à un nœud dans `k8s-par2` (manifestes du M27, fichier de site : `replicas: 1`), topologie par le Topology Operator depuis le miroir de `plateforme/donnees`, puis le worker. MédiAgenda recommence à publier dès que son `MEDIAGENDA_AMQP_URL` vise un courtier joignable : note l'heure de la première publication réussie (journaux de l'API). Rejeu ([`rejouer-notifications.sh`](fichiers/F5-S11/k8s/outils/pra/rejouer-notifications.sh)) : compter d'abord, publier ensuite.
 ```
@@ -254,7 +266,7 @@ admin@adm02:~/k8s$ outils/pra/rejouer-notifications.sh 2026-12-15T08:50:00Z 2026
 
 **Explications**
 
-Le mode dégradé est l'état le plus long d'un PRA et le moins préparé : un site de repli est dimensionné pour **reprendre**, rarement pour **durer**. Trois choses se dégradent avec le temps à PAR2 et méritent d'être écrites : les copies de données qui n'existent que là (un serveur, un bâtiment), les échéances (zones DNS secondaires, signatures DNSSEC, certificats émis par `ca01`, baux d'OpenBao), et la mémoire de `hp01` qu'on est tenté de remplir avec « juste un service de plus ». `objectifs.md` disait « pas de Prometheus à PAR2 » : c'est un écart à porter au rapport (S13) — l'incident INC-6110 l'a montré.
+Le mode dégradé est l'état le plus long d'un PRA et le moins préparé : un site de repli est dimensionné pour **reprendre**, rarement pour **durer**. Trois choses se dégradent avec le temps à PAR2 et méritent d'être écrites : les copies de données qui n'existent que là (un serveur, un bâtiment), les échéances (zones DNS secondaires, signatures DNSSEC, certificats émis par `ca01`, baux d'OpenBao), et la mémoire de `hp01` qu'on est tenté de remplir avec « juste un service de plus ». `objectifs.md` prévoit cette supervision minimale **pendant un PRA** (vague 6), sans rien de prêt en veille : la mettre en service a pris du temps, et INC-6110 a été signalé par un utilisateur avant elle — un écart à porter au rapport (S13, E4).
 
 **Alternatives**
 - Supervision dans `k8s-par2` (Prometheus mononœud par le chart de la plateforme) : cohérent avec PAR1, mais dans le même nœud que ce qu'il surveille, et plus lourd.
@@ -276,13 +288,13 @@ Une supervision de PAR2 permanente (pas seulement en PRA) qui alerte aussi sur l
 ## Points non testés en conditions réelles
 
 - **Table `inet f5_sinistre` sur `gw01`/`gw02`** : interaction avec la traduction des tunnels vers la VIP WAN (M07-E26) et `conntrackd` — les règles jettent les paquets dans les chaînes `input`/`forward`/`output` à la priorité −150, sans toucher à VRRP, BGP (VLAN 40, `wg2`) ni au NAT ; la règle `ct direction original` sur `ens18` (connexions ouvertes depuis le LAN, sauf `pve01`) est à confirmer avec ton plan de bordure (adresse source de `pve01` lue par `ip route get 10.10.10.10`). Un rechargement de `/etc/nftables.conf` (qui commence par `flush ruleset`) efface la table.
-- Variante 1 de S08 : le nom de l'unité `filer.sync` est trouvé par son `ExecStart` dans `/etc/systemd/system/` (une unité modèle `@` de S04 est détectée par son fichier modèle ; une instance activée par un lien est relancée sous le nom du modèle — vérifie l'annulation sur ton lab).
+- Variante 1 de S08 et checks de `filer.sync` : les unités sont reconnues à leur commande (`weed filer.sync` dans un fichier de `/etc/systemd/system/`) ; pour une unité modèle `@`, ses instances sont lues dans les liens `*.wants/` et dans `systemctl list-units` (une instance arrêtée mais activée reste visible) — vérifie sur ton lab que la panne arrête bien l'instance `cnpg-k8s-par1` et que l'annulation la relance.
 - Variante 3 de S08 : `qm set 1055 --lock backup` sur une VM arrêtée, puis `qm unlock` (comportement documenté de `qm`, non essayé sur le Proxmox VE installé à côté de PBS).
 - Variante 1 de S10 : `date -s '+25 minutes'` alors que chrony tourne sans source joignable ; recalage arrière par `chronyc -a makestep` (la configuration du rôle `base` contient `makestep 1 3`) ; effet d'un recul d'horloge sur le journal de métadonnées du filer de `s3-02`.
 - Variante 2 de S10 : réécriture de `recursor.yml` par `python3` + `yaml` (PyYAML, dépendance de cloud-init sur les images du lab) ; nom de l'unité `pdns-recursor`.
 - Variante 3 de S10 : nom de l'unité SSH `ssh` (Debian 13) et forme exacte du message de refus dans le journal.
 - `pdnsutil rrset replace` de PowerDNS 5.0 : NAME absolu accepté (relis la zone après) ; `pdns_control purge` et `rec_control wipe-cache` avec le suffixe `$`.
 - Promotion de `mediagenda-db-par2` sans jeton par le miroir et Argo CD (temps de synchronisation) ; archivage immédiat sous `mediagenda-db-par2` dans `cnpg-k8s-par2`.
-- Métriques `cnpg_pg_stat_archiver_seconds_since_last_archival` et `cnpg_pg_replication_lag` des requêtes par défaut de CloudNativePG 1.30 ; Service `LoadBalancer` avec `externalTrafficPolicy: Local` et annotation `lbipam.cilium.io/ips` en annonces L2.
+- Métriques `cnpg_pg_stat_archiver_seconds_since_last_archival` et `cnpg_pg_replication_lag` des requêtes par défaut de CloudNativePG 1.30 ; Service `LoadBalancer` (annotation `lbipam.cilium.io/ips`, `externalTrafficPolicy: Cluster`, incompatible `Local` en annonces L2) : conservation de l'adresse source de `adm02` pour la politique réseau sur un nœud unique avec remplacement de kube-proxy (attendue : le serveur est local, pas de SNAT).
 - Options de Mailpit `--listen`, `--smtp`, `--database`, `--ui-auth-file` (relues dans `mailpit --help` de la version de `mon01`).
 - Publication par l'API de gestion de RabbitMQ à travers la route HTTPS de PAR2 (port et authentification de l'interface de gestion de la grappe de PAR2).

@@ -1,0 +1,41 @@
+# plateforme/outils — preuves/catalogue.yaml : lignes AJOUTÉES par la remédiation (F6-S08 à S10), à la
+# fin de « preuves: ». Chaque ligne a sa jumelle dans docs/conformite/preuves.md (même identifiant).
+# Collecteurs : preuves/collecteurs/ (même dossier que ceux de S02, mêmes règles : _commun.sh).
+# Identités en plus pour le pipeline de collecte (lues dans OpenBao par le rôle ci-preuves, politique
+# preuves-collecte étendue à kv/data/plateforme/archive-audit/rgw-lecture) : ARCHIVE_AWS_ACCESS_KEY_ID,
+# ARCHIVE_AWS_SECRET_ACCESS_KEY.
+  - id: P-AUD-01
+    titre: Sources du locataire audit de Loki (lignes sur 24 h, sources muettes)
+    mesures: ["8.15", "8.16"]
+    hds: [4, 5]
+    frequence: quotidienne
+    collecteur: audit-sources
+    format: json
+  - id: P-AUD-02
+    titre: Verrouillage du compartiment archive-audit et manifeste signé de la veille
+    mesures: ["8.15", "5.33", "5.28"]
+    hds: [5]
+    frequence: quotidienne
+    collecteur: archive-audit-verrou
+    format: json
+  - id: P-VUL-03
+    titre: Exceptions de vulnérabilité de Harbor (cve_allowlist et échéances)
+    mesures: ["8.8", "5.36"]
+    hds: [4]
+    frequence: quotidienne
+    collecteur: harbor-allowlist
+    format: json
+  - id: P-SAV-03
+    titre: Phrase du dépôt Kopia de Velero tirée d'OpenBao, dépôts et restaurations
+    mesures: ["8.13", "8.24"]
+    hds: [6]
+    frequence: quotidienne
+    collecteur: velero-chiffrement
+    format: json
+  - id: P-CTL-01
+    titre: Derniers pipelines planifiés des contrôles (archive d'audit, exceptions échues, kit forensique)
+    mesures: ["8.15", "8.8", "5.24", "5.26"]
+    hds: [5]
+    frequence: quotidienne
+    collecteur: controles-planifies
+    format: json

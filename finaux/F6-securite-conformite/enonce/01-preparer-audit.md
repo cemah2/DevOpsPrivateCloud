@@ -17,12 +17,13 @@ Prérequis de la phase : [`00-introduction.md`](00-introduction.md) lu, état d'
 - Situer les exigences propres à HDS v2 (localisation, transparence, contrat, réversibilité) par rapport à ISO/IEC 27001.
 
 **Prérequis** : modules 24 à 26 ; F2 (équipes, prestataires) ; F4 (processus de changement), F5 (PRA) si tu les as faits.
-**Durée indicative** : 4 à 5 h.
+**Durée indicative** : 3 à 4 h.
 
 **Contexte technique**
 - **Sites** : les salles PAR1 et PAR2 sont des espaces privatifs (cages) loués chez **DataCampus**, opérateur de colocation (fictif) **certifié HDS pour l'activité 1** ; il fournit le bâtiment, l'énergie, la climatisation, le contrôle d'accès et la surveillance des salles. Les serveurs (`pve01`, `hp01`), les baies et le réseau de baie appartiennent à MédiSphère.
 - **Clients** : cabinets médicaux, centres de santé et établissements, responsables de traitement des données de leurs patients ; ils accèdent à MédiAgenda, MédiDoc (pièces jointes), MédiNotif (rappels), Legacy-RDV et MédiVisio (téléconsultation).
 - **SI interne** (messagerie, bureautique, RH, comptabilité) : géré par un autre prestataire, sans donnée de santé, séparé de la plateforme.
+- **Fournisseurs et accès autour de la plateforme** (détaillés en S07) : **HelpNow** (outil de tickets du support, en SaaS), **SMS-Express** (envoi des rappels de MédiNotif), l'astreinte du support assurée deux semaines par an **depuis le Maroc** par le VPN. Ce sont des interfaces du périmètre, et la matière des exigences HDS de transparence.
 - **Format de la SoA** (lu par le check) : rappelé dans [`00-introduction.md`](00-introduction.md), « Conventions du final ».
 - Le texte d'ISO/IEC 27001 est payant : si tu ne l'as pas, la liste des intitulés de l'annexe A (identique à ISO/IEC 27002:2022) est largement publiée par les organismes certificateurs ; cite tes sources.
 
@@ -73,7 +74,7 @@ Une exclusion défendable porte sur une mesure dont le **risque** n'existe pas d
 - Industrialiser : outil testé, identités dédiées, pipeline planifié, échec visible.
 
 **Prérequis** : F6-S01 ; M08 (RGW), F2-S08 (utilisateurs et compartiments RGW par script, `plateforme/ceph`) ; M25 (OpenBao `transit`, Cosign `hashivault://`, méthode `jwt` `gitlab`, rôles `ci-*`) ; M02 et F2-S13 (conventions des outils `ms-*` de `plateforme/outils`, tests sans service réel) ; M19 (pipelines planifiés).
-**Durée indicative** : 7 à 8 h.
+**Durée indicative** : 6 à 8 h.
 
 **Contexte technique**
 - RGW de `ceph-par1` : `https://rgw.par1.medisphere.internal` ; `radosgw-admin` sur `ceph01` ; le script `outils/rgw-compartiment.sh` de `plateforme/ceph` (F2-S08) montre comment créer un utilisateur, ranger ses clés dans OpenBao sans les afficher, et créer un compartiment.
@@ -139,7 +140,7 @@ Pour les tests, inspire-toi de `tests/ms-verif-equipe/` (F2-S13) : de faux `aws`
 - Rendre la revue reproductible (outil, déclarations versionnées) et en garder la preuve.
 
 **Prérequis** : F6-S02 (`ms-preuves`, pour garder l'état brut) ; M24 (FreeIPA, Keycloak, SSO des services, comptes de bris de glace) ; M25 (OpenBao, AppRole, rôles `jwt`) ; F2-S10 à S12 (AxiomDev, son départ, `depart-externe.sh`).
-**Durée indicative** : 4 à 5 h.
+**Durée indicative** : 3 h 30 à 4 h 30.
 
 **Contexte technique**
 - Source de vérité des personnes : l'**annuaire FreeIPA** (`ipa01`) — un compte actif = une personne présente ; `nsAccountLock: TRUE` = désactivé. Les identités de lecture des checks (M24-M26 : `ipa-checks.env`, `keycloak-checks.env`, `openbao-checks.env`, `grafana-checks.token`, `k8s-checks.kubeconfig`) montrent comment lire chaque système sans pouvoir écrire ; certaines ne suffisent pas pour une revue complète (liste des utilisateurs de Grafana ou de Harbor, par exemple) : à toi de décider quelles identités de revue créer, et de l'écrire.

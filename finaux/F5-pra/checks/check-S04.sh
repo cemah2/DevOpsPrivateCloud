@@ -27,9 +27,9 @@ check_cmd "s3-02 : ci-cache n'est PAS copié (minimisation)" _f5_s04_sans_ci_cac
 _f5_s04_medidoc_objets() { _f5p_s3 list-objects-v2 --bucket medidoc-documents --max-items 1 2>/dev/null | jq -e '(.Contents // []) | length > 0' >/dev/null; }
 check_cmd "s3-02 : medidoc-documents contient des documents" _f5_s04_medidoc_objets
 
-_f5_s04_s3hote=s3-02.par2.medisphere.internal
-check_cmd "s3-02 : une unité de filer.sync (nom contenant « filer-sync ») est active" \
-  _f5p_unite_active "$_f5_s04_s3hote" 'filer-sync'
+_f5_s04_s3hote="$_f5p_s302_hote"
+check_cmd "s3-02 : les unités qui lancent weed filer.sync (simples ou instances d'un modèle @) sont actives" \
+  _f5p_filersync_ok
 check_cmd "s3-02 : une minuterie de copie de MédiDoc (nom contenant « medidoc ») est active" \
   _f5p_unite_active "$_f5_s04_s3hote" 'medidoc.*\.timer'
 _f5_s04_medidoc_ok() {

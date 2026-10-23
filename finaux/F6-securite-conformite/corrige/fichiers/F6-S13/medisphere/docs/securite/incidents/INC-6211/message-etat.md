@@ -19,7 +19,7 @@ patient réelle** (données fictives). Aucun accès à la production, aucune don
 violation de données personnelles (analyse du DPO au registre des violations).
 
 **Ce qui a été fait.** Le conteneur a été isolé sans être détruit (preuves préservées), les preuves
-collectées, la cause corrigée (une règle réseau trop large retirée / un accès renouvelé), les secrets
+collectées, la cause corrigée (des règles de sortie trop larges retirées / un accès renouvelé), les secrets
 concernés renouvelés, le service rétabli. Aucune interruption visible pour les utilisateurs.
 
 **Suites.** Un post-mortem sans recherche de coupable est rédigé ; il a déjà produit des actions

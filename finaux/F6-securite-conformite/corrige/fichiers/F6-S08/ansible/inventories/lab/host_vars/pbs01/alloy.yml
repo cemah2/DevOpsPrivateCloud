@@ -1,0 +1,11 @@
+---
+# host_vars/pbs01/alloy.yml — F6-S08 (SEC-3608) : traces d'administration du PBS de hp01 (inventaire « pbs01 »,
+# et Proxmox VE de PAR2 si le F5 est fait) au locataire audit. proxmox-backup-proxy et proxmox-backup :
+# connexions, tâches (sauvegardes, restaurations, suppressions, vérifications) et leur auteur.
+# ⚠️ hp01 : l'agent seulement. Ni le datastore ds-lab, ni la configuration de PBS, ni le réseau (vmbr0,
+# wg0) ne sont touchés ; si l'envoi vers Loki passe par wg0 (hp01 est sur le LAN), la règle de bordure
+# correspondante va dans group_vars/role_routeur/pare_feu.yml (flux hp01 → Loki 3100, locataire audit).
+alloy_audit_unites:
+  - {unite: proxmox-backup-proxy.service, service: proxmox}
+  - {unite: proxmox-backup.service, service: proxmox}
+  - {unite: pvedaemon.service, service: proxmox}

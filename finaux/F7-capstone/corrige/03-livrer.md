@@ -11,7 +11,7 @@
 
 **Fichiers** : [`fichiers/F7-S07/`](fichiers/F7-S07/) à [`fichiers/F7-S11/`](fichiers/F7-S11/), en extraits des projets : `equipes/…` = `plateforme/equipes`, `secrets/…`, `identite/…`, `ceph/…`, `ansible/…`, `observabilite/…`, `outils/…`, `resilience/…`, `mediagenda-api/…` = `mediagenda/api`, `mediagenda-deploiement/…` = `mediagenda/deploiement`, `medisphere/…` = `plateforme/medisphere`. Les `*.extrait*` sont à fusionner dans le fichier existant (l'emplacement est en tête). Les valeurs `<EN-MAJUSCULES>` sont à relever sur ton lab (empreintes d'images, versions promues).
 
-**Correspondance avec la phase 2** : ADR-0370 (isolation : ce que crée `equipes/ghsv.yaml` ; le groupe `ghsv` du fichier joue le rôle du groupe « exploitation du GHSV »), ADR-0371 (clés `transit/ghsv-*`, aucune personne avec `decrypt`), ADR-0372 (courtier dans `medisphere`, DPI en compte de service ; l'ADR nomme le fournisseur `ghsv` : la phase 3 fixe l'alias `ghsv-idp`, comme le royaume simulé), ADR-0373 (témoin de RPO, `archive_timeout` à 1 min), ADR-0374 (format d'export, `ms-reversibilite`, RB-371).
+**Correspondance avec la phase 2** : ADR-0370 (isolation : ce que crée `equipes/ghsv.yaml` ; le groupe `ghsv` du fichier joue le rôle du groupe « exploitation du GHSV »), ADR-0371 (clés `transit/ghsv-*`, aucune personne avec `decrypt`), ADR-0372 (courtier d'alias `ghsv-idp` dans `medisphere`, comme le royaume simulé ; DPI en compte de service ; groupe unique `ghsv-agents` et rôle `client-externe` : simplifications de la preuve de concept écrites dans l'ADR), ADR-0373 (témoin de RPO, `archive_timeout` à 1 min), ADR-0374 (format d'export, `ms-reversibilite`, RB-371 ; export lancé depuis `adm01`, le pipeline protégé restant la cible). Chaque ADR concernée porte une ligne « Preuve de concept du lab » qui dit ces écarts.
 
 ---
 
@@ -116,7 +116,7 @@ admin@adm01:~$ curl -s https://sso.par1.medisphere.internal/realms/ghsv-idp/.wel
 - Tester le refus avec une session déjà ouverte dans le même navigateur que la console d'administration : utilise une fenêtre privée par identité.
 
 **En production chez MédiSphère**
-Le client OIDC est fourni par l'IdP réel du GHSV (secret par canal séparé, rotation annuelle) ; le courtier pointe son émetteur public par le mandataire sortant ; un Keycloak de repli existe à PAR2 (risque R-1) ; une sonde synthétique de connexion d'agent alerte avant les secrétariats.
+Le client OIDC est fourni par l'IdP réel du GHSV (secret par canal séparé, rotation annuelle) ; le courtier pointe son émetteur public par le mandataire sortant ; un Keycloak de repli existe à PAR2 (`architecture.md`, ADR-0372 ; dans le lab, risque RSQ-17) ; une sonde synthétique de connexion d'agent alerte avant les secrétariats.
 
 ---
 
@@ -196,8 +196,10 @@ spec:
     source: mediagenda-db-par2
   externalClusters:
     - {name: mediagenda-db-prod, plugin: {name: barman-cloud.cloudnative-pg.io, parameters: {barmanObjectName: cnpg-ghsv, serverName: mediagenda-db-prod}}}
-    - {name: mediagenda-db-par2, plugin: {name: barman-cloud.cloudnative-pg.io, parameters: {barmanObjectName: cnpg-ghsv, serverName: mediagenda-db-par2}}}
+    - {name: mediagenda-db-par2, plugin: {name: barman-cloud.cloudnative-pg.io, parameters: {barmanObjectName: cnpg-ghsv-par2, serverName: mediagenda-db-par2}}}
 ```
+
+avec, dans `overlays/clients/ghsv-prod`, un ObjectStore `cnpg-ghsv-par2` **en lecture** (compartiment `cnpg-ghsv-par2` de `s3-02`, sans `retentionPolicy`), comme `objectstore-par2.yaml` de MédiAgenda (F5-S06). À PAR2, la réplique lit la copie de l'archive de PAR1 par l'ObjectStore `cnpg-ghsv-par1` et archive dans **son** compartiment `cnpg-ghsv-par2` ([`sauvegarde-par2.yaml`](fichiers/F7-S10/mediagenda-deploiement/overlays/clients/ghsv-prod-par2/sauvegarde-par2.yaml)), classe de stockage `local-path` : mêmes règles que `mediagenda-db-par2` du F5. Compartiment `cnpg-ghsv-par2` et identité `cnpg-ghsv-par2` à ajouter à `s3-02` (rôle `seaweedfs`, F5-S04), `cnpg-ghsv` à la liste de `filer.sync`.
 
 Témoin de RPO [`temoin-rpo-client`](fichiers/F7-S10/mediagenda-deploiement/components/temoin-rpo-client/cronjob.yaml) (écriture SQL directe : l'API exige un jeton) ; nom `ghsv.medisphere.internal` (CNAME, TTL 60 s, même mécanisme que les noms globaux du F5) ; essai de reprise **isolé** (grappe restaurée à part dans `ghsv-essai-reprise` de `k8s-par2`, API à 1 réplica, mesure, suppression) : RPO = dernier témoin PAR1 − dernier témoin restauré.
 
@@ -329,5 +331,5 @@ Signale tes retours : ils corrigent le workbook.
 - **Ceph RGW** : SSE-KMS adossé au moteur `transit` d'OpenBao (cible de `ghsv-sauvegardes`) : non essayé.
 - **oasdiff** : options `--prefix-base` et `--fail-on` à vérifier avec `oasdiff breaking --help` de ta version.
 - **Panne F7-S11** : injection, détection des effets et `--annuler` jamais joués sur un lab réel ; le meneur en arrière-plan survit à la fermeture du terminal (`trap '' HUP`) mais pas à un redémarrage d'`adm01` (relance `--annuler` puis l'injection) ; envoi des courriels par `curl` en SMTP avec STARTTLS vers Mailpit.
-- **Overlays** : listes de components et chemins de correctifs (`env/0`, `containers/0`) à confronter à l'état réel de **ton** `mediagenda/deploiement` (M17 à M28, F4) ; noms `racine-medisphere`, `site-par2`, classe de stockage de `k8s-par2`.
+- **Overlays** : listes de components et chemins de correctifs (`env/0`, `containers/0`) à confronter à l'état réel de **ton** `mediagenda/deploiement` (M17 à M28, F4) ; nom du component `racine-medisphere` ; cibles des correctifs de route de `ghsv-prod-par2` (reprises de `overlays/prod-par2` du F5).
 - Mesures (RPO, durées de reprise, durée d'export) : à relever sur ton lab ; les valeurs du corrigé sont des emplacements `<…>`.

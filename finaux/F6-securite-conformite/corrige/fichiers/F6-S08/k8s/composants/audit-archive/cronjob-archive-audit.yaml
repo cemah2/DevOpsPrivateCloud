@@ -1,21 +1,56 @@
 # plateforme/k8s — composants/audit-archive/cronjob-archive-audit.yaml (F6-S08, SEC-3608, ferme ECA-3601)
 #
-# Archive quotidienne du locataire « audit » de Loki vers le compartiment RGW archive-audit, en
-# verrouillage d'objets (COMPLIANCE, rétention 1 an), avec un manifeste signé par transit d'OpenBao.
-# Image par Harbor (chaîne d'approvisionnement), profil restricted, aucun jeton de compte de service
-# monté sauf besoin (ici : aucun appel à l'API Kubernetes). Secrets (S3 d'écriture, jeton transit)
-# fournis par ESO (M25). Le compartiment archive-audit est créé À PART, avec verrouillage activé dès le
-# départ (voir docs/conformite/journaux-audit.md) — un CronJob ne l'active pas après coup.
+# Archive quotidienne du locataire « audit » de Loki vers le compartiment RGW archive-audit (verrouillage
+# d'objets, COMPLIANCE, rétention par défaut 365 jours), manifeste signé par transit d'OpenBao.
+# Espace « journaux » (celui de Loki, M22). Aucune clé de signature dans le cluster : le pod se connecte
+# à OpenBao par la méthode kubernetes « k8s-par1 » (rôle audit-archive, politique audit-archive :
+# transit/sign/audit-archive seulement) avec un jeton projeté d'audience openbao.medisphere.internal ;
+# les clés S3 d'écriture (utilisateur RGW archive-audit) arrivent par ESO depuis
+# kv/plateforme/archive-audit/rgw-ecriture (ClusterSecretStore openbao, réservé aux espaces de plateforme).
+# Le compartiment est créé À PART, verrouillage activé à la création (plateforme/ceph, rgw-preuves.sh) :
+# ce CronJob ne règle jamais le verrou, il vérifie que chaque objet déposé le porte.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: audit-archive
+  namespace: journaux
+automountServiceAccountToken: false
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: audit-archive-s3
+  namespace: journaux
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: audit-archive-s3
+  data:
+    - secretKey: AWS_ACCESS_KEY_ID
+      remoteRef:
+        key: plateforme/archive-audit/rgw-ecriture
+        property: AWS_ACCESS_KEY_ID
+    - secretKey: AWS_SECRET_ACCESS_KEY
+      remoteRef:
+        key: plateforme/archive-audit/rgw-ecriture
+        property: AWS_SECRET_ACCESS_KEY
 ---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: audit-archive
-  namespace: observabilite
+  namespace: journaux
   labels:
+    app.kubernetes.io/name: audit-archive
     medisphere.internal/composant: conformite
 spec:
-  schedule: "CRON_TZ=Europe/Paris 30 1 * * *"
+  # 01:30 UTC : la veille est close dans Loki ; la collecte ms-preuves (P-AUD-02) passe après.
+  schedule: "30 1 * * *"
+  timeZone: "Etc/UTC"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 7
   failedJobsHistoryLimit: 7
@@ -29,6 +64,7 @@ spec:
             app.kubernetes.io/name: audit-archive
         spec:
           restartPolicy: Never
+          serviceAccountName: audit-archive
           automountServiceAccountToken: false
           securityContext:
             runAsNonRoot: true
@@ -38,7 +74,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: archive
-              image: registry.par1.medisphere.internal/medisphere/audit-archive:1.0.0
+              image: registry.par1.medisphere.internal/plateforme/audit-archive:v1.0.0
               imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false
@@ -47,36 +83,34 @@ spec:
                   drop: ["ALL"]
               env:
                 - name: LOKI_URL
-                  value: "http://loki.apps.par1.medisphere.internal:3100"
+                  value: "http://loki.journaux.svc:3100"
                 - name: LOKI_TENANT
                   value: "audit"
                 - name: RGW_URL
                   value: "https://rgw.par1.medisphere.internal"
                 - name: ARCHIVE_BUCKET
                   value: "archive-audit"
-                - name: RETENTION_JOURS
-                  value: "365"
-                - name: OBJECT_LOCK_MODE
-                  value: "COMPLIANCE"   # GOVERNANCE le temps d'éprouver, puis COMPLIANCE
                 - name: BAO_ADDR
                   value: "https://openbao.par1.medisphere.internal:8200"
+                - name: BAO_AUTH
+                  value: "k8s-par1"
+                - name: BAO_ROLE
+                  value: "audit-archive"
                 - name: TRANSIT_CLE
                   value: "audit-archive"
+                - name: BAO_JWT_FICHIER
+                  value: "/var/run/secrets/openbao/token"
+                - name: TMPDIR
+                  value: "/tmp"
               envFrom:
                 - secretRef:
-                    name: audit-archive-s3        # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (écriture)
-                - secretRef:
-                    name: audit-archive-bao        # BAO_TOKEN (signature transit)
-              command: ["/usr/local/bin/archiver-audit"]
-              # archiver-audit : pour la veille,
-              #   1. query_range sur chaque job du locataire audit -> un .jsonl.gz par source ;
-              #   2. manifeste.json (periode, objets[{nom, sha256, lignes}]) ;
-              #   3. signe le condensat du manifeste par transit -> manifeste.sig ;
-              #   4. put-object --object-lock-mode $OBJECT_LOCK_MODE
-              #        --object-lock-retain-until-date <veille + RETENTION_JOURS> pour CHAQUE objet.
+                    name: audit-archive-s3
               volumeMounts:
                 - name: tmp
                   mountPath: /tmp
+                - name: jeton-openbao
+                  mountPath: /var/run/secrets/openbao
+                  readOnly: true
               resources:
                 requests:
                   cpu: 100m
@@ -86,4 +120,12 @@ spec:
                   memory: 512Mi
           volumes:
             - name: tmp
-              emptyDir: {}
+              emptyDir:
+                sizeLimit: 2Gi
+            - name: jeton-openbao
+              projected:
+                sources:
+                  - serviceAccountToken:
+                      path: token
+                      audience: openbao.medisphere.internal
+                      expirationSeconds: 600

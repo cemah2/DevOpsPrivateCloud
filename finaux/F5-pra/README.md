@@ -63,5 +63,5 @@ Le sinistre est **simulé par isolement** (`lab/bin/break F5 09`) : la bordure d
 
 - Énoncé : [`enonce/`](enonce/) — commence par [`00-introduction.md`](enonce/00-introduction.md).
 - Vérifications : `lab/bin/check F5 <XX>`, depuis `adm01` (depuis `adm02` pendant le PRA, de S09 à S11).
-- Pannes : `lab/bin/break F5 <XX>`, depuis `adm01` ; annulation du sinistre depuis `pve01`.
+- Pannes : `lab/bin/break F5 8` et `lab/bin/break F5 9` depuis `adm01` ; `lab/bin/break F5 10` depuis `adm02` (pendant le PRA) ; annulation du sinistre (`lab/bin/break F5 9 --annuler`, S12) depuis `pve01`, après neutralisation de PAR1.
 - ⚠️ Corrigé : [`corrige/`](corrige/) — à n'ouvrir qu'après avoir cherché.

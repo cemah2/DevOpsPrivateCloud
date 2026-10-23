@@ -1,6 +1,10 @@
 # mediagenda/deploiement — overlays/prod/objectstore-par2.yaml (F5-S06) : archive de PAR2 vue de PAR1, en
 # LECTURE (identité cnpg-par1-lecture de s3-02 : Read/List sur cnpg-k8s-par2 seulement ; ExternalSecret
-# cnpg-s3-par2 depuis kv/mediagenda/prod/cnpg-s3-par2). Pas de retentionPolicy (lecture seule).
+# cnpg-s3-par2 depuis kv/mediagenda/prod/cnpg-s3-par2, ci-dessous). Pas de retentionPolicy : la rétention
+# de cette archive est l'affaire du cluster qui l'écrit (PAR2), jamais de PAR1.
+# Déclaré dès S06 (topologie distribuée : chaque site connaît les deux archives), LU seulement au retour
+# (F5-S12, RB-351 §B3 : reconstruction de mediagenda-db en réplique de PAR2, puis rejeu jusqu'au jeton) ;
+# le flux k8s-par1 (VLAN 40) → s3-02:8333 à travers wg0 n'est ouvert qu'alors (RB-351 §0.6).
 apiVersion: barmancloud.cnpg.io/v1
 kind: ObjectStore
 metadata:
@@ -13,3 +17,17 @@ spec:
     s3Credentials:
       accessKeyId: {name: cnpg-s3-par2, key: ACCESS_KEY_ID}
       secretAccessKey: {name: cnpg-s3-par2, key: ACCESS_SECRET_KEY}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: cnpg-s3-par2
+spec:
+  refreshInterval: 1h
+  secretStoreRef: {kind: SecretStore, name: openbao}
+  target: {name: cnpg-s3-par2, creationPolicy: Owner, deletionPolicy: Retain}
+  data:
+    - secretKey: ACCESS_KEY_ID
+      remoteRef: {key: mediagenda/prod/cnpg-s3-par2, property: access_key_id}
+    - secretKey: ACCESS_SECRET_KEY
+      remoteRef: {key: mediagenda/prod/cnpg-s3-par2, property: secret_access_key}

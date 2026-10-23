@@ -32,7 +32,7 @@ Tout ce qui a été écrit depuis la reprise n'existe **qu'à PAR2**, sur un seu
 
 ## 3. Supervision minimale
 
-`objectifs.md` disait « pas de Prometheus à PAR2 » : la journée a montré que c'était une erreur (INC-6110 aurait sonné). Décision de Claire (13:40) : +512 Mio pour `adm02`.
+`objectifs.md` §4 prévoit une supervision minimale de PAR2 **pendant un PRA** (vague 6 de RB-350), rien en veille. Mise en service à 13:40, après INC-6110, qu'elle aurait signalé (écart E4 du rapport). Décision de Claire (13:40) : +512 Mio pour `adm02`.
 
 - Prometheus, Alertmanager et blackbox_exporter sur `adm02` (paquets Debian), Mailpit de secours sur `adm02` (boîte `cellule-crise`), consulté par la cellule.
 - Cibles : node_exporter des VMs de PAR2, les trois noms globaux (sonde HTTPS), l'exportateur de `mediagenda-db-par2` (Service `LoadBalancer` 10.20.20.210, réservé à `adm02`).

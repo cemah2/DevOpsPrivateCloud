@@ -1,13 +1,21 @@
 # plateforme/k8s — composants/velero/planifications.extrait-F6.yaml (F6-S09, SEC-3609, ferme ECA-3603)
 #
-# À FUSIONNER dans composants/velero/ (le fichier des planifications existe depuis le M16-E21). Ce qui
-# change au F6 : le dépôt de sauvegarde est CHIFFRÉ côté serveur (Kopia), la phrase de passe vient
-# d'OpenBao par ESO. Le stockage objet (velero-k8s-par1 sur s3-01) ne voit que du chiffré.
+# À FUSIONNER dans composants/velero/ (planifications du M16 ; même kustomization). Deux changements :
 #
-# ⚠️ Le champ du secret de dépôt dépend de Velero 1.18 : vérifier sur le lab (Points non testés). La
-# forme ci-dessous suit la convention « repo maintenance / backup repository config » de Velero + Kopia.
+# 1. La phrase du dépôt Kopia (données des volumes) ne vaut plus la phrase PAR DÉFAUT que Velero écrit à
+#    l'installation dans le Secret velero/velero-repo-credentials (clé repository-password) : elle vient
+#    d'OpenBao (kv/plateforme/velero/depot, propriété phrase, 48 caractères aléatoires) par ESO.
+#    ⚠️ La phrase est GLOBALE à tous les dépôts Kopia de Velero et un dépôt existant reste chiffré avec
+#    l'ancienne : on fait pointer l'emplacement de sauvegarde « s3-01 » vers un NOUVEAU préfixe (dans
+#    values.yaml du M16-E16 : « prefix: kopia-v2 » sous backupStorageLocation, donc de nouveaux dépôts
+#    initialisés avec la nouvelle phrase) ; l'ancien emplacement reste déclaré en LECTURE SEULE
+#    (« s3-01-avant », accessMode ReadOnly, sans préfixe) jusqu'à l'expiration des anciennes sauvegardes
+#    (14 jours). Pour restaurer l'une d'elles, il faut l'ancienne phrase : ESO suspendu et phrase par
+#    défaut remise le temps de la restauration (procédure dans docs/conformite/vulnerabilites.md).
+# 2. Les Secrets ne sont plus dans l'archive des manifestes (tar.gz que Velero dépose EN CLAIR à côté des
+#    dépôts Kopia) : ils sont tous recréés par ESO depuis OpenBao (M25), les sauvegarder n'apporte rien et
+#    les expose. Les autres manifestes ne contiennent pas de données de santé.
 ---
-# Secret de la phrase de passe du dépôt Kopia, rempli par ESO depuis OpenBao (kv/velero/depot/phrase).
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -16,30 +24,17 @@ metadata:
 spec:
   refreshInterval: 1h
   secretStoreRef:
-    name: openbao
     kind: ClusterSecretStore
+    name: openbao
   target:
     name: velero-repo-credentials
+    # Le Secret existe déjà (créé par Velero) : ESO en prend la propriété et remplace la phrase.
     creationPolicy: Owner
   data:
     - secretKey: repository-password
       remoteRef:
-        key: kv/data/velero/depot
+        key: plateforme/velero/depot
         property: phrase
----
-# Configuration du dépôt : chiffrement activé, phrase lue dans le secret ci-dessus.
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: velero-repo-config
-  namespace: velero
-data:
-  # Velero lit la phrase de passe du dépôt Kopia dans le secret velero-repo-credentials
-  # (clé repository-password). Sans elle, le dépôt est en clair (état d'avant ECA-3603).
-  repository-maintenance-job: |
-    requests:
-      cpu: 100m
-      memory: 128Mi
 ---
 apiVersion: velero.io/v1
 kind: Schedule
@@ -48,13 +43,17 @@ metadata:
   namespace: velero
   labels:
     medisphere.internal/composant: sauvegarde
+    medisphere.internal/sauvegarde: quotidienne
 spec:
-  schedule: "CRON_TZ=Europe/Paris 0 3 * * *"
+  schedule: "0 2 * * *"
+  paused: false                     # écrit explicitement : un « apply » le remet à faux (leçon de F6-S04)
   template:
     includedNamespaces:
       - medidoc-dev
+    excludedResources:
+      - secrets                     # recréés par ESO depuis OpenBao ; jamais en clair sur s3-01
     snapshotVolumes: true
-    snapshotMoveData: true          # déplacement de données par Kopia -> dépôt chiffré
+    snapshotMoveData: true          # données des volumes copiées par Kopia dans le dépôt chiffré
     defaultVolumesToFsBackup: false
     labelSelector:
       matchExpressions:

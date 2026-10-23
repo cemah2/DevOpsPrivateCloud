@@ -34,3 +34,5 @@ _f5_s01_fin() { grep -Eqi 'fin de (la )?reprise|reprise (est )?(atteinte|acquise
 check_cmd "objectifs.md : l'instant où s'arrête l'horloge du RTO est défini" _f5_s01_fin
 _f5_s01_perimetre() { grep -Eqi 'p(é|e)rim(è|e)tre' <<<"$_f5_s01_obj" && grep -Eqi 'm(é|e)divisio' <<<"$_f5_s01_obj" && grep -Eqi '\bdata\b' <<<"$_f5_s01_obj" && grep -Eqi 'exclu|hors (du )?(PRA|p(é|e)rim)' <<<"$_f5_s01_obj"; }
 check_cmd "objectifs.md : périmètre du PRA v1, MédiVisio et Data tranchés, exclusions motivées" _f5_s01_perimetre
+_f5_s01_supervision() { grep -Eqi 'supervision|prometheus|alert' <<<"$_f5_s01_obj" && grep -Eqi 'PAR2|adm02' <<<"$_f5_s01_obj"; }
+check_cmd "objectifs.md : supervision minimale de PAR2 pendant un PRA" _f5_s01_supervision

@@ -48,7 +48,7 @@ Le **Groupement hospitalier Seine-et-Vallées** (GHSV, douze établissements) la
 |---|---|---|
 | Cahier des charges du GHSV | [`ressources/S01/`](ressources/S01/) | S01 |
 | Locataire du client | Capsule `ghsv`, espaces `ghsv-recette`, `ghsv-prod` ; `https://ghsv.apps.par1.medisphere.internal` (et `ghsv-recette.…`) | S07 |
-| IdP du client (simulé) | royaume Keycloak `ghsv-idp` sur `idp01`, courtier d'identité OIDC dans `medisphere` | S08 |
+| IdP du client (simulé) | royaume Keycloak `ghsv-idp` sur `idp01`, courtier d'identité OIDC d'alias `ghsv-idp` dans `medisphere` | S08 |
 | Clés dédiées | `transit/ghsv-*` d'OpenBao | S07 |
 
 Le GHSV et ses personnes sont **fictifs**. Détails figés : [`PLAN.md`](../../PLAN.md) §4.15.

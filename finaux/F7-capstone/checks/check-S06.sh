@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # shellcheck source-path=SCRIPTDIR
 # check-S06.sh — F7-S06 « Planning, risques et organisation du run » (RED publié) : présence et contenu
-# minimal de docs/capstone/planning.md (jalons datés, chemin critique, RACI), risques.md (risques R-nn
+# minimal de docs/capstone/planning.md (jalons datés, chemin critique, RACI), risques.md (risques RSQ-nn
 # évalués, avec propriétaire) et run.md (support, samedi, astreinte, priorités, rapport mensuel, montée
 # en compétences). Lecture seule (GitLab). La qualité se juge avec le corrigé.
 
@@ -36,12 +36,12 @@ fi
 
 check_cmd "risques.md présent sur main" _f7c_doc_present risques.md
 if [[ -n "$_f7_s06_risques" ]]; then
-  check_cmd "risques : au moins $_f7c_min_risques risques R-nn ($(_f7c_nb_ids "$_f7_s06_risques" '(^|[^A-Za-z])R-[0-9]{2}') trouvés)" \
-    _f7c_doc_nb_ids_min risques.md '(^|[^A-Za-z])R-[0-9]{2}' "$_f7c_min_risques"
+  check_cmd "risques : au moins $_f7c_min_risques risques RSQ-nn ($(_f7c_nb_ids "$_f7_s06_risques" "$_F7C_RE_RSQ") trouvés)" \
+    _f7c_doc_nb_ids_min risques.md "$_F7C_RE_RSQ" "$_f7c_min_risques"
   check_cmd "risques : probabilité, impact, propriétaire et réponse décrits" \
     _f7c_doc_contient risques.md 'probabilit' 'impact' 'propri(é|e)taire' '(é|e)viter|r(é|e)duire|transf(é|e)rer|accepter'
   check_cmd "risques : chaque risque porte une cotation chiffrée (cellule de 1 à 4) sur sa ligne" \
-    _f7c_part_liees_min "$_f7_s06_risques" '(^|[^A-Za-z])R-[0-9]{2}' '\|[[:space:]]*[1-4][[:space:]]*\|' 0.8
+    _f7c_part_liees_min "$_f7_s06_risques" "$_F7C_RE_RSQ" '\|[[:space:]]*[1-4][[:space:]]*\|' 0.8
 else
   skip "contenu du registre des risques" "document absent"
 fi

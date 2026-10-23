@@ -118,7 +118,7 @@ Le GHSV est un **petit** client en calcul et en base ; il est **moyen** en stock
 
 ### NF-12 — Intégrité des rendez-vous confirmés (ENF-07, R-11)
 
-Le RPO technique n'est pas nul ; l'engagement porte sur le **résultat** : après une bascule, chaque rendez-vous confirmé dans la fenêtre perdue est **retrouvé** et recréé, ou le patient est **contacté**, sous 24 h. Sources de réconciliation : le DPI (qui a reçu le `201` et garde le rendez-vous), le journal des confirmations envoyées par MédiNotif (MédiAgenda publie un message par création : M27-E08), les journaux d'accès (horodatage des `POST` en `201`, sans donnée de santé). Procédure de réconciliation dans RB-374, le runbook du PRA du client écrit en F7-S10 (ADR-0373). Mesure : rapport de réconciliation de chaque test de PRA (nombre de rendez-vous de la fenêtre, retrouvés, recréés, patients contactés).
+Le RPO technique n'est pas nul ; l'engagement porte sur le **résultat** : après une bascule, chaque rendez-vous confirmé dans la fenêtre perdue est **retrouvé** et recréé, ou le patient est **contacté**, sous 24 h. Sources de réconciliation : le DPI (qui a reçu le `201` et garde le rendez-vous), le journal des confirmations envoyées par MédiNotif (MédiAgenda publie un message par création : M27-E08), les journaux d'accès (horodatage des `POST` en `201`, sans donnée de santé). Principe éprouvé en F7-S10 (`pra-ghsv.md`, `engagements.md`) ; procédure détaillée dans RB-370, le runbook d'exploitation du service GHSV écrit à la notification (ADR-0373). Mesure : rapport de réconciliation de chaque test de PRA (nombre de rendez-vous de la fenêtre, retrouvés, recréés, patients contactés).
 
 ### NF-13 — Test annuel (ENF-08)
 
@@ -135,7 +135,7 @@ Un exercice par an en présence du GHSV (rapport sous 15 jours, format du rappor
 | NF-18 (ESC-06, ERV-04, R-14) | Clés `transit/ghsv-*` d'OpenBao : date de dernière rotation (métadonnées de la clé), rotation automatique ≤ 12 mois ; destruction sur demande : procédure à deux personnes, procès-verbal, preuve que les données et sauvegardes deviennent illisibles (ADR-0371) | à construire (F7-S07) |
 | NF-19 (ESC-07) | TLS ≥ 1.2 partout (1.3 en façade publique, vérifié par la sonde blackbox, `probe_tls_version_info`) ; dans le cluster : PostgreSQL et Valkey déjà en TLS (M27), trafic entre pods à chiffrer (chiffrement transparent de Cilium, à évaluer) | partiel |
 
-MFA des agents : responsabilité du GHSV (R-16) ; notre engagement est de **n'offrir aucun autre moyen d'authentification** aux agents (aucun compte local, aucun mot de passe de secours dans le royaume `medisphere` pour le fournisseur `ghsv`). Vérifiable : liste des utilisateurs liés au fournisseur `ghsv` sans identifiant local.
+MFA des agents : responsabilité du GHSV (R-16) ; notre engagement est de **n'offrir aucun autre moyen d'authentification** aux agents (aucun compte local, aucun mot de passe de secours dans le royaume `medisphere` pour le fournisseur `ghsv-idp`). Vérifiable : liste des utilisateurs liés au fournisseur `ghsv-idp` sans identifiant local.
 
 ## 7. Exploitation et réversibilité (NF-20 à NF-23)
 

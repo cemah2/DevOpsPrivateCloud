@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# archive-audit-verrou — P-AUD-02 (F6-S08) : verrouillage et versionnage du compartiment archive-audit,
+# et présence du manifeste signé de la veille. Identité : ARCHIVE_AWS_ACCESS_KEY_ID /
+# ARCHIVE_AWS_SECRET_ACCESS_KEY (utilisateur RGW archive-audit-lecture, lecture seule).
+# (dans le dépôt : à côté des collecteurs de S02 ; ici, corrigé du F6-S02)
+# shellcheck source=../../../../F6-S02/outils/preuves/collecteurs/_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+exige ARCHIVE_AWS_ACCESS_KEY_ID ARCHIVE_AWS_SECRET_ACCESS_KEY
+RGW="${MS_PREUVES_RGW_URL:-https://rgw.par1.medisphere.internal}"
+B="${ARCHIVE_BUCKET:-archive-audit}"
+a() {
+  AWS_ACCESS_KEY_ID="$ARCHIVE_AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$ARCHIVE_AWS_SECRET_ACCESS_KEY" \
+    aws --endpoint-url "$RGW" "$@"
+}
+hier="$(date -u -d yesterday +%F)"
+v="$(a s3api get-object-lock-configuration --bucket "$B")"
+ver="$(a s3api get-bucket-versioning --bucket "$B")"
+objets="$(a s3api list-objects-v2 --bucket "$B" --prefix "$hier/" --query 'Contents[].{cle: Key, octets: Size, date: LastModified}' --output json)"
+entete_preuve | jq -S --argjson v "$v" --argjson ver "$ver" --argjson o "${objets:-null}" --arg h "$hier" '
+  . + {compartiment: {verrou: $v.ObjectLockConfiguration, versionnage: ($ver.Status // null)},
+       periode: $h, objets: ($o // []),
+       manifeste_signe: (($o // []) | (any(.cle | endswith("/manifeste.json")) and any(.cle | endswith("/manifeste.sig"))))}'
+jq -e '.ObjectLockConfiguration.Rule.DefaultRetention.Mode == "COMPLIANCE"' >/dev/null <<<"$v"

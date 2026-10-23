@@ -5,10 +5,11 @@
 # sinistre). Lancé depuis adm01 : lab/bin/break F5 08. Pannes sur les objets de PAR2 SEULEMENT.
 #
 # Variantes :
-#   1. s3-02 : l'unité systemd qui lance « weed filer.sync » est arrêtée et désactivée (« Karim l'a
-#      coupée pour la montée de SeaweedFS de s3-02 et ne l'a pas relancée ») → plus rien n'arrive de
-#      s3-01 : l'archive de mediagenda-db n'avance plus à PAR2, la réplique de PAR2 prend du retard, le
-#      RPO réel dérive sans bruit ;
+#   1. s3-02 : l'unité systemd qui lance « weed filer.sync » pour l'archive de la base (instance
+#      cnpg-k8s-par1 de l'unité modèle de S04, sinon la première unité filer.sync trouvée) est ARRÊTÉE,
+#      toujours activée (« Karim l'a coupée pour la montée de SeaweedFS de s3-02 et ne l'a pas
+#      relancée ») → l'archive de mediagenda-db n'avance plus à PAR2, la réplique de PAR2 prend du
+#      retard, le RPO réel dérive sans bruit (une unité arrêtée proprement n'est pas « failed ») ;
 #   2. k8s-par2 : le nœud unique k8s-par2-n01 est cordonné (« la maintenance de hp01 du mois dernier »)
 #      et annoté medisphere.internal/panne=F5-S08 → aucun pod nouveau ne se planifie : le démarrage
 #      d'essai des applications de PAR2 reste « Pending » ;
@@ -55,15 +56,16 @@ _s08_prealable() {
 }
 
 panne_S08_v1() {
-  local u
+  local l u
   _s08_prealable || { _S08_REFUS=1; return 1; }
-  u="$(_f5e_filersync_unite)"
+  l="$(_f5p_filersync_unites)" || l=""
+  u="$(grep -m1 'cnpg-k8s-par1' <<<"$l" || true)"
+  [[ -n "$u" ]] || u="$(head -n1 <<<"$l")"
   [[ -n "$u" ]] || return 1
   wb_exec "$_f5e_s302" UNITE="$u" <<'EOF'
-if systemctl is-enabled --quiet "$UNITE"; then echo active > "$WB_DIR/$WB_EX.etait-activee"; fi
 echo "$UNITE" > "$WB_DIR/$WB_EX.unite"
-systemctl disable --now "$UNITE" >/dev/null 2>&1 || exit 1
-journal "$UNITE arrêtée et désactivée"
+systemctl stop "$UNITE" >/dev/null 2>&1 || exit 1
+journal "$UNITE arrêtée (toujours activée)"
 EOF
 }
 
@@ -87,7 +89,7 @@ EOF
 
 verifier_S08() {
   case "$WB_VAR" in
-    1) ! _f5e_p_filersync >/dev/null 2>&1 ;;
+    1) ! _f5p_filersync_ok >/dev/null 2>&1 ;;
     2) _s08_k2 get node "$_F5E_NOEUD_PAR2" -o jsonpath='{.spec.unschedulable}' 2>/dev/null | grep -qx true ;;
     3) remote "$WB_PBS_HOST" "qm config $_F5E_VMID_BAO_PAR2" 2>/dev/null | grep -qx 'lock: backup' ;;
     *) return 1 ;;
@@ -101,10 +103,9 @@ annuler_S08() {
   wb_exec "$_f5e_s302" <<'EOF' >/dev/null 2>&1 || wb_avert "s3-02 : filer.sync à vérifier (systemctl status)"
 [ -f "$WB_DIR/$WB_EX.unite" ] || exit 0
 u="$(cat "$WB_DIR/$WB_EX.unite")"
-if [ -f "$WB_DIR/$WB_EX.etait-activee" ] && ! systemctl is-enabled --quiet "$u"; then systemctl enable "$u" >/dev/null 2>&1; fi
 systemctl is-active --quiet "$u" || systemctl start "$u"
 journal "$u rétablie"
-rm -f -- "${WB_DIR:?}/${WB_EX:?}.unite" "${WB_DIR:?}/${WB_EX:?}.etait-activee"
+rm -f -- "${WB_DIR:?}/${WB_EX:?}.unite"
 EOF
   # Variante 2 : décordonné seulement si le nœud porte encore l'annotation de la panne.
   if [[ -r "$_S08_K2ADMIN" ]] &&

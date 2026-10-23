@@ -42,11 +42,15 @@ else
       jq -e --arg p "$_s11_pod" 'any(.items[]?.endpoints[]?; .targetRef.name? == $p)' >/dev/null 2>&1
   }
   check_cmd "pod suspect $_s11_ns/$_s11_pod : en quarantaine, sorti de son contrôleur, derrière aucun Service (non supprimé)" _s11_isole
-  _s11_service() {
-    kube -n "$_s11_ns" get deployments -o json 2>/dev/null \
-      | jq -e '(.items | length) > 0 and all(.items[]; (.status.availableReplicas // 0) >= (.spec.replicas // 1))' >/dev/null 2>&1
+  _s11_redemarrages() {
+    local avant
+    avant="$(_f6i_etat redemarrages 2>/dev/null || true)"
+    [[ -n "$_s11_p" && -n "$avant" ]] || return 1
+    jq -e --argjson a "$avant" '([.status.containerStatuses[]? | .restartCount] | add // 0) == $a' >/dev/null 2>&1 <<<"$_s11_p"
   }
-  check_cmd "mediagenda-recette rétabli : un pod sain a remplacé le suspect (Deployments disponibles)" _s11_service
+  check_cmd "pod suspect : aucun redémarrage de ses conteneurs depuis l'injection (preuves vivantes intactes)" _s11_redemarrages
+  check_cmd "$_s11_ns rétabli : le Rollout mediagenda est complet et un pod d'API sain, hors quarantaine, sert" \
+    _f6c_recette_api_saine "$_s11_ns"
 fi
 
 # --- Dossier d'incident et escalade -----------------------------------------------------------------

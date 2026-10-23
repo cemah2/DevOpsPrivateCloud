@@ -22,9 +22,9 @@ La plateforme a un Keycloak 26.8 (M24) avec le royaume `medisphere` (personnels 
 
 ## Décision
 
-1. **Agents** : fournisseur d'identité OIDC `ghsv` (courtier d'identité) dans le royaume **`medisphere`**, pointant l'émetteur du GHSV (`https://idp.ghsv.example`, simulé dans le lab par `ghsv-idp`).
+1. **Agents** : fournisseur d'identité OIDC d'alias **`ghsv-idp`** (courtier d'identité) dans le royaume **`medisphere`**, pointant l'émetteur du GHSV (`https://idp.ghsv.example`, simulé dans le lab par le royaume `ghsv-idp` d'`idp01` : même nom pour le royaume simulé et pour l'alias du fournisseur).
    - Premier passage : création automatique d'un utilisateur **lié** (pas de mot de passe, pas d'OTP local, pas de réinitialisation possible), avec un attribut `client=ghsv` ; synchronisation des groupes du GHSV à **chaque** connexion (mappeur de revendication → groupes préfixés `ghsv-…`).
-   - Le fournisseur `ghsv` est le **seul** chemin : les clients de l'interface des agents du GHSV n'acceptent que lui (redirection directe vers le fournisseur, sans formulaire de connexion local) ; contrôle mensuel : aucun utilisateur `client=ghsv` n'a d'identifiant local (ESC-04).
+   - Le fournisseur `ghsv-idp` est le **seul** chemin : les clients de l'interface des agents du GHSV n'acceptent que lui (redirection directe vers le fournisseur, sans formulaire de connexion local) ; contrôle mensuel : aucun utilisateur `client=ghsv` n'a d'identifiant local (ESC-04).
    - Désactivation ≤ 15 min (NF-14) : jetons d'accès de 5 min, sessions limitées à la durée de la session de l'IdP du GHSV, déconnexion par canal arrière si le GHSV la propose.
    - Autorisation : groupes `ghsv-<service>` → périmètre d'agendas dans l'application (EF-04, développement) ; la route « agents » de l'API est protégée (OAuth2 Proxy ou validation du jeton à la Gateway) et n'accepte que des jetons dont l'utilisateur porte `client=ghsv`.
    - MFA : responsabilité du GHSV (R-16), écrite dans le contrat ; nous ne proposons aucun autre moyen d'authentification.
@@ -47,6 +47,7 @@ La plateforme a un Keycloak 26.8 (M24) avec le royaume `medisphere` (personnels 
 - Dimensionnement : le hachage des mots de passe des patients coûte du processeur à chaque connexion : à mesurer (F7-S10), avec limites de débit sur la connexion.
 - L'indisponibilité de l'IdP du GHSV empêche les agents de se connecter : exclue de NF-01, supervisée.
 - Dans le lab : `ghsv-idp` simulé, courtier dans `medisphere`, royaume `ghsv-patients` **non construit** (hors démonstration, écrit comme écart).
+- **Preuve de concept du lab** (F7-S08, F7-S09) : un seul groupe `ghsv-agents`, attribué par le mappeur du fournisseur `ghsv-idp` aux seuls membres du groupe `secretariat-medical` du GHSV (l'API n'a pas de notion de service : les groupes `ghsv-<service>` restent la cible) ; le marquage « utilisateur externe » est le rôle de royaume `client-externe` posé par un mappeur codé en dur (le flux `navigateur-medisphere` sait tester un rôle, pas un attribut) au lieu de l'attribut `client=ghsv` ; DPI en *client credentials* avec secret partagé (`ghsv-dpi`), `private_key_jwt` restant la cible. Ce sont des simplifications de la démonstration, pas des décisions contraires à celle-ci.
 
 ## Révision
 

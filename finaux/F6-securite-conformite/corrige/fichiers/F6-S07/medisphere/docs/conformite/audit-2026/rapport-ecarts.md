@@ -35,7 +35,7 @@ Une question demande une décision de la direction dès cette semaine : des capt
 
 | Écart | Titre | Gravité | Mesures | Fiche |
 |---|---|---|---|---|
-| ECA-3601 | Journaux d'audit centralisés mais non inaltérables ; quatre sources non centralisées | **Majeure** | 8.15, 5.33, 5.28 | [ECA-3601](../ecarts/ECA-3601-journaux-audit.md) |
+| ECA-3601 | Journaux d'audit centralisés mais non inaltérables ; deux sources (GitLab, Proxmox) non centralisées | **Majeure** | 8.15, 5.33, 5.28 | [ECA-3601](../ecarts/ECA-3601-journaux-audit.md) |
 | ECA-3602 | Vulnérabilités sans délai de traitement ; exceptions sans échéance ; couverture incomplète | Mineure | 8.8, 5.36 | [ECA-3602](../ecarts/ECA-3602-vulnerabilites.md) |
 | ECA-3603 | Sauvegardes Velero et exports non chiffrés côté serveur | **Majeure** | 8.13, 8.24 | [ECA-3603](../ecarts/ECA-3603-sauvegardes-chiffrement.md) |
 | ECA-3604 | Revue des accès non périodique ; comptes orphelins | Mineure | 5.18, 6.5 | [ECA-3604](../ecarts/ECA-3604-revue-acces.md) |

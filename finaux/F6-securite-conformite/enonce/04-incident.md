@@ -6,7 +6,7 @@ Prérequis de la phase : F6-S08 et F6-S09 terminés (traçabilité inaltérable 
 
 > **Simulation — à lire avant F6-S11** : l'incident est **entièrement inoffensif**. Le script d'injection ne contient **aucun code malveillant** : il rejoue des commandes ordinaires (un shell, la lecture d'un jeton de compte de service, des variables d'environnement, une connexion sortante) et crée un faux « centre de commande » `c2-simule01` qui ne fait que **journaliser** ce qu'il reçoit. Aucune donnée n'est lue ni envoyée, aucun binaire d'attaque n'existe. Traite-le comme si c'était réel.
 
-> **Rappel — journal et notifications** : chaque geste va dans le dossier d'incident `docs/securite/incidents/INC-6211/` (chronologie horodatée UTC, une ligne `- HH:MM INC-6211 [type] texte` comme la main courante du F3) ; les preuves vont dans `preuves-conformite/INC-6211/` (collecte par la procédure, empreintes recopiées dans la chronologie). Types d'entrée : `[ouverture]`, `[état]`, `[décision]`, `[action]`, `[clôture]`.
+> **Rappel — journal et notifications** : chaque geste va dans le dossier d'incident `docs/securite/incidents/INC-6211/` (chronologie horodatée UTC : une entrée par événement avec son heure, son type et sa source — en lignes `- HH:MM INC-6211 [type] texte` comme la main courante du F3, ou en tableau) ; les preuves vont dans `preuves-conformite/INC-6211/` (collecte par la procédure, empreintes recopiées dans la chronologie). Types d'entrée : `[ouverture]`, `[état]`, `[décision]`, `[action]`, `[clôture]`.
 
 ---
 
@@ -20,25 +20,26 @@ Prérequis de la phase : F6-S08 et F6-S09 terminés (traçabilité inaltérable 
 - Préparer la collecte forensique d'un conteneur (capture de l'état vivant) sans l'avoir improvisée.
 - Conduire un exercice de table (*tabletop*) et en tirer des actions.
 
-**Prérequis** : F6-S01 à F6-S09 ; M26 (RB-262 réponse à incident conteneur, quarantaine réseau, point de contrôle de conteneur, compartiment de preuves), F3 (main courante, format d'incident, bris de glace RB-240), F2/F3 (comptes de bris de glace). F6-S08 (preuves inaltérables).
-**Durée indicative** : 5 à 7 h.
+**Prérequis** : F6-S01 à F6-S09 ; M26 (RB-262 réponse à incident conteneur, quarantaine réseau, point de contrôle de conteneur), M24 (comptes de bris de glace, RB-240), F3 (main courante, format d'incident). F6-S02 et F6-S08 (preuves inaltérables).
+**Durée indicative** : 4 à 6 h.
 
 **Contexte technique**
 - RB-262 (M26) couvre déjà l'isolement, la collecte et l'escalade. Le F6 en tire **deux** runbooks de niveau plateforme : **RB-360** (réponse à incident de sécurité, générique, au-dessus de RB-262) et **RB-361** (forensique d'un conteneur, le détail de la capture). Ne duplique pas RB-262 : référence-le, généralise-le.
 - Kit forensique : ce qu'il faut sous la main (conteneur éphémère d'outils signé et à jour, identité de dépôt des preuves `preuves-conformite` en écriture sans suppression, modèles de chronologie et de manifeste, contacts d'escalade, commandes prêtes). Il doit être **rangé** (un endroit connu) et **vérifié** (les accès marchent, les images existent).
-- Comptes de bris de glace : `admin.conf` de `k8s-par1`, `root@pam` de Proxmox, OpenBao (parts Shamir), Keycloak `kc-secours`, GitLab `root` — éprouvés **en lecture** (RB-240, F3-S01), usage tracé et alerté (audit).
+- Comptes de bris de glace : `admin.conf` de `k8s-par1`, `root@pam` de Proxmox, OpenBao (parts Shamir), Keycloak `kc-secours`, GitLab `root` — éprouvés **en lecture** (RB-240, M24), usage tracé et alerté (l'usage d'`admin.conf` fait sonner `AuditBrisDeGlace`) : un contrôle automatique quotidien ne s'en sert donc pas.
 - Capture d'un conteneur vivant : point de contrôle du kubelet (`ContainerCheckpoint`, KEP-2008, M26) si le runtime le permet (containerd + CRIU), sinon copie du système de fichiers et des journaux. À **confirmer sur le lab** (déjà noté « à confirmer » au M26) : éprouve-le sur un pod d'essai et écris le résultat.
-- Exercice de table : un scénario joué sur table (pas sur le lab) avec l'équipe, chronométré, qui révèle les trous (un accès qui manque, un contact introuvable, une étape ambiguë). Compte rendu dans `docs/securite/incidents/exercices/`.
+- Exercice de table : un scénario joué sur table (pas sur le lab) avec l'équipe, chronométré, qui révèle les trous (un accès qui manque, un contact introuvable, une étape ambiguë).
+- Valeurs figées (lues par le check) : runbooks dans `docs/securite/incidents/runbooks/` (`RB-360-…`, `RB-361-…`) ; comptes rendus dans `docs/securite/incidents/exercices/` ; contrôle du kit `bin/ms-verifier-kit-forensique` de `plateforme/outils` ; identité de dépôt : fichier `s3-preuves-conformite-depot.env` (introduction).
 
 **Travail demandé**
 
 Objectifs :
 1. **RB-360** « Réponse à incident de sécurité » (`docs/securite/incidents/runbooks/RB-360-reponse-incident.md`) : déclenchement, gravités, rôles (responsable, collecte, RSSI, DPO, communication, support), rythme des points, lien vers RB-361 et RB-262, et le volet **réglementaire** (quand on se pose la question CNIL/clients/CERT Santé, et qui décide).
 2. **RB-361** « Forensique d'un conteneur » (`…/runbooks/RB-361-forensique-conteneur.md`) : l'ordre de collecte du plus volatil au plus durable, la capture de l'état vivant (point de contrôle **ou** copie), les empreintes, le dépôt dans `preuves-conformite`, et ce qu'on ne touche pas.
-3. **Kit** rangé et **vérifié** : un script ou un runbook de vérification (`verifier-kit-forensique`) qui contrôle que l'image d'outils existe et est signée, que l'identité de dépôt des preuves écrit (et ne supprime pas), que les modèles sont présents, que les comptes de bris de glace sont lisibles (sans les utiliser en écriture).
+3. **Kit** rangé et **vérifié** : le contrôle `ms-verifier-kit-forensique`, planifié, qui prouve que l'image d'outils existe et est signée, que l'identité de dépôt des preuves écrit (et ne peut pas supprimer ce qu'elle a écrit), que les modèles sont présents ; les comptes de bris de glace s'éprouvent à la main, en lecture, selon RB-240.
 4. **Capture éprouvée** sur un pod d'essai (point de contrôle si disponible, sinon copie), résultat écrit dans RB-361 (« à confirmer » résolu dans un sens ou l'autre).
 5. **Exercice de table** : scénario, déroulé, trous trouvés, actions (responsable, échéance), compte rendu dans `docs/securite/incidents/exercices/2026-exercice-table.md`.
-6. **Fermer ECA-3605** : écart clos avec preuves (`ms-preuves`).
+6. **Fermer ECA-3605** : preuve de clôture au catalogue de `ms-preuves`, fiche close (en-tête : `clos-le`, `preuve:` = un lot déjà déposé).
 
 Contraintes :
 - Les comptes de bris de glace s'éprouvent **en lecture** seulement (RB-240) : un essai en écriture est une modification non tracée.
@@ -49,10 +50,10 @@ Livrables : MR dans `plateforme/medisphere` (runbooks, exercice), `plateforme/ou
 
 **Critères de réussite**
 - [ ] RB-360 et RB-361 sont sur `main`, cohérents avec RB-262, avec rôles, gravités, ordre de collecte et volet réglementaire.
-- [ ] Un contrôle du kit forensique existe et passe : image d'outils signée présente, dépôt des preuves en écriture, modèles présents, bris de glace lisibles.
-- [ ] La capacité de capture d'un conteneur vivant est éprouvée et documentée (point de contrôle ou copie).
+- [ ] `ms-verifier-kit-forensique` est sur `main` de `plateforme/outils`, planifié, et passe : image d'outils signée présente, dépôt des preuves en écriture sans suppression possible, modèles présents.
+- [ ] La capacité de capture d'un conteneur vivant est éprouvée et son résultat écrit dans RB-361 (point de contrôle ou copie).
 - [ ] Le compte rendu de l'exercice de table est sur `main`, avec des actions datées.
-- [ ] `ECA-3605` est clos sur `main` avec sa preuve.
+- [ ] La fiche `ECA-3605` est close sur `main`, avec un lot de preuve antérieur à sa clôture.
 
 **Vérification** : `lab/bin/check F6 10`
 
@@ -63,7 +64,7 @@ Ne réécris pas RB-262 : il contient déjà l'isolement (quarantaine), l'ordre 
 
 <details><summary>Indice 2</summary>
 
-« Prêt » est une propriété **vérifiable**, pas une déclaration. Écris le contrôle qui le prouve : l'image d'outils répond et sa signature est valide (Cosign), l'identité `preuves` écrit un fichier d'essai et échoue à le supprimer, les fichiers de modèle existent, chaque compte de bris de glace répond en lecture. Lance-le à froid : s'il passe au vert sans que rien ne soit prêt, il ne vérifie rien.
+« Prêt » est une propriété **vérifiable**, pas une déclaration. Écris le contrôle qui le prouve : l'image d'outils répond et sa signature est valide, l'identité de dépôt écrit un objet d'essai et échoue à le supprimer (attention : dans un compartiment versionné, que fait une suppression qui ne précise pas de version ?), les fichiers de modèle existent. Lance-le à froid : s'il passe au vert sans que rien ne soit prêt, il ne vérifie rien.
 </details>
 
 **Pour aller plus loin** (facultatif) : une « trousse d'astreinte sécurité » dérivée de celle du F3 ; un deuxième exercice de table joué par une personne qui n'a pas écrit la procédure (le meilleur test de clarté) ; l'intégration du point de contrôle de conteneur dans un pipeline de capture déclenché par une étiquette.
@@ -86,11 +87,11 @@ Ne réécris pas RB-262 : il contient déjà l'isolement (quarantaine), l'ordre 
 **Contexte technique**
 - Espace **`mediagenda-recette`** uniquement (jamais la production). Les données de recette sont fictives ou pseudonymisées (vérifie-le : c'est une pièce de la décision de F6-S13).
 - La politique de cluster `quarantaine` (M26-E33, `plateforme/k8s/composants/reseau/politiques/quarantaine.yaml`) s'applique à tout pod étiqueté `medisphere.internal/quarantaine=oui`. RB-262 et RB-361 décrivent l'ordre des gestes.
-- Le « C2 » est une VM `c2-simule01` (VMID **3601**, VLAN 99 SANDBOX, **10.10.99.66**) **créée par le script d'injection** : elle ne fait que **journaliser** les connexions qu'elle reçoit (horodatage, adresse source). Le script la détruit à l'annulation.
+- Le « C2 » est une VM `c2-simule01` (VMID **3601**, VNet `vsandbox`, VLAN 99, **10.10.99.66**) **créée par le script d'injection** dans le pool `lab` : elle ne fait que **journaliser** les connexions qu'elle reçoit (horodatage, adresse source). Le script la détruit à l'annulation.
 - ⚠️ **Ne supprime pas le pod suspect, ne redémarre pas son conteneur, ne lance rien dedans** avant la fin de la collecte. Ne désactive ni ne modifie Falco/Tetragon pour faire taire l'alerte. Un silence Alertmanager **ciblé et daté** sur le pod une fois isolé est permis (consigne-le).
 - Compartiment de preuves : `preuves-conformite` (verrouillage d'objets, F6-S02/S08), identité de dépôt du kit (écrire et lister, jamais supprimer).
 
-**Injection** : `lab/bin/break F6 11` (2 variantes de vecteur, tirées au hasard ; `--variante N` pour forcer). Temps cible : **60 min** jusqu'au confinement et à l'escalade ; la collecte peut déborder. `lab/bin/break F6 11 --annuler` retire tout ce que le script a créé (y compris `c2-simule01`), sans supprimer le pod suspect (l'éradication est ton geste, F6-S12).
+**Injection** : `lab/bin/break F6 11` (2 variantes de vecteur, tirées au hasard ; `--variante N` pour forcer). Temps cible : **60 min** jusqu'au confinement et à l'escalade ; la collecte peut déborder. Le lab doit être sain (Falco et Tetragon prêts, politique de quarantaine présente, un pod d'API prêt en recette, VMID 3601 libre), sinon l'injection refuse. `lab/bin/break F6 11 --annuler` retire tout ce que le script a créé ou modifié (y compris `c2-simule01`), sans supprimer le pod suspect (l'éradication est ton geste, F6-S12).
 
 **Travail demandé**
 1. Ouvre l'incident **INC-6211** dans `docs/securite/incidents/INC-6211/` ; dans les 15 premières minutes, **qualifie** (RB-360/RB-262) : quel pod, quel espace, quel nœud, quelle image, depuis quand, qui a ouvert le shell (audit de l'API), vers où partent les connexions, un changement annoncé l'explique-t-il ? Écris ta décision (vrai/faux positif) et sa justification.
@@ -108,12 +109,12 @@ Ne réécris pas RB-262 : il contient déjà l'isolement (quarantaine), l'ordre 
 
 <details><summary>Indice 1</summary>
 
-Trois sources, trois questions. Falco dit **ce qui** a été lancé (shell, lecture de jeton, connexion) ; le journal d'audit de l'API (locataire `audit` de Loki, `{job="kubernetes-audit"} | objectRef_subresource="exec"`) dit **qui** l'a demandé et avec quelle identité ; Tetragon et Hubble disent **où** les paquets sont allés et s'ils ont été jetés ou non. L'identité qui a fait l'`exec` est l'indice du vecteur.
+Trois sources, trois questions. Falco dit **ce qui** a été lancé (shell, lecture de jeton, connexion) ; le journal d'audit de l'API (locataire `audit`, `{job="kubernetes-audit"}`) dit **qui** a appelé l'API, avec quelle identité, quel outil (`userAgent`) et depuis où ; Tetragon et Hubble disent **où** les paquets sont allés et s'ils ont été jetés ou non. Une identité de compte de service qui appelle l'API depuis l'extérieur du cluster est un indice.
 </details>
 
 <details><summary>Indice 2</summary>
 
-Deux vecteurs possibles, qui changent la **portée**, pas les gestes de confinement : soit une identité de l'API a servi à entrer (un jeton de compte de service utilisé par `kubectl exec`), soit une **règle réseau trop large** (ajoutée par une vieille MR) a laissé la connexion sortante atteindre sa cible. Hubble te dit tout de suite laquelle : la connexion vers le C2 est-elle `DROPPED` (refus par défaut tenu) ou `FORWARDED` (une politique l'autorise) ? La réponse oriente l'enquête de F6-S12.
+Deux vecteurs possibles, qui changent la **portée**, pas les gestes de confinement : soit un jeton de compte de service a fuité et sert contre l'API, soit des **règles de sortie trop larges** (une vieille MR oubliée) ont laissé la connexion atteindre sa cible. Hubble te dit vite laquelle : la connexion vers le C2 est-elle `DROPPED` (refus par défaut tenu) ou `FORWARDED` (une politique l'autorise) ? Et si elle est autorisée dans le cluster, qu'est-ce qui la laisse passer ensuite ? La réponse oriente l'enquête de F6-S12.
 </details>
 
 <details><summary>Indice 3</summary>
@@ -139,25 +140,25 @@ Confiner sans détruire : étiquette de quarantaine d'abord (la politique posée
 **Durée indicative** : 3 à 4 h.
 
 **Contexte technique**
-- Sources pour la chronologie : locataire `audit` de Loki (`{job="kubernetes-audit"}`, `exec`, lectures, créations), événements Falco et Tetragon (`{service=~"falco|tetragon"}`), flux Hubble (`hubble observe --pod mediagenda-recette/<pod>`), et les **journaux du C2** `c2-simule01` (ce qu'il a reçu : adresses source, horodatages) — lisibles sur la VM tant que l'injection n'est pas annulée.
+- Sources pour la chronologie : journal d'audit de l'API (locataire `audit`, `{job="kubernetes-audit"}`), événements Falco (locataire `audit`, envoyés par falcosidekick, M26) et Tetragon, flux Hubble, journaux de la bordure, et les **journaux du C2** `c2-simule01` (`/var/log/c2-simule.log` : ce qu'il a reçu, adresses source, horodatages) — lisibles sur la VM tant que l'injection n'est pas annulée.
 - Portée : le pod suspect avait-il un jeton de compte de service monté ? quels droits ? quels Secrets montés (quelles valeurs OpenBao) ? la connexion sortante a-t-elle **abouti** (Hubble : `FORWARDED`/`DROPPED`, journaux du C2) ? d'autres pods de la même image, du même compte ?
-- Éradication : supprimer le pod suspect **après** la collecte et l'accord de la RSSI ; corriger la **cause** (selon le vecteur : révoquer/renouveler le jeton de compte de service et le compte lui-même, ou retirer la règle réseau trop large et la remplacer par la bonne) ; tourner dans OpenBao ce que le pod a pu voir.
+- Éradication : supprimer le pod suspect **après** la collecte et l'accord de la RSSI ; corriger la **cause** (selon le vecteur observé) et pas seulement le symptôme ; tourner dans OpenBao ce que le pod a pu voir.
 - Retour : vérifier que le pod sain tourne, qu'aucune nouvelle alerte ne revient, que la connexion vers le C2 ne part plus.
 
 **Travail demandé**
 1. **Chronologie** (`INC-6211/chronologie.md`) : de la première trace à l'isolement, chaque événement daté (UTC), sourcé (quelle source le prouve), avec les empreintes des preuves dans `preuves-conformite/INC-6211/`.
 2. **Portée** : écris ce qui est **établi** (jeton lu, connexion tentée/aboutie, données accessibles) et ce qui **ne l'est pas** (données effectivement lues ou sorties). Appuie-toi sur Hubble et les journaux du C2 pour trancher l'aboutissement.
-3. **Éradication de la cause** (pas du symptôme) : traite le vecteur réellement observé (jeton de compte de service, ou règle réseau trop large). Supprime le pod suspect après la collecte.
+3. **Éradication de la cause** (pas du symptôme) : traite le vecteur réellement observé, partout où il existe (cluster, bordure, code). Supprime le pod suspect après la collecte.
 4. **Rotation des secrets exposés** : tout ce que le pod a pu lire (jeton de compte de service, Secrets montés, identifiants OpenBao) est renouvelé ; écris ce qui a été tourné et pourquoi.
 5. **Retour en service** : la recette tourne proprement, plus de connexion vers le C2, plus d'alerte ; consigne-le.
-6. Quand tout est propre, l'injection peut être annulée (`lab/bin/break F6 11 --annuler`), ce qui détruit `c2-simule01` : relève d'abord ses journaux comme preuve.
+6. Quand tout est propre, **annule** l'injection (`lab/bin/break F6 11 --annuler`) : elle détruit `c2-simule01` et retire ce qu'elle a posé et que tu n'aurais pas déjà retiré. Relève d'abord les journaux du C2 comme preuve.
 
 **Critères de réussite**
 - [ ] `INC-6211/chronologie.md` est sur `main` : événements datés, sourcés, avec les empreintes des preuves.
 - [ ] La portée distingue l'établi du non établi, et tranche l'aboutissement de la connexion sortante (Hubble / journaux du C2).
-- [ ] La cause du vecteur observé est éradiquée (jeton/compte renouvelé, ou règle réseau corrigée par MR) ; le pod suspect est supprimé après collecte.
+- [ ] La cause du vecteur observé est éradiquée (jeton et compte renouvelés, ou règles de sortie trop larges retirées du cluster **et** de la bordure) ; le pod suspect est supprimé après collecte.
 - [ ] Les secrets exposés sont tournés (trace OpenBao / nouveaux identifiants).
-- [ ] La recette tourne, aucune connexion vers `c2-simule01`, aucune alerte Falco active sur l'espace ; consigné dans la chronologie.
+- [ ] La recette tourne (Rollout complet), aucune alerte Falco active sur l'espace, l'injection est annulée (`c2-simule01` détruite après relevé de ses journaux) ; consigné dans la chronologie.
 
 **Vérification** : `lab/bin/check F6 12`
 
@@ -168,7 +169,7 @@ L'archive d'audit inaltérable de F6-S08 est faite pour ce moment : la chronolog
 
 <details><summary>Indice 2</summary>
 
-« Éradiquer la cause » dépend du vecteur de F6-S11. Si c'est un jeton de compte de service, le supprimer ne suffit pas : il faut **renouveler le compte de service** (nouveau jeton) et révoquer ce qu'il ouvrait (OpenBao : nouveaux identifiants, révocation des baux du moteur `database`). Si c'est une règle réseau trop large, la retirer par MR et vérifier que le refus par défaut est de nouveau tenu (Hubble : la connexion vers le C2 repasse `DROPPED`).
+« Éradiquer la cause » dépend du vecteur de F6-S11. Un jeton lié ne se révoque pas un par un : qu'est-ce qui invalide **tous** les jetons d'un compte de service ? Et que pouvait-il ouvrir ailleurs (OpenBao, baux du moteur `database`) ? Si c'est une sortie trop large, cherche **chaque** couche qui l'a laissée passer, retire-les par le bon chemin, et vérifie que le refus par défaut est de nouveau tenu.
 </details>
 
 **Pour aller plus loin** (facultatif) : une règle de détection nouvelle issue de l'incident (Falco/Tetragon) ; un contrôle de dérive qui aurait vu la règle réseau trop large avant l'incident ; le retrait de la capacité d'`exec` humain hors bris de glace sur la recette aussi (comme la production, `prod-gestes-interactifs` du F3).
@@ -186,7 +187,7 @@ L'archive d'audit inaltérable de F6-S08 est faite pour ce moment : la chronolog
 - Écrire un post-mortem qui cherche des mécanismes, avec des actions datées.
 
 **Prérequis** : F6-S11 et F6-S12 terminés (chronologie, portée établie) ; [`annexes/versions-finaux-F5-F7.md`](../../../annexes/versions-finaux-F5-F7.md) (cadre réglementaire), RB-360.
-**Durée indicative** : 3 à 4 h.
+**Durée indicative** : 2 h 30 à 3 h 30.
 
 **Contexte technique**
 - La décision se prend **sur les preuves de F6-S12** : données de recette fictives ou pseudonymisées ? accès à la production ? jeton/Secrets exposés donnant accès à des données réelles ? connexion sortante aboutie et données sorties, ou refusée ?
@@ -227,10 +228,3 @@ Trois régimes distincts, trois destinataires : la **CNIL** (RGPD, si violation 
 
 **Pour aller plus loin** (facultatif) : un modèle de notification CNIL réutilisable (champs du téléservice) ; un arbre de décision « faut-il notifier ? » versionné dans `docs/conformite/` ; la place de ce post-mortem dans la revue de suivi (F6-S14).
 
----
-
-## Points non testés en conditions réelles (phase 4)
-
-- Point de contrôle de conteneur (`ContainerCheckpoint`) : dépend du runtime (containerd + CRIU) ; déjà « à confirmer sur le lab » au M26 — F6-S10 le tranche dans un sens ou l'autre et l'écrit.
-- Interception de l'`exec` par une politique sur la recette : le F3 l'a mise en production (`prod-gestes-interactifs`) ; sur la recette, à décider en F6-S12 (« pour aller plus loin »).
-- Textes réglementaires : les délais RGPD sont établis ; le signalement CERT Santé (art. L.1111-8-2) est marqué « à vérifier sur Légifrance » dans l'annexe.

@@ -1,8 +1,9 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2016  # filtres jq et commandes distantes entre apostrophes
-# _f5-par2.sh — fonctions partagées par les vérifications du final F5 (PRA multi-site), phases 1 à 4
-# (check-S01 à check-S14). Sourcé, jamais lancé seul. Préfixe _f5p_ (évite les collisions si un check
-# charge plusieurs fichiers de fonctions).
+# _f5-par2.sh — fonctions de BASE partagées par toutes les vérifications du final F5 (PRA multi-site),
+# check-S01 à check-S14, et par les pannes (via _f5-exercice.sh, qui le source). Sourcé, jamais lancé
+# seul. Préfixe _f5p_. Une seule implémentation par fonction : _f5-exercice.sh (préfixe _f5e_) n'ajoute
+# que ce qui est propre à l'exercice (T0, sonde, main courante, état « PAR2 prêt »).
 #
 # LECTURE SEULE : GitLab en GET (jeton des checks), miroirs Git de adm02 en lecture (git show), SSH en
 # lecture vers hp01 (root : qm, pvesh, pvesm, ip, nft, proxmox-backup-manager en consultation) et vers
@@ -23,6 +24,8 @@
 #   WB_F5_MIROIRS            dossier des miroirs sur adm02 (défaut /srv/miroirs)
 #   WB_F5_HP01               hôte SSH de hp01, compte root (défaut : WB_PBS_HOST, sinon pbs01)
 #   WB_F5_ADM02              hôte SSH de adm02, compte admin (défaut adm02.par2.medisphere.internal)
+#   WB_F5_S3_02_HOTE         hôte SSH de s3-02, compte admin (défaut s3-02.par2.medisphere.internal)
+#   WB_F5_DNS03_HOTE         hôte SSH de dns03, compte admin (défaut dns03.par2.medisphere.internal)
 #   WB_F5_DNS01, WB_F5_DNS03 adresses de dns01 et dns03 (défaut 10.10.20.10 et 10.20.20.11) ; les checks
 #                            interrogent leurs RÉCURSEURS (port 53) : les autoritaires (5300) ne sont pas
 #                            ouverts à MGMT
@@ -61,11 +64,17 @@
 #                                            n'est pas un champ : voir _f5p_vm_pool)
 #   _f5p_vm_etat VMID                       affiche running | stopped | absente | injoignable (hp01 muet)
 #   _f5p_vm_pool VMID                       affiche le pool Proxmox de la VM (vide si aucun)
-#   _f5p_ssh HÔTE COMMANDE                  exécute COMMANDE sur une VM de PAR2 en admin (ou HÔTE complet
+#   _f5p_sur HÔTE COMMANDE                  comme « remote », mais exécution LOCALE si le nom court de HÔTE
+#                                            (sans « compte@ » ni domaine) est la machine courante (checks
+#                                            lancés sur adm02 pendant le PRA)
+#   _f5p_ssh HÔTE COMMANDE                  _f5p_sur vers une VM de PAR2 en admin (ou HÔTE complet
 #                                            user@hôte) ; renvoie son code
 #   _f5p_adm02 COMMANDE                     raccourci de _f5p_ssh vers WB_F5_ADM02
 #   _f5p_unite_active HÔTE MOTIF            une unité systemd (service ou timer) dont le nom contient MOTIF
 #                                            est active sur HÔTE
+#   _f5p_filersync_unites                   unités de s3-02 qui lancent « weed filer.sync » (unités simples,
+#                                            et instances activées ou chargées d'une unité modèle « @ »)
+#   _f5p_filersync_ok                       au moins une telle unité, et toutes actives (message sinon)
 # DNS
 #   _f5p_soa ZONE SERVEUR [PORT=53]         affiche le numéro de série SOA de ZONE servi par SERVEUR
 #   _f5p_dig NOM TYPE SERVEUR [PORT=53]     affiche la réponse courte (+noall +answer) sans les commentaires
@@ -96,6 +105,8 @@ _f5p_source="${WB_F5_SOURCE_DOC:-gitlab}"
 _f5p_miroirs="${WB_F5_MIROIRS:-/srv/miroirs}"
 _f5p_hp01_hote="${WB_F5_HP01:-${WB_PBS_HOST:-pbs01}}"
 _f5p_adm02_hote="${WB_F5_ADM02:-adm02.par2.medisphere.internal}"
+_f5p_s302_hote="${WB_F5_S3_02_HOTE:-s3-02.par2.medisphere.internal}"
+_f5p_dns03_hote="${WB_F5_DNS03_HOTE:-dns03.par2.medisphere.internal}"
 _f5p_dns01="${WB_F5_DNS01:-10.10.20.10}"
 _f5p_dns03="${WB_F5_DNS03:-10.20.20.11}"
 _f5p_s3_url="${WB_F5_S3_URL:-https://s3-02.par2.medisphere.internal:8333}"
@@ -128,16 +139,16 @@ _f5p_fichier() {
   fi
 }
 
-# _f5p_arbre PROJET DOSSIER — chemins des fichiers sous DOSSIER (récursif), un par ligne.
+# _f5p_arbre PROJET [DOSSIER] — chemins des fichiers sous DOSSIER (tout le dépôt si vide), un par ligne.
 _f5p_arbre() {
   local projet="$1" dossier="$2" p page=1 r
   if [[ "$_f5p_source" == "miroir" ]]; then
-    _f5p_adm02 "git --git-dir='$_f5p_miroirs/$projet.git' ls-tree -r --name-only main -- '$dossier'" 2>/dev/null || true
+    _f5p_adm02 "git --git-dir='$_f5p_miroirs/$projet.git' ls-tree -r --name-only main -- ${dossier:+'$dossier'}" 2>/dev/null || true
     return 0
   fi
   p="$(_f5p_enc "$projet")"
   while ((page <= 10)); do
-    r="$(gitlab_api "projects/$p/repository/tree?ref=main&recursive=true&per_page=100&page=$page&path=$(_f5p_enc "$dossier")" 2>/dev/null)" || return 0
+    r="$(gitlab_api "projects/$p/repository/tree?ref=main&recursive=true&per_page=100&page=$page${dossier:+&path=$(_f5p_enc "$dossier")}" 2>/dev/null)" || return 0
     jq -r '.[]? | select(.type == "blob") | .path' <<<"$r"
     (($(jq 'length' <<<"$r" 2>/dev/null || echo 0) < 100)) && return 0
     page=$((page + 1))
@@ -160,9 +171,10 @@ _f5p_doc() {
   _f5p_contient "$_f5p_projet_doc" "$_f5p_doc_dir/$chemin" "$@"
 }
 
-# _f5p_doc_motif DOSSIER MOTIF_NOM REGEX…
+# _f5p_doc_motif DOSSIER MOTIF_NOM REGEX… — DOSSIER relatif à WB_F5_DOC (« . » : WB_F5_DOC lui-même).
 _f5p_doc_motif() {
   local d="$_f5p_doc_dir/$1" motif="$2" f
+  [[ -z "$1" || "$1" == . ]] && d="$_f5p_doc_dir"
   shift 2
   while IFS= read -r f; do
     [[ -n "$f" && "${f##*/}" =~ $motif ]] || continue
@@ -207,11 +219,21 @@ _f5p_vm_pool() {
     | jq -r --argjson id "$1" '.[] | select(.vmid == $id) | .pool // empty'
 }
 
+_f5p_sur() {
+  local court="${1#*@}"
+  court="${court%%.*}"
+  if [[ "$court" == "$(hostname -s)" || "$court" == localhost ]]; then
+    bash -c "$2"
+    return
+  fi
+  remote "$1" "$2"
+}
+
 _f5p_ssh() {
   local h="$1"
   shift
   [[ "$h" == *@* ]] || h="admin@$h"
-  remote "$h" "$@"
+  _f5p_sur "$h" "$*"
 }
 
 _f5p_adm02() { _f5p_ssh "$_f5p_adm02_hote" "$@"; }
@@ -219,6 +241,34 @@ _f5p_adm02() { _f5p_ssh "$_f5p_adm02_hote" "$@"; }
 _f5p_unite_active() {
   _f5p_ssh "$1" "systemctl list-units --type=service,timer --state=active --no-legend --plain 2>/dev/null" \
     | awk '{ print $1 }' | grep -q -- "$2"
+}
+
+# Unités de s3-02 qui lancent « weed filer.sync ». Une unité modèle (S04 : seaweedfs-filer-sync@.service,
+# une instance par compartiment) n'est pas lançable elle-même : on liste ses INSTANCES activées (liens
+# *.wants) ou chargées. Une instance arrêtée mais toujours activée reste listée (et donc vue inactive).
+_f5p_filersync_unites() {
+  _f5p_ssh "$_f5p_s302_hote" 'for f in /etc/systemd/system/*.service; do
+      grep -qs "filer.sync" "$f" || continue
+      b=${f##*/}
+      case "$b" in
+        *@.service)
+          p=${b%.service}
+          find /etc/systemd/system -path "*.wants/*" -name "${p}?*.service" -printf "%f\n" 2>/dev/null
+          systemctl list-units --all --type=service --no-legend --plain "${p}*" 2>/dev/null | awk "{ print \$1 }" ;;
+        *) echo "$b" ;;
+      esac
+    done | sort -u' 2>/dev/null
+}
+
+_f5p_filersync_ok() {
+  local u l ko=0
+  l="$(_f5p_filersync_unites)" || l=""
+  [[ -n "$l" ]] || { echo "aucune unité systemd de s3-02 ne lance weed filer.sync"; return 1; }
+  while IFS= read -r u; do
+    [[ -n "$u" ]] || continue
+    _f5p_ssh "$_f5p_s302_hote" "systemctl is-active --quiet '$u'" 2>/dev/null || { echo "s3-02 : $u n'est pas actif"; ko=1; }
+  done <<<"$l"
+  return "$ko"
 }
 
 # --- DNS --------------------------------------------------------------------------------------------

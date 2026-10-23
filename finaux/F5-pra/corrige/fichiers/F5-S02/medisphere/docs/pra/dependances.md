@@ -65,7 +65,7 @@ Chaque vague a une condition de passage **observable**. Les temps de référence
 | **3. Données** | promotion de `mediagenda-db-par2` ; relevé du dernier témoin (RPO) ; restauration de la base de Legacy-RDV (sauvegarde du jour) et de ses pièces jointes (Velero) | `kubectl cnpg status` : primaire ; témoin lu et noté ; `SELECT count(*)` de contrôle | 30 min (MédiAgenda), + 1 h (Legacy-RDV) |
 | **4. Applications** | MédiAgenda (migrations, API), puis MédiNotif (RabbitMQ, worker), MédiDoc, Legacy-RDV : réplicas > 0 par Argo CD de `k8s-par2` | `/pret` 200 sur `….apps.par2…` ; une création de rendez-vous en direct sur `mediagenda.apps.par2…` | 30 min |
 | **5. Noms** | CNAME globaux vers `….apps.par2.medisphere.internal` sur `dns03` ; vidage des caches des récurseurs | sonde `ms-sonde-pra` : création réussie par le nom global, `X-MediSphere-Site: par2` → **T reprise** | 10 min (+ TTL 60 s) |
-| **6. Mode dégradé** | rejeu des rappels du jour ; communication aux cabinets ; surveillance minimale | messages d'état envoyés ; rappels partis | — |
+| **6. Mode dégradé** | supervision minimale de PAR2 mise en service (`objectifs.md` §4) ; rejeu des rappels du jour ; communication aux cabinets ; sauvegardes de ce qui tourne à PAR2 | alertes reçues dans Mailpit de secours ; messages d'état envoyés ; rappels partis | — |
 
 Chemin critique (MédiAgenda) : vagues 0 → 1 → 2 → 3 → 4 → 5 ≈ **2 h 30** de référence, sous le RTO de 4 h avec ≈ 1 h 30 de marge pour la décision et les imprévus.
 
@@ -77,7 +77,7 @@ Chemin critique (MédiAgenda) : vagues 0 → 1 → 2 → 3 → 4 → 5 ≈ **2 h
 | SSO (Keycloak, FreeIPA), certificats SSH de 16 h | comptes de bris de glace | toute la durée, avec revue des accès au retour |
 | Certificats ACME des VMs de PAR2 | plus de renouvellement | **15 jours** (puis émission manuelle par l'intermédiaire PAR2) |
 | DNSSEC de `par1` | signatures non renouvelées | ≈ 2 semaines |
-| Observabilité, alertes par courriel | sonde de `adm02`, contrôle humain par vacations | jours ; au-delà, déployer un Prometheus minimal à PAR2 |
+| Observabilité, alertes par courriel | sonde de `adm02` ; supervision minimale (Prometheus, Alertmanager, Mailpit de secours sur `adm02`) mise en service en vague 6 ; contrôle humain par vacations en attendant | jours (pas de journaux centralisés, pas de tableaux de bord) |
 | Sauvegardes de ce qui tourne à PAR2 | la base de PAR2 archive dans `cnpg-k8s-par2` (`s3-02`), **sur la même machine** que tout le reste ; pas de copie hors site | jours : au-delà, exporter vers un support externe (RB-350, annexe) |
 | Haute disponibilité | aucune (un nœud, une instance de base) | le temps du PRA |
 

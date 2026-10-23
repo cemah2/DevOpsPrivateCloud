@@ -38,5 +38,5 @@ Le GHSV est repris **avec** MédiAgenda, dans l'ordre du RB-350 (même cellule d
 
 ## 4. Écarts et risques
 
-1. **Identité à PAR2** : sans Keycloak à PAR2, ni les agents ni le DPI ne s'authentifient → RTO non tenu pour l'accès authentifié. Le PRA v1 du F5 l'a mis hors périmètre ; le GHSV l'exige. Traitement proposé : instance Keycloak de secours à PAR2 (restaurée depuis PBS, comme `kms01`) dans le RB-350, à chiffrer en phase 2 (risque R-nn de `risques.md`).
+1. **Identité à PAR2** : sans Keycloak à PAR2, ni les agents ni le DPI ne s'authentifient → RTO non tenu pour l'accès authentifié. Le PRA v1 du F5 l'a mis hors périmètre ; le GHSV l'exige. Traitement proposé : instance Keycloak de secours à PAR2 (restaurée depuis PBS, comme `kms01`) dans le RB-350, prévue par l'architecture cible (§4, ADR-0372) et chiffrée en phase 2 ; risque RSQ-17 de `risques.md`.
 2. Test annuel en présence du GHSV (ENF-08) : l'essai isolé ne remplace pas l'exercice complet du F5 ; calendrier dans `docs/pra/calendrier-tests.md`.

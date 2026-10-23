@@ -88,6 +88,53 @@ resource "keycloak_openid_client" "ghsv_api" {
   }
 }
 
-# Démonstration et journée de jeu : un second client « ghsv-dpi-demo » (même réglages) sert à la
-# charge k6 (F7-S11), pour ne jamais partager le secret remis au GHSV. Identique à ghsv_dpi, à créer
-# par copie de ces trois ressources si tu outilles la charge du DPI.
+# Clients techniques de MédiSphère, mêmes réglages que ghsv-dpi, pour ne jamais partager le secret
+# remis au GHSV :
+#   - ghsv-dpi-demo : charge de démonstration et journée de jeu (F7-S11), deux portées ;
+#   - ghsv-sonde    : sonde authentifiée de mon01 (F7-S10), lecture seule.
+# Secrets dans OpenBao (kv/ghsv/prod/dpi-demo, Ansible Vault de mon01 pour la sonde), jamais dans Git.
+locals {
+  ghsv_clients_techniques = {
+    "ghsv-dpi-demo" = {
+      nom     = "GHSV — DPI de démonstration (charge k6, F7-S11)"
+      portees = [keycloak_openid_client_scope.rdv_lecture.name, keycloak_openid_client_scope.rdv_ecriture.name]
+    }
+    "ghsv-sonde" = {
+      nom     = "GHSV — sonde authentifiée de mon01 (F7-S10)"
+      portees = [keycloak_openid_client_scope.rdv_lecture.name]
+    }
+  }
+}
+
+resource "keycloak_openid_client" "ghsv_technique" {
+  for_each    = local.ghsv_clients_techniques
+  realm_id    = keycloak_realm.medisphere.id
+  client_id   = each.key
+  name        = each.value.nom
+  access_type = "CONFIDENTIAL"
+
+  standard_flow_enabled        = false
+  implicit_flow_enabled        = false
+  direct_access_grants_enabled = false
+  service_accounts_enabled     = true
+
+  full_scope_allowed    = false
+  access_token_lifespan = "300"
+}
+
+resource "keycloak_openid_client_default_scopes" "ghsv_technique" {
+  for_each       = local.ghsv_clients_techniques
+  realm_id       = keycloak_realm.medisphere.id
+  client_id      = keycloak_openid_client.ghsv_technique[each.key].id
+  default_scopes = concat(["basic"], each.value.portees)
+}
+
+resource "keycloak_openid_audience_protocol_mapper" "ghsv_technique_audience" {
+  for_each                 = local.ghsv_clients_techniques
+  realm_id                 = keycloak_realm.medisphere.id
+  client_id                = keycloak_openid_client.ghsv_technique[each.key].id
+  name                     = "audience-ghsv-api"
+  included_custom_audience = "ghsv-api"
+  add_to_access_token      = true
+  add_to_id_token          = false
+}
