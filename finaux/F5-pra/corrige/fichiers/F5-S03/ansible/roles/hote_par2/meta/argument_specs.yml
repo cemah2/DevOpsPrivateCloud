@@ -3,6 +3,10 @@ argument_specs:
   main:
     short_description: hp01 hyperviseur de PAR2 à côté de PBS (F5-S03)
     options:
+      hote_par2_interface_lan:
+        type: str
+        required: true
+        description: Carte LAN de hp01 qui porte la route par défaut (ex. eno1 ; pas de vmbr0 sur hp01).
       hote_par2_lan_maison:
         type: str
         required: true

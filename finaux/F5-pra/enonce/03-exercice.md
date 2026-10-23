@@ -37,7 +37,7 @@ Prérequis de la phase : phases 1 et 2 terminées (`lab/bin/check F5 3` à `lab/
 **Critères de réussite**
 - [ ] `s3-02` réplique de nouveau depuis `s3-01` (unités `filer.sync` actives).
 - [ ] Le nœud `k8s-par2-n01` est `Ready` et planifiable.
-- [ ] La VM 1055 (`bao-par2`) ne porte aucun verrou et est arrêtée (veille).
+- [ ] La VM 1055 (`bao-par2`) ne porte aucun verrou et est arrêtée (veille) ; la VM 3501 n'existe plus.
 - [ ] `mediagenda-db-par2` est une réplique saine ; dns03 et reg02 répondent.
 - [ ] `repetition.md` est sur `main` avec INC-6108, la cause, la réparation et la prévention.
 
@@ -78,7 +78,8 @@ Après la réparation, demande-toi pourquoi aucune alerte n'a sonné : le retard
 
 **Contexte technique**
 - Le sinistre est **simulé par isolement** : `lab/bin/break F5 9`, lancé depuis `adm01` par la personne qui joue « le destin » (toi, si tu es seul : lance-le à une heure tirée au hasard). La bordure de PAR1 coupe la liaison `wg0` vers PAR2, le VPN `wg1` de PAR1 et les accès au lab depuis le LAN (sauf `pve01`). **Aucune VM de PAR1 n'est arrêtée** : PAR1 continue de tourner, seul, sans que personne le voie.
-- Le contrôle préalable refuse l'injection si PAR2 n'est pas prêt, si le témoin ne tourne pas, si la sonde `ms-sonde-pra` est arrêtée, si `wg1` de `hp01` manque, ou si `pve01` ne joint pas `gw01` **et** `gw02` (l'annulation, en S12, se fait depuis `pve01`).
+- Le contrôle préalable refuse l'injection si PAR2 n'est pas prêt, si le témoin ne tourne pas, si la sonde `ms-sonde-pra` est arrêtée, si `wg1` de `hp01` manque, ou si `pve01` ne joint pas `gw01` **et** `gw02` (SSH avec `sudo -n`) et `adm01` (SSH), ou n'a pas `jq` : l'annulation, en S12, se fait depuis `pve01`.
+- La coupure **résiste à un rechargement du pare-feu** des passerelles (`systemctl reload nftables`, rôle `pare_feu`, retour arrière automatique) : elle est reposée dans les secondes qui suivent. Pendant toute la phase, ne rejoue de toute façon aucun rôle Ansible sur `gw01`/`gw02`.
 - **Règle du jeu** : à partir de T0, PAR1 n'existe plus. Ni VPN de PAR1, ni `adm01`, ni `pve01` (« il est dans la salle »). Seule exception : une urgence réelle du lab, décidée par écrit dans la main courante avec l'accord de Sophie — et l'exercice est alors noté comme interrompu.
 - T0 est écrit par l'injection dans `/var/lib/workbook/f5-t0` de `adm02` et de `gw01` (et dans la main courante de ton clone de travail, s'il existe). C'est l'heure de référence du RTO et du RPO.
 - **Mesures** : la sonde `ms-sonde-pra` de `adm02` écrit toutes les 15 s `horodatage_utc,cible,code_http,latence_ms,site` dans `/var/lib/ms-sonde-pra/mesures.csv`. RTO d'une application = première réponse 2xx servie par `par2` sur son nom global − T0. RPO de MédiAgenda = horodatage du dernier témoin `PRA-TEMOIN` écrit à PAR1 avant T0 − horodatage du dernier témoin retrouvé à PAR2.

@@ -8,13 +8,17 @@
 #     « flush ruleset » effacerait les règles des autres) ;
 #   - VPN de secours wg1 ;
 #   - chrony : sert PAR2 INFRA, garde une source hors de PAR1.
-# Il ne touche JAMAIS : /etc/proxmox-backup, le datastore ds-lab, vmbr0, vmbr1, wg0.
+# Il ne touche JAMAIS : /etc/proxmox-backup, le datastore ds-lab, l'interface LAN de hp01, vmbr1, wg0,
+# ni /etc/nftables.conf (pare-feu de l'hôte, M00-E21, tenu à la main : ses ajouts F5 sont dans RB-353 §6,
+# le rôle se contente de VÉRIFIER qu'ils sont là).
 
 hote_par2_noeud: pbs01
 hote_par2_pont: vmbr2
 hote_par2_adresse: 10.20.20.1/24
 hote_par2_reseau: 10.20.20.0/24
-hote_par2_interface_lan: vmbr0
+# Interface LAN de hp01 (sortie Internet de PAR2 INFRA) : la carte physique qui porte <IP-HP01-LAN>
+# (M00-E20 : pas de pont vmbr0 sur hp01). Obligatoire, sans défaut : à lire sur hp01 (ip route get 1.1.1.1).
+hote_par2_interface_lan: ""
 hote_par2_lan_maison: ""
 hote_par2_interface_s2s: wg0
 

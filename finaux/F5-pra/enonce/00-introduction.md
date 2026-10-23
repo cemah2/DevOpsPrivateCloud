@@ -90,7 +90,7 @@ Si F3 ou F4 n'ont pas été faits, rien ne manque à F5 : ils ne changent que de
 
 ## ⚠️ Les règles du final
 
-1. **`hp01` porte toutes les sauvegardes du lab.** Le datastore `ds-lab`, la configuration de PBS (`/etc/proxmox-backup`), le réseau existant de l'hôte (`vmbr0`, `vmbr1`, `wg0`) et ses tâches de sauvegarde ne doivent **jamais** être perdus ni modifiés sans retour arrière **écrit et vérifié**. Pas de reformatage, pas de réinstallation, pas de nouveau RAID, pas de « je nettoie les vieux instantanés pour faire de la place ». Avant tout changement sur `hp01` : une sauvegarde de sa configuration, vérifiée, **hors de `hp01`**.
+1. **`hp01` porte toutes les sauvegardes du lab.** Le datastore `ds-lab`, la configuration de PBS (`/etc/proxmox-backup`), le réseau existant de l'hôte (sa carte LAN, `vmbr1`, `wg0`, son pare-feu `/etc/nftables.conf`) et ses tâches de sauvegarde ne doivent **jamais** être perdus ni modifiés sans retour arrière **écrit et vérifié**. Pas de reformatage, pas de réinstallation, pas de nouveau RAID, pas de « je nettoie les vieux instantanés pour faire de la place ». Avant tout changement sur `hp01` : une sauvegarde de sa configuration, vérifiée, **hors de `hp01`**.
 2. **`kms01` de PAR1 n'est jamais touché.** Il descelle le coffre de production. Toute répétition de sa restauration se fait sur une **copie** à PAR2 (VMID 3501), isolée, détruite après usage. Jamais deux `kms01` sur le même réseau.
 3. **Une copie n'est pas une sauvegarde.** Ce que tu répliques à PAR2 (objets, dépôts, images) réplique aussi les suppressions et les erreurs. PBS reste la sauvegarde ; PAR2 est un site de **reprise**.
 4. **PAR2 ne dépend pas de PAR1.** Tout ce dont la reprise a besoin (code, état OpenTofu, images, secrets, autorité de certification, comptes, documentation) doit être **à PAR2 avant** le sinistre. Une dépendance découverte pendant l'exercice est un résultat de l'exercice — on préfère la découvrir à la répétition (S08).
@@ -115,7 +115,7 @@ Si F3 ou F4 n'ont pas été faits, rien ne manque à F5 : ils ne changent que de
 | `kms01` restauré (3501) | absent | 0,5 Go |
 | **Total des VMs** | **≈ 8 Go** | **≈ 10 Go** |
 
-Disque : stockage Proxmox **`par2-vms`** (répertoire sur le disque dur, à côté de `ds-lab`, avec une **place réservée** et une alerte avant saturation). Le plus gros consommateur est `s3-02` (copie des archives PostgreSQL, des sauvegardes Velero et des documents de MédiDoc) : dimensionne-le en S02 à partir des volumes réels de `s3-01`.
+Disque : stockage Proxmox **`par2-vms`** (répertoire sur le disque dur, à côté de `ds-lab`, avec une **place réservée** et une alerte avant saturation). Le plus gros consommateur est `s3-02` (copie des archives PostgreSQL, des sauvegardes Velero et des documents de MédiDoc) : dimensionne-le en S02 à partir des volumes réels de `s3-01`, **et** de la place réellement libre sur `hp01` hors de `ds-lab` (avec la disposition du M00-E20, il ne reste dans le groupe de volumes que ce que `ds-lab` n'a pas pris : `vgs`).
 
 > ⚠️ **Attention** : un datastore PBS plein arrête **toutes** les sauvegardes du lab. Si `par2-vms` et `ds-lab` partagent un système de fichiers, une VM de PAR2 qui grossit peut remplir le disque des sauvegardes. S03 fixe une limite technique, pas une bonne intention.
 

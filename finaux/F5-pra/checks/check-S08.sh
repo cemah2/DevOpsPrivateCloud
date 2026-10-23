@@ -16,6 +16,8 @@ check_cmd "k8s-par2 : $_F5E_NOEUD_PAR2 est Ready et planifiable" _f5e_p_noeud2
 check_cmd "hp01 : la VM $_F5E_VMID_BAO_PAR2 (bao-par2) ne porte aucun verrou" _f5e_p_bao2
 _f5_s08_bao_arrete() { _f5p_sur "$_f5e_hp01" "qm status $_F5E_VMID_BAO_PAR2" 2>/dev/null | grep -q 'status: stopped'; }
 check_cmd "hp01 : bao-par2 est arrêté (veille) après la répétition" _f5_s08_bao_arrete
+_f5_s08_sans_3501() { [[ "$(_f5p_vm_etat 3501)" == absente ]]; }
+check_cmd "hp01 : la restauration d'essai de kms01 (VM 3501) a été détruite après la répétition" _f5_s08_sans_3501
 check_cmd "k8s-par2 : $_F5E_CNPG_PAR2 est une réplique saine" _f5e_p_cnpg2_replique
 check_cmd "dns03 répond pour medisphere.internal" _f5e_p_dns03
 check_cmd "reg02 répond sur /v2/" _f5e_p_reg02

@@ -22,10 +22,10 @@ Prérequis de la phase : S01 et S02 publiés ; l'ADR-0350 décidé par Claire. L
 **Durée indicative** : 8 h, en deux fenêtres au moins (hyperviseur ; réseau et VMs).
 
 **Contexte technique**
-- `hp01` : PBS 4.2 installé par son ISO (Debian 13, noyau Proxmox), nom d'hôte `pbs01`, datastore `ds-lab`, adresse PAR2 10.20.10.10 sur `vmbr1` (pont sans port) ; tunnel `wg0` vers la bordure (M00-E21). Proxmox VE 9.2 s'installe sur un Debian 13 par le paquet `proxmox-ve` (page officielle « Install Proxmox VE on Debian 13 Trixie ») ; Proxmox documente aussi l'installation de PBS **sur** un PVE, mais **pas** l'inverse (PVE ajouté à un PBS installé par ISO) : même base Debian, même noyau, chemin non décrit officiellement. C'est pour cela que ce changement commence par un go/no-go. Le nœud Proxmox garde le nom **`pbs01`** ; son API est `https://10.20.10.10:8006`.
+- `hp01` : PBS 4.2 installé par son ISO (Debian 13, noyau Proxmox), nom d'hôte `pbs01`, datastore `ds-lab` (M00-E20 : volume logique du groupe `pbs`, ou jeu ZFS selon ton choix), adresse du LAN maison portée **directement par sa carte** (pas de `vmbr0`), adresse PAR2 10.20.10.10 sur `vmbr1` (pont sans port) ; tunnel `wg0` vers la bordure (M00-E21). Son pare-feu est `/etc/nftables.conf` (M00-E21, complété à la main en M01-E28 et M06-E28) : table `inet filter`, chaînes `input` **et** `forward` en refus par défaut. Proxmox VE 9.2 s'installe sur un Debian 13 par le paquet `proxmox-ve` (page officielle « Install Proxmox VE on Debian 13 Trixie ») ; Proxmox documente aussi l'installation de PBS **sur** un PVE, mais **pas** l'inverse (PVE ajouté à un PBS installé par ISO) : même base Debian, même noyau, chemin non décrit officiellement. C'est pour cela que ce changement commence par un go/no-go. Le nœud Proxmox garde le nom **`pbs01`** ; son API est `https://10.20.10.10:8006`.
 - Proxmox VE exige que le nom de l'hôte se résolve vers une adresse non locale (`/etc/hosts`) : on retient **10.20.10.10**.
 - La bordure (`gw01`, `wg0`) accepte déjà `10.20.0.0/16` depuis PAR2 (M00-E21) ; c'est son **filtrage** (`group_vars/role_routeur/pare_feu.yml`) qui décide de ce qui passe. `hp01` émet vers PAR1 depuis 10.20.10.10 (routes posées par `wg0.conf`).
-- Les VMs de PAR2 se synchronisent sur leur passerelle (convention du PLAN) ; `hp01` prend aujourd'hui l'heure de `gw01` par `wg0` (M00-E31).
+- Les VMs de PAR2 se synchronisent sur leur passerelle (convention du PLAN) ; `hp01` prend aujourd'hui l'heure de `gw01` par `wg0` (M00-E31). Côté Ansible, `group_vars/all/temps.yml` (M07-E25) vise les adresses `.2` et `.3` du VLAN de chaque hôte, en NTS.
 - Il n'y a aucune image dorée sur `hp01` ; les images dorées de `pve01` (M03, `gold`/`debian13`/`current`) peuvent être sauvegardées dans PBS comme n'importe quelle VM.
 - Le module `vm-noeud` de `plateforme/tofu-modules` refuse les VMID hors 2000-2999 et les VMs de moins de 1 Gio, et écrit dans NetBox (à PAR1) ; il se télécharge depuis `git01` (à PAR1).
 - La zone `par2.medisphere.internal` et la zone inverse `20.10.in-addr.arpa` sont sur le primaire `dns01` (écrites par l'API, M06) ; les transferts sont signés par la clé TSIG `axfr-par1`. La zone parente `medisphere.internal` est générée par le rôle `powerdns_auth`.
@@ -45,7 +45,7 @@ Objectifs :
 7. **Les noms** : enregistrements de PAR2 publiés, noms globaux en CNAME à TTL 60 s, servis aussi par `dns03`.
 
 Contraintes :
-- Ni le datastore `ds-lab`, ni `/etc/proxmox-backup`, ni `vmbr0`, `vmbr1`, `wg0` de `hp01` ne sont modifiés (sauf ajout réversible et écrit dans la fiche) ; aucune tâche de sauvegarde n'est déplacée ou désactivée.
+- Ni le datastore `ds-lab`, ni `/etc/proxmox-backup`, ni la carte LAN, `vmbr1`, `wg0` et les règles existantes du pare-feu de `hp01` ne sont modifiés (sauf ajout réversible et écrit dans la fiche) ; aucune tâche de sauvegarde n'est déplacée ou désactivée.
 - Toute modification réseau de `hp01` est faite avec un accès de secours **vérifié avant** (console iLO ou SSH par le LAN) et un retour arrière testé.
 - Aucune VM de PAR2 hors du pool `par2` ; aucun secret dans Git.
 
@@ -73,7 +73,7 @@ Un état OpenTofu ne peut pas vivre sur une machine qu'il doit créer. Deux temp
 
 <details><summary>Indice 3</summary>
 
-Depuis Proxmox VE 8, utiliser un pont pour une carte de VM demande un droit sur ce pont dans l'arborescence SDN, même sans SDN configuré : cherche dans la documentation des permissions (`pveum`) quel chemin protège un pont « local ». Pour la limite de `par2-vms`, compare ce que permettent un sous-volume ZFS avec quota, un volume logique séparé, ou l'option de PVE qui refuse de créer un disque au-delà d'un seuil — et ce qui protège **vraiment** contre un disque qui grossit après sa création.
+Depuis Proxmox VE 8, utiliser un pont pour une carte de VM demande un droit sur ce pont dans l'arborescence SDN, même sans SDN configuré : cherche dans la documentation des permissions (`pveum`) quel chemin protège un pont « local ». Pour la limite de `par2-vms`, compare ce que permettent un sous-volume ZFS avec quota, un volume logique séparé, ou un simple répertoire « surveillé » — et ce qui protège **vraiment** contre un disque qui grossit après sa création.
 </details>
 
 **Pour aller plus loin** (facultatif) : un second jeton Proxmox en lecture pour la supervision de PAR2 (pve-exporter de `mon01`, puis d'`adm02` en PRA) ; l'inventaire des VMs de PAR2 dans NetBox par la synchronisation Proxmox → NetBox du M06 (NetBox reste à PAR1 : ce n'est que de la documentation).
@@ -178,7 +178,7 @@ Objectifs :
 5. **L'enveloppe** : `docs/pra/enveloppe.md` — pour chaque élément, sa nature, son emplacement physique ou logique, ses gardiens, sa date de dernière vérification, la procédure de vérification **sans l'ouvrir** quand c'est possible, et ce qu'on fait s'il manque ; plus la liste de ce qui doit en sortir et y rentrer à chaque rotation.
 
 Contraintes :
-- ⚠️ Le `kms01` de PAR1 (1024) n'est **jamais** arrêté, modifié, restauré « en place » ni descellé de nouveau ; la copie 3501 n'a **jamais** de chemin réseau vers PAR1 ; elle n'est démarrée qu'avec sa carte réseau coupée tant que son adresse n'a pas changé.
+- ⚠️ Le `kms01` de PAR1 (1024) n'est **jamais** arrêté, modifié, restauré « en place » ni descellé de nouveau ; la copie 3501 n'a **jamais** de chemin réseau vers PAR1 ; elle n'est démarrée qu'avec sa carte réseau coupée tant que son adresse n'a pas changé. Pendant la répétition, `bao-par2` restauré n'a pas davantage de chemin vers PAR1.
 - La clé de l'autorité de PAR2 n'apparaît jamais sur une machine de PAR1, ni en clair dans Git.
 - Aucun secret dans `enveloppe.md` ni dans le procès-verbal (empreintes, numéros de série et identifiants de gardiens seulement).
 

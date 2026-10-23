@@ -22,7 +22,8 @@
 # Contrôle préalable : lancé sur adm02, sinistre en cours (/var/lib/workbook/f5-t0 présent et PAR1
 # injoignable), PAR2 sert les trois noms globaux, horloge de s3-02 synchronisée, dns03 résout, sshd de
 # adm02 sans AllowUsers. Annulation : seulement si l'état injecté est encore là. Jamais ds-lab, PBS, ni
-# le réseau de hp01 ; aucune donnée touchée.
+# le réseau de hp01 ; aucune donnée touchée. Les VMs sont jointes par leur adresse (_s10_exec) : la variante
+# 2 casse la résolution des noms, l'annulation doit pourtant les joindre.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
@@ -31,6 +32,18 @@ source "$WB_ROOT/finaux/F5-pra/checks/_f5-exercice.sh"
 
 _S10_DROPIN=/etc/ssh/sshd_config.d/10-durcissement-f5.conf
 _S10_REFUS=0
+_S10_IP_S302=10.20.20.14
+_S10_IP_DNS03=10.20.20.11
+
+# _s10_exec HÔTE IP [VAR=valeur…] <<'EOF' — wb_exec vers HÔTE en joignant directement son ADRESSE : la
+# variante 2 casse la résolution des noms par dns03 (y compris celle de adm02) ; l'annulation doit
+# pourtant joindre dns03 et s3-02. La clé d'hôte reste vérifiée sous le nom habituel (HostKeyAlias).
+_s10_exec() {
+  local h="$1" ip="$2" nom
+  shift 2
+  nom="$(ssh -G "${h#*@}" 2>/dev/null | awk '$1 == "hostname" { print $2; exit }')"
+  WB_SSH_OPTS="${WB_SSH_OPTS:-} -o HostName=$ip -o HostKeyAlias=${nom:-${h#*@}}" wb_exec "$h" "$@"
+}
 
 _s10_prealable() {
   local a ko=0 n s
@@ -42,6 +55,10 @@ _s10_prealable() {
     command -v "$a" >/dev/null 2>&1 || { echo "  - outil manquant sur adm02 : $a" >&2; ko=1; }
   done
   [[ -n "$(_f5e_t0 2>/dev/null)" ]] || { echo "  - aucun sinistre en cours (T0 absent de adm02) : S10 se joue pendant le PRA" >&2; ko=1; }
+  if timeout 3 bash -c 'exec 3<>/dev/tcp/10.10.20.10/53' 2>/dev/null; then
+    echo "  - PAR1 (dns01, 10.10.20.10) est joignable depuis adm02 : l'isolement n'est pas en place" >&2
+    ko=1
+  fi
   for n in "${_F5E_NOMS[@]}"; do
     s="$(_f5e_site "$n" 2>/dev/null)" || s=""
     [[ "$s" == par2 ]] || { echo "  - $n n'est pas servi par PAR2 (réponse : ${s:-aucune}) : termine S09 d'abord" >&2; ko=1; }
@@ -59,7 +76,7 @@ _s10_prealable() {
 
 panne_S10_v1() {
   _s10_prealable || { _S10_REFUS=1; return 1; }
-  wb_exec "$_f5e_s302" <<'EOF'
+  _s10_exec "$_f5e_s302" "$_S10_IP_S302" <<'EOF'
 f=/etc/chrony/chrony.conf
 [ -f "$f" ] || exit 1
 sauver "$f"
@@ -89,7 +106,7 @@ EOF
 
 panne_S10_v2() {
   _s10_prealable || { _S10_REFUS=1; return 1; }
-  wb_exec "$_f5e_dns03" <<'EOF'
+  _s10_exec "$_f5e_dns03" "$_S10_IP_DNS03" <<'EOF'
 f=/etc/powerdns/recursor.yml
 [ -f "$f" ] || exit 1
 command -v python3 >/dev/null || exit 1
@@ -158,15 +175,29 @@ verifier_S10() {
 annuler_S10() {
   # Injection refusée par le contrôle préalable : rien n'a été touché, rien à défaire.
   if ((_S10_REFUS)); then return 0; fi
-  # 1 : restaure chrony seulement si la configuration injectée est encore en place.
-  wb_exec "$_f5e_s302" <<'EOF' >/dev/null 2>&1 || wb_avert "s3-02 : horloge et chrony à vérifier (chronyc tracking)"
+  # 1 : restaure chrony seulement si la configuration injectée est encore en place, puis recale l'horloge :
+  #     par chrony si une source répond (pas forcé, « chronyc makestep »), sinon sur l'heure de adm02
+  #     (synchronisée, passée à l'appel et corrigée du temps écoulé). Un recul de 25 min est un PAS
+  #     (pas un ralentissement de plusieurs heures) : voir le corrigé (objets et journal de métadonnées
+  #     horodatés « dans le futur » pendant la panne).
+  _s10_exec "$_f5e_s302" "$_S10_IP_S302" REF_EPOCH="$(date +%s)" <<'EOF' >/dev/null 2>&1 || wb_avert "s3-02 : horloge et chrony à vérifier (chronyc tracking ; date -u comparée à adm02)"
 t="${WB_DIR:?}/${WB_EX:?}"
+debut=$(cut -d. -f1 /proc/uptime)
 [ -f "$t.manifeste" ] || exit 0
 if cmp -s /etc/chrony/chrony.conf "$t.chrony-injecte"; then
   restaurer_fichiers
   systemctl restart chrony
-  sleep 5
-  chronyc -a makestep >/dev/null 2>&1 || true
+  i=0
+  while [ "$i" -lt 30 ]; do
+    if chronyc -n sources 2>/dev/null | grep -q '^\^\*'; then chronyc -a makestep >/dev/null 2>&1; break; fi
+    sleep 2
+    i=$((i + 1))
+  done
+  attendu=$((REF_EPOCH + $(cut -d. -f1 /proc/uptime) - debut))
+  ecart=$(( $(date +%s) - attendu ))
+  if [ "$ecart" -gt 5 ] || [ "$ecart" -lt -5 ]; then
+    date -s "@$attendu" >/dev/null && journal "horloge recalée sur adm02 (aucune source chrony sélectionnée ; écart ${ecart} s)"
+  fi
   journal "chrony restauré, horloge recalée"
 else
   rm -f -- "$t.manifeste" "$t".*.orig
@@ -174,7 +205,7 @@ fi
 rm -f -- "$t.chrony-injecte"
 EOF
   # 2 : restaure recursor.yml seulement s'il est identique à l'état injecté.
-  wb_exec "$_f5e_dns03" <<'EOF' >/dev/null 2>&1 || wb_avert "dns03 : recursor.yml à vérifier"
+  _s10_exec "$_f5e_dns03" "$_S10_IP_DNS03" <<'EOF' >/dev/null 2>&1 || wb_avert "dns03 : recursor.yml à vérifier"
 t="${WB_DIR:?}/${WB_EX:?}"
 [ -f "$t.manifeste" ] || exit 0
 if cmp -s /etc/powerdns/recursor.yml "$t.recursor-injecte"; then

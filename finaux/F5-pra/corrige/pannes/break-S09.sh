@@ -15,21 +15,29 @@
 #   - T0 (heure de référence du RTO et du RPO) écrit dans /var/lib/workbook/f5-t0 sur adm02 et sur gw01
 #     (T0_EPOCH=…, T0_ISO=…) et ajouté à la main courante du clone de travail de adm02 s'il existe
 #     (docs/pra/journal/<AAAA-MM-JJ>.md, NON commité : l'apprenant commite) ;
-#   - table nftables « inet f5_sinistre » posée sur gw01 ET gw02 (fichier /etc/nftables.conf INCHANGÉ :
-#     un rechargement du pare-feu, qui commence par « flush ruleset », l'effacerait) :
+#   - table nftables « inet f5_sinistre » posée sur gw01 ET gw02 (fichier /etc/nftables.conf INCHANGÉ).
+#     Ce fichier commence par « flush ruleset » : un rechargement effacerait la table et lèverait
+#     l'isolement en silence. D'où un fichier de règles /var/lib/workbook/f5-sinistre.nft rejoué par un
+#     complément de nftables.service (nftables.service.d/f5-sinistre.conf : start, restart, reload) et
+#     par un garde (f5-sinistre-garde.timer, toutes les 10 s et au démarrage) pour un « nft -f » direct
+#     (rôle Ansible pare_feu, pare-feu-retour). Secours à la main sur chaque passerelle (console) :
+#       rm /var/lib/workbook/f5-sinistre.nft; systemctl disable --now f5-sinistre-garde.timer;
+#       nft delete table inet f5_sinistre
+#     Règles :
 #       * tout ce qui entre ou sort par wg0 (liaison PAR1 ↔ PAR2) et wg1 (VPN d'administration de PAR1)
 #         est jeté, ainsi que les poignées de main WireGuard (UDP 51820, 51821) : les tunnels tombent ;
 #       * les connexions OUVERTES depuis le WAN vers 10.10.0.0/16 sont jetées, sauf celles de pve01
 #         (accès LAN conservé pour l'annulation ; la redirection publique 443 vers lb01/lb02 est coupée) ;
 #       * rien d'autre : VRRP (keepalived), conntrackd, BGP vers k8s-par1 et vers LYO1 (wg2), DHCP relayé,
 #         NAT sortant du lab, NTP, tout continue. Aucune VM n'est arrêtée : PAR1 tourne, isolé.
-#   - vérification sur place : table présente sur les deux passerelles ET adm02 injoignable depuis adm01 ;
+#   - vérification sur place : table et garde présents sur les deux passerelles ET adm02 injoignable
+#     depuis adm01 ;
 #     sinon annulation et message.
 #
 # Annulation (idempotente) : refuse de lever l'isolement tant que PAR1 n'est pas neutralisé (Cluster
 # mediagenda-db de mediagenda-prod clôturé, en réplique ou absent, lu par le compte des checks de adm01),
-# sauf WB_F5_LEVER_SANS_NEUTRALISATION=1 (choix écrit dans la main courante) ; retire la table des deux
-# passerelles, note LEVEE_EPOCH dans /var/lib/workbook/f5-levee sur gw01, efface le marqueur de adm01.
+# sauf WB_F5_LEVER_SANS_NEUTRALISATION=1 (choix écrit dans la main courante) ; retire le garde, le
+# complément de nftables.service, le fichier de règles et la table des deux passerelles, note LEVEE_EPOCH dans /var/lib/workbook/f5-levee sur gw01, efface le marqueur de adm01.
 # Les fichiers f5-t0 restent (preuve et référence des checks de S12, S13).
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
@@ -80,8 +88,10 @@ _s09_prealable() {
     || _s09_ko "adm02 : dépôt du workbook ou lab/lab.env absent (~/$_S09_WB_ADM02) : les checks de S09 à S11 se lancent de là"
   remote "$_f5e_hp01" "wg show wg1 >/dev/null 2>&1" 2>/dev/null \
     || _s09_ko "hp01 : interface wg1 (VPN d'administration de secours) absente : tu n'aurais plus accès à PAR2"
-  remote "$WB_PVE_HOST" "ssh -o BatchMode=yes -o ConnectTimeout=5 gw01 true && ssh -o BatchMode=yes -o ConnectTimeout=5 gw02 true" 2>/dev/null \
-    || _s09_ko "pve01 ne joint pas gw01 ET gw02 en SSH (alias de /root/.ssh/config) : l'annulation serait impossible"
+  remote "$WB_PVE_HOST" "ssh -o BatchMode=yes -o ConnectTimeout=5 gw01 sudo -n true && ssh -o BatchMode=yes -o ConnectTimeout=5 gw02 sudo -n true" 2>/dev/null \
+    || _s09_ko "pve01 ne joint pas gw01 ET gw02 en SSH avec « sudo -n » (alias de /root/.ssh/config) : l'annulation serait impossible"
+  remote "$WB_PVE_HOST" "ssh -o BatchMode=yes -o ConnectTimeout=5 adm01 true && command -v jq >/dev/null" 2>/dev/null \
+    || _s09_ko "pve01 : alias SSH adm01 absent ou jq manquant (apt install jq) : l'annulation ne pourrait pas vérifier la neutralisation de PAR1"
   remote "$WB_PVE_HOST" "test -f /root/DevOpsPrivateCloud/finaux/F5-pra/corrige/pannes/break-S09.sh" 2>/dev/null \
     || _s09_ko "pve01 : /root/DevOpsPrivateCloud n'a pas ce script (git pull sur pve01 d'abord)"
   [[ -n "$(_s09_ip_pve01)" ]] || _s09_ko "adresse de pve01 vers le lab introuvable (ip route get 10.10.10.10)"
@@ -118,8 +128,12 @@ EOF
   # 2. Isolement : gw02 puis gw01.
   for gw in gw02 gw01; do
     wb_exec "$gw" PVE="$pve" T0_EPOCH="$t0" T0_ISO="$iso" <<'EOF' || return 1
-nft list table inet f5_sinistre >/dev/null 2>&1 && nft delete table inet f5_sinistre
-nft -f - <<NFT || exit 1
+# Règles du sinistre dans un fichier idempotent (création, suppression, recréation dans une seule
+# transaction nft) : rejouable à tout moment par le garde et par nftables.service.
+REGLES="$WB_DIR/f5-sinistre.nft"
+cat > "$REGLES" <<NFT || exit 1
+table inet f5_sinistre
+delete table inet f5_sinistre
 table inet f5_sinistre {
 	chain entree {
 		type filter hook input priority -150; policy accept;
@@ -139,11 +153,52 @@ table inet f5_sinistre {
 	}
 }
 NFT
+chmod 600 "$REGLES"
+nft -c -f "$REGLES" || { rm -f -- "$REGLES"; exit 1; }
+nft -f "$REGLES" || exit 1
+# Le fichier /etc/nftables.conf n'est PAS modifié. Comme il commence par « flush ruleset », tout
+# rechargement effacerait la table : l'isolement serait levé en silence, en plein exercice.
+#  - nftables.service (start, restart, reload) rejoue les règles du sinistre juste après le fichier ;
+#  - le rôle Ansible pare_feu (et son retour arrière) charge le fichier par « nft -f » directement :
+#    un garde (minuterie, toutes les 10 s, et au démarrage) repose la table si elle a disparu.
+# Les deux deviennent sans effet dès que $REGLES n'existe plus (annulation, ou secours à la main).
+mkdir -p /etc/systemd/system/nftables.service.d
+cat > /etc/systemd/system/nftables.service.d/f5-sinistre.conf <<'UNIT'
+# Workbook F5-S09 (sinistre simulé) : retiré par « lab/bin/break F5 9 --annuler ».
+[Service]
+ExecStartPost=-/bin/sh -c 'if [ -f /var/lib/workbook/f5-sinistre.nft ]; then /usr/sbin/nft -f /var/lib/workbook/f5-sinistre.nft; fi'
+ExecReload=-/bin/sh -c 'if [ -f /var/lib/workbook/f5-sinistre.nft ]; then /usr/sbin/nft -f /var/lib/workbook/f5-sinistre.nft; fi'
+UNIT
+cat > /etc/systemd/system/f5-sinistre-garde.service <<'UNIT'
+# Workbook F5-S09 (sinistre simulé) : retiré par « lab/bin/break F5 9 --annuler ».
+[Unit]
+Description=Workbook F5-S09 : maintient la table nftables inet f5_sinistre (isolement de PAR1)
+After=nftables.service
+ConditionPathExists=/var/lib/workbook/f5-sinistre.nft
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'if ! /usr/sbin/nft list table inet f5_sinistre >/dev/null 2>&1; then /usr/sbin/nft -f /var/lib/workbook/f5-sinistre.nft && logger -t f5-sinistre "table inet f5_sinistre reposee (effacee par un rechargement du pare-feu)"; fi'
+UNIT
+cat > /etc/systemd/system/f5-sinistre-garde.timer <<'UNIT'
+# Workbook F5-S09 (sinistre simulé) : retiré par « lab/bin/break F5 9 --annuler ».
+[Unit]
+Description=Workbook F5-S09 : garde de la table inet f5_sinistre
+
+[Timer]
+OnBootSec=5s
+OnUnitActiveSec=10s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
+UNIT
+systemctl daemon-reload && systemctl enable --now f5-sinistre-garde.timer >/dev/null 2>&1 || exit 1
 if [ "$(hostname -s)" = gw01 ]; then
   printf 'T0_EPOCH=%s\nT0_ISO=%s\n' "$T0_EPOCH" "$T0_ISO" > "$WB_DIR/f5-t0"
   rm -f -- "${WB_DIR:?}/f5-levee"   # nouvel exercice : l'heure de levée précédente ne vaut plus
 fi
-journal "table inet f5_sinistre posée (pve01 exempté : $PVE)"
+journal "table inet f5_sinistre posée, garde actif (pve01 exempté : $PVE)"
 EOF
   done
   sleep 5
@@ -152,7 +207,7 @@ EOF
 verifier_S09() {
   local gw
   for gw in gw01 gw02; do
-    remote "$gw" "sudo -n nft list table inet f5_sinistre" >/dev/null 2>&1 || return 1
+    remote "$gw" "sudo -n nft list table inet f5_sinistre >/dev/null && systemctl is-active --quiet f5-sinistre-garde.timer" >/dev/null 2>&1 || return 1
   done
   # Isolement constaté : adm02 (PAR2) n'est plus joignable depuis adm01.
   if ssh -o BatchMode=yes -o ConnectTimeout=5 -o ControlMaster=no -o ControlPath=none "$_f5e_adm02" true >/dev/null 2>&1; then
@@ -170,7 +225,7 @@ _s09_par1_neutralise() {
 }
 
 annuler_S09() {
-  local gw rc=0
+  local gw rc=0 ko_gw=0
   # Injection refusée par le contrôle préalable : rien n'a été touché, rien à défaire.
   if ((_S09_REFUS)); then return 0; fi
   if ((_S09_INJECTION == 0)) && [[ "${WB_F5_LEVER_SANS_NEUTRALISATION:-0}" != 1 ]]; then
@@ -190,16 +245,28 @@ annuler_S09() {
     fi
   fi
   for gw in gw01 gw02; do
-    wb_exec "$gw" LEVEE="$(date +%s)" <<'EOF' || wb_avert "$gw : table f5_sinistre à vérifier (nft list tables)"
+    wb_exec "$gw" LEVEE="$(date +%s)" <<'EOF' || { wb_avert "$gw : table f5_sinistre ou garde à vérifier (nft list tables ; systemctl status f5-sinistre-garde.timer)"; ko_gw=1; }
+# Le garde et le complément de nftables.service d'abord (sinon la table reviendrait), puis la table.
+rm -f -- "${WB_DIR:?}/f5-sinistre.nft"
+systemctl disable --now f5-sinistre-garde.timer >/dev/null 2>&1 || true
+rm -f /etc/systemd/system/f5-sinistre-garde.timer /etc/systemd/system/f5-sinistre-garde.service \
+  /etc/systemd/system/nftables.service.d/f5-sinistre.conf
+rmdir /etc/systemd/system/nftables.service.d 2>/dev/null || true
+systemctl daemon-reload
 if nft list table inet f5_sinistre >/dev/null 2>&1; then
-  nft delete table inet f5_sinistre && journal "table inet f5_sinistre retirée"
+  nft delete table inet f5_sinistre && journal "table inet f5_sinistre et son garde retirés"
 fi
+! nft list table inet f5_sinistre >/dev/null 2>&1 || exit 1
 if [ "$(hostname -s)" = gw01 ] && [ -f "$WB_DIR/f5-t0" ] && [ ! -f "$WB_DIR/f5-levee" ]; then
   printf 'LEVEE_EPOCH=%s\n' "$LEVEE" > "$WB_DIR/f5-levee"
   chmod 644 "$WB_DIR/f5-t0" "$WB_DIR/f5-levee"
 fi
 EOF
   done
+  if ((ko_gw)); then
+    wb_avert "isolement peut-être encore en place : relance l'annulation, ou applique le secours à la main décrit dans l'énoncé de F5-S12"
+    return 1
+  fi
   if [[ "$(hostname -s)" != adm01 ]]; then
     remote adm01 'rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/workbook/pannes-actives/F5-S09"' 2>/dev/null \
       || wb_avert "marqueur F5-S09 de adm01 non effacé : rm ~/.local/state/workbook/pannes-actives/F5-S09 sur adm01"

@@ -44,11 +44,11 @@ RB-353 §1 à §7, dans l'ordre. Points d'arrêt : fin de §1 (go/no-go), fin de
 
 Sortie de `go-no-go-hp01.sh` : **GO** (jointe ci-dessous, avec `simulation-apt-<date>.txt`). Plus : *verify* de `ds-lab` vert, restauration d'un fichier d'essai réussie.
 
-Critères d'**abandon** : un contrôle du §3 rouge ; PBS injoignable plus de 5 min ; toute modification non prévue de `vmbr0`, `vmbr1`, `wg0`.
+Critères d'**abandon** : un contrôle du §3 rouge ; PBS injoignable plus de 5 min ; toute modification non prévue de l'interface LAN de `hp01`, de `vmbr1`, de `wg0` ou des règles existantes de `/etc/nftables.conf` ; `networking`, `wg-quick@wg0` ou `nftables` non `enabled` après l'installation (non corrigeable sur le champ).
 
 ## Retour arrière
 
-RB-353 §6 (réseau) et §8 (désinstallation par l'historique d'APT). Limite écrite : non documenté par Proxmox ; dernier recours = réinstallation de PBS et import du datastore intact.
+RB-353 §6 (réseau, dont la copie `nftables.conf.avant-F5` du pare-feu de l'hôte) et §8 (désinstallation par l'historique d'APT). Limite écrite : non documenté par Proxmox ; dernier recours = réinstallation de PBS et import du datastore intact.
 
 ## Communication
 
@@ -63,7 +63,8 @@ Sonde de continuité sur les groupes `continuite-*` (témoin de `mon01`) : objec
 - 14:02 go/no-go : GO (sortie jointe).
 - 14:10 archive `pbs-config-20261110.tar.gz` copiée sur `adm01`, empreinte vérifiée.
 - 14:18 installation lancée ; 14:31 terminée ; aucun paquet retiré (historique d'APT).
-- 14:35 contrôles PBS et PVE verts ; dépôt d'entreprise désactivé.
+- 14:35 contrôles PBS et PVE verts ; `networking`, `wg-quick@wg0`, `nftables` toujours `enabled` ; dépôt d'entreprise désactivé.
+- 14:50 ajouts au pare-feu de l'hôte (7 règles `F5-S03`, RB-353 §4.1) ; retour programmé annulé après double session SSH.
 - 15:20 stockage, pool, `vmbr2`, `inet par2`, `wg1` (rôle `hote_par2`) ; contrôles RB-353 §6 verts.
 - 16:40 `adm02`, `dns03`, `s3-02` ; état migré sur `s3-02` ; `tofu plan` vide depuis `adm02`.
 - J+1 08:05 sauvegarde nocturne complète.

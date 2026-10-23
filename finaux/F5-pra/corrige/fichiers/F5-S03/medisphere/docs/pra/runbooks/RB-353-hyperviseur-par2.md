@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | Changement | CHG-3503 (`docs/changements/fiches/CHG-3503-hyperviseur-par2.md`) |
-| Portée | `hp01` (nœud `pbs01`) : Proxmox VE 9.2 ajouté à PBS 4.2 ; stockage `par2-vms`, pool `par2`, `vmbr2`, table `inet par2`, `wg1` ; amorçage de `envs/par2` |
+| Portée | `hp01` (nœud `pbs01`) : Proxmox VE 9.2 ajouté à PBS 4.2 ; ajouts au pare-feu de l'hôte ; stockage `par2-vms`, pool `par2`, `vmbr2`, table `inet par2`, `wg1` ; amorçage de `envs/par2` |
 | Durée de référence | go/no-go 30 min ; sauvegarde 10 min ; installation 30 min ; contrôles 30 min ; réseau et VMs 2 h |
-| Interdits | toucher `ds-lab`, `/etc/proxmox-backup`, `vmbr0`, `vmbr1`, `wg0` ; installer pendant une fenêtre de sauvegarde ; redémarrer `hp01` sans accès de secours vérifié |
+| Interdits | toucher `ds-lab`, `/etc/proxmox-backup`, l'interface LAN de `hp01` (`<NIC-HP01-LAN>`, M00-E20 : pas de `vmbr0` sur `hp01`), `vmbr1`, `wg0`, les règles existantes de `/etc/nftables.conf` (on n'y fait que des **ajouts**, §4.1) ; installer pendant une fenêtre de sauvegarde ; redémarrer `hp01` sans accès de secours vérifié |
 
 > ⚠️ **Attention** : `hp01` porte **toutes les sauvegardes du lab**. Chaque section se termine par un contrôle ; un contrôle rouge = on s'arrête et on applique le retour arrière de la section.
 
@@ -55,7 +55,7 @@ root@pbs01:~# apt-get install proxmox-ve postfix open-iscsi chrony
 ```
 
 - `postfix` : choisir « Local only » (pas de relais).
-- Le paquet `proxmox-ve` ajoute `/etc/apt/sources.list.d/pve-enterprise.sources` : le désactiver (`Enabled: no`) sans abonnement.
+- Si l'installation a ajouté un dépôt d'entreprise de PVE (`/etc/apt/sources.list.d/pve-enterprise.sources` : vérifier `ls /etc/apt/sources.list.d/`), le désactiver (`Enabled: no`) sans abonnement ; `apt-get update` doit rester sans erreur (les mises à jour de PBS en dépendent).
 - Le noyau ne change pas de famille (`proxmox-kernel`) : **pas de redémarrage** nécessaire ; si APT installe une version de noyau plus récente, le redémarrage attend une fenêtre annoncée, avec l'iLO ouvert (le noyau 7.0 peut renommer les interfaces : relire `/etc/network/interfaces` avant).
 
 Contrôles d'après (tous verts, sinon §8) :
@@ -66,28 +66,56 @@ pve-manager/9.2.x/… (running kernel: 7.0.x-pve)
 root@pbs01:~# systemctl is-active proxmox-backup-proxy proxmox-backup pveproxy pvedaemon pve-cluster
 root@pbs01:~# proxmox-backup-manager datastore list
 root@pbs01:~# ss -tlnp | grep -E ':(8006|8007) '
+root@pbs01:~# systemctl is-enabled networking wg-quick@wg0 nftables      # trois « enabled »
 ```
+
+Le dernier contrôle protège le **prochain redémarrage** : un retour d'expérience publié sur le forum Proxmox (« no network after installing pve9 on trixie ») signale `networking.service` passé à `disabled` après l'installation de `proxmox-ve` sur un Debian ; `hp01` redémarrerait alors sans réseau, donc sans sauvegardes. Si l'un n'est pas `enabled` : `systemctl enable <unité>` et on le note dans CHG-3503.
 
 Puis : interface PBS (`https://10.20.10.10:8007`) et PVE (`https://10.20.10.10:8006`) ouvertes depuis `adm01` ; **la sauvegarde nocturne suivante** se termine (contrôle du lendemain, noté dans CHG-3503) ; `lab/bin/check F5 3` (partie PBS).
 
-## 4. Stockage, pool, compte d'automatisation, image dorée
+## 4. Pare-feu de l'hôte, stockage, pool, compte d'automatisation, image dorée
 
-1. **Stockage `par2-vms` plafonné** : si le disque de `hp01` est en ZFS, jeu `rpool/par2-vms` avec `quota` et `refquota` (rôle `hote_par2`) ; sinon, volume logique séparé (`lvcreate` sur l'espace libre du groupe, `mkfs.ext4`, montage dans `/etc/fstab`) **préparé à la main** et décrit ici avec sa taille. Jamais un simple dossier sur le système de fichiers de `ds-lab`.
-2. **Rôle `hote_par2`** (plateforme/ansible) : stockage, pool `par2`, `vmbr2`, `inet par2`, `wg1`, chrony.
+1. **Pare-feu de l'hôte (ajouts seulement)** : `/etc/nftables.conf` de `hp01` (M00-E21, tenu à la main) a des chaînes `input` **et** `forward` en `policy drop` ; tant qu'il n'est pas complété, `inet par2` ne peut rien ouvrir (un paquet doit être accepté par toutes les chaînes du même crochet) : ni le routage de PAR2 INFRA, ni NTP vers 10.20.20.1, ni `wg1` (UDP 51823), ni l'API de PVE (8006) pour OpenTofu. Ajouts (table `inet filter`, rien n'est retiré, chaque ligne commentée `F5-S03`) :
+   ```
+   # chain input
+   iifname $LAN_IF udp dport 51823 accept comment "F5-S03 wg1"
+   iifname "wg0" ip saddr $ADMIN_SRC tcp dport 8006 accept comment "F5-S03 API PVE depuis adm01"
+   iifname "wg1" ip saddr 10.255.3.0/24 tcp dport { 22, 8006, 8007 } accept comment "F5-S03 VPN de secours"
+   iifname "vmbr2" ip saddr 10.20.20.10 tcp dport { 22, 8006, 8007 } accept comment "F5-S03 adm02"
+   iifname "vmbr2" ip saddr 10.20.20.0/24 udp dport 123 accept comment "F5-S03 NTP de PAR2 INFRA"
+   # chain forward (policy drop conservée ; filtrage fin dans inet par2)
+   iifname { "vmbr2", "wg1" } accept comment "F5-S03 délégué à inet par2"
+   oifname "vmbr2" accept comment "F5-S03 délégué à inet par2"
+   ```
+   Application avec les précautions du M00-E21 :
+   ```
+   root@pbs01:~# cp -a /etc/nftables.conf /root/f5/nftables.conf.avant-F5 && vi /etc/nftables.conf
+   root@pbs01:~# nft -c -f /etc/nftables.conf
+   root@pbs01:~# systemd-run --on-active=5min --unit=retour-nft /bin/sh -c 'cp /root/f5/nftables.conf.avant-F5 /etc/nftables.conf && systemctl restart nftables'
+   root@pbs01:~# systemctl restart nftables && nft list table inet filter | grep -c F5-S03      # 7
+   root@pbs01:~# systemctl stop retour-nft.timer        # après une NOUVELLE session SSH réussie depuis adm01 et depuis le LAN
+   ```
+   Le rôle `hote_par2` refuse de s'appliquer tant que ces ajouts manquent. Retour arrière : §6.
+2. **Stockage `par2-vms` plafonné** : si le disque de `hp01` est en ZFS, jeu `rpool/par2-vms` avec `quota` et `refquota` (rôle `hote_par2`) ; sinon (disposition du M00-E20 : groupe de volumes `pbs`, `ds-lab` sur un volume logique de 95 % de l'espace libre), volume logique séparé **préparé à la main** sur ce qui reste du groupe (`vgs pbs` : ≈ 5 % du disque, ≈ 90 Go sur 2 To), `mkfs.ext4`, montage dans `/etc/fstab`, taille décrite ici. Si c'est trop peu pour le dimensionnement de S02 : second disque (baie libre) ou dimensionnement revu (archives compressées, rétention de `s3-02` plus courte). **Jamais** de réduction du volume de `ds-lab`, jamais un simple dossier sur son système de fichiers.
+3. **Rôle `hote_par2`** (plateforme/ansible) : stockage, pool `par2`, `vmbr2`, `inet par2`, `wg1`, chrony.
    ```
    admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/site-par2.yml --limit pbs01 --diff
    ```
-3. **Compte OpenTofu** : `outils/par2/compte-tofu-par2.sh <VMID-TEMPLATE>` (après l'étape 4) ; secret dans Ansible Vault « critique » (`vault_pve_par2_jeton`) et `~/.config/workbook/pve-par2.env` (600) sur `adm01` puis `adm02`.
-4. **Image dorée** (pas d'image sur `hp01`) : sauvegarde du template `current` de `pve01` dans PBS, espace de noms `par1/images` (stockage `pbs-par2-images` de `pve01`, créé comme `pbs-par2-identite` au M24), puis restauration sur `hp01` :
+4. **Compte OpenTofu** : `outils/par2/compte-tofu-par2.sh <VMID-TEMPLATE>` (après l'étape 5) ; secret dans Ansible Vault « critique » (`vault_pve_par2_jeton`) et `~/.config/workbook/pve-par2.env` (600) sur `adm01` puis `adm02`.
+5. **Image dorée** (pas d'image sur `hp01`) : sauvegarde du template `current` de `pve01` dans PBS, espace de noms `par1/images` (stockage `pbs-par2-images` de `pve01`, créé comme `pbs-par2-identite` au M24, espace de noms créé de même), puis restauration sur `hp01`. Un stockage PBS de Proxmox VE ne voit **qu'un** espace de noms : deux stockages en lecture sur `hp01`, `pbs-local-images` (`par1/images`, pour ce geste) et **`pbs-local`** (`par1/secrets`, sauvegardes de `kms01` pour RB-355) :
    ```
    root@pve01:~# vzdump <VMID-TEMPLATE> --storage pbs-par2-images --mode stop
-   root@pbs01:~# pvesm add pbs pbs-local --server 10.20.10.10 --datastore ds-lab --namespace par1/images \
+   root@pbs01:~# pvesm add pbs pbs-local-images --server 10.20.10.10 --datastore ds-lab --namespace par1/images \
        --username wb-restauration@pbs --fingerprint <EMPREINTE-PBS> --password <MOT-DE-PASSE> \
        --encryption-key <FICHIER-CLE-PBS> --content backup
-   root@pbs01:~# qmrestore pbs-local:backup/vm/<VMID-TEMPLATE>/<DATE> <VMID-TEMPLATE> --storage par2-vms
-   root@pbs01:~# qm set <VMID-TEMPLATE> --tags 'current;debian13;gold' && qm template <VMID-TEMPLATE>
+   root@pbs01:~# pvesm add pbs pbs-local --server 10.20.10.10 --datastore ds-lab --namespace par1/secrets \
+       --username wb-restauration@pbs --fingerprint <EMPREINTE-PBS> --password <MOT-DE-PASSE> \
+       --encryption-key <FICHIER-CLE-PBS> --content backup
+   root@pbs01:~# qmrestore pbs-local-images:backup/vm/<VMID-TEMPLATE>/<DATE> <VMID-TEMPLATE> --storage par2-vms
+   root@pbs01:~# qm config <VMID-TEMPLATE> | grep -q '^template: 1' || qm template <VMID-TEMPLATE>
+   root@pbs01:~# qm set <VMID-TEMPLATE> --tags 'current;debian13;gold'
    ```
-   `wb-restauration@pbs` : utilisateur PBS en lecture seule (`DatastoreReader`) sur `/datastore/ds-lab/par1`. Le stockage `pbs-local` ne porte **aucune** tâche de sauvegarde (contenu `backup` en lecture pour les restaurations : image dorée, `kms01` en S05).
+   La sauvegarde d'un template se restaure en template (`template: 1` dans sa configuration) : `qm template` ne sert que si ce n'est pas le cas. `wb-restauration@pbs` : utilisateur PBS en lecture seule (`DatastoreReader`) sur `/datastore/ds-lab/par1`. Les stockages `pbs-local*` ne portent **aucune** tâche de sauvegarde (contenu `backup` en lecture pour les restaurations).
 
 ## 5. Amorçage de `envs/par2`
 
@@ -111,19 +139,20 @@ Puis la même chose depuis `adm02` (clone **du miroir** de `plateforme/infra`, f
 
 ## 6. Réseau : vérifications et retour arrière
 
-Contrôles : `ip -4 addr show vmbr2` (10.20.20.1/24) ; `nft list table inet par2` ; depuis `adm02` : `ping 10.10.20.10` (par `wg0`), `curl -sI https://deb.debian.org` (Internet), `ping <une-adresse-du-LAN-maison>` **en échec** ; depuis ton poste par `wg1` : `ssh admin@10.20.20.10`.
+Contrôles : `ip -4 addr show vmbr2` (10.20.20.1/24) ; `nft list table inet par2` ; `chronyc sources` sur `dns03` (10.20.20.1 joignable, `^*` ou `^+`) ; depuis `adm02` : `ping 10.10.20.10` (par `wg0`), `curl -sI https://deb.debian.org` (Internet), `ping <une-adresse-du-LAN-maison>` **en échec** ; depuis ton poste par `wg1` : `ssh admin@10.20.20.10`.
 
 Retour arrière (dans cet ordre, chacun testé avant la mise en service) :
 ```
 root@pbs01:~# systemctl disable --now wg-quick@wg1 nftables-par2
 root@pbs01:~# pvesh delete /nodes/pbs01/network/vmbr2 && pvesh set /nodes/pbs01/network
 root@pbs01:~# rm /etc/sysctl.d/90-par2.conf && sysctl -w net.ipv4.ip_forward=0
+root@pbs01:~# cp /root/f5/nftables.conf.avant-F5 /etc/nftables.conf && nft -c -f /etc/nftables.conf && systemctl restart nftables
 ```
-`vmbr0`, `vmbr1` et `wg0` ne sont jamais modifiés par ce runbook : s'ils changent, c'est une erreur, et l'archive du §2 contient leur configuration.
+L'interface LAN, `vmbr1` et `wg0` ne sont jamais modifiés par ce runbook : s'ils changent, c'est une erreur, et l'archive du §2 contient leur configuration (`/etc/network`, `/etc/wireguard`, `/etc/nftables.conf`).
 
 ## 7. DNS
 
-- MR sur `plateforme/ansible` : `host_vars/dns03/*`, ajout de 10.20.20.11 aux `powerdns_auth_notifier` de `dns01`, noms globaux dans la zone parente (`powerdns_auth.yml.extrait-F5`) ; flux de la bordure (extrait `pare_feu.yml`).
+- MR sur `plateforme/ansible` : `host_vars/dns03/*`, ajout de 10.20.20.11 aux `powerdns_auth_notifier` de `dns01` **et** à son filtrage local (`host_vars/dns01/pare_feu_local.yml`, 5300), noms globaux dans la zone parente (`powerdns_auth.yml.extrait-F5`) ; flux de la bordure (extrait `pare_feu.yml`).
 - Contrôle : `dig @10.20.20.11 SOA par1.medisphere.internal +short` = même série que `dig @10.10.20.10 …` ; `dig @10.10.20.10 mediagenda.medisphere.internal CNAME` : TTL ≤ 60.
 
 ## 8. Retour arrière de l'installation de Proxmox VE
@@ -131,14 +160,14 @@ root@pbs01:~# rm /etc/sysctl.d/90-par2.conf && sysctl -w net.ipv4.ip_forward=0
 À appliquer si un contrôle du §3 est rouge, ou si PBS se comporte anormalement dans les 7 jours (CHG-3503). Avant : aucune VM de PAR2 en service (sinon d'abord `envs/par2` détruit, sauf `s3-02` et son état exportés).
 
 ```
-root@pbs01:~# grep -A3 'Commandline: apt-get install proxmox-ve' /var/log/apt/history.log    # transaction exacte
+root@pbs01:~# grep -A4 'Commandline: apt-get install proxmox-ve' /var/log/apt/history.log    # transaction exacte
 root@pbs01:~# apt-get -s purge <PAQUETS-INSTALLÉS-PAR-CETTE-TRANSACTION>                       # simulation d'abord
 root@pbs01:~# apt-get purge <PAQUETS-INSTALLÉS-PAR-CETTE-TRANSACTION>
-root@pbs01:~# rm /etc/apt/sources.list.d/pve-install-repo.sources /etc/apt/sources.list.d/pve-enterprise.sources
+root@pbs01:~# rm -f /etc/apt/sources.list.d/pve-install-repo.sources /etc/apt/sources.list.d/pve-enterprise.sources
 root@pbs01:~# apt-get update
 root@pbs01:~# diff <(dpkg --get-selections) <(tar -xzOf /root/f5/pbs-config-<DATE>.tar.gz ./dpkg-selections.txt)
 ```
 
-La simulation ne doit retirer **aucun** paquet `proxmox-backup*`, `proxmox-kernel*` ni `ifupdown2` : sinon, arrêt et purge paquet par paquet. Le `diff` final doit être vide. Contrôles du §3 côté PBS, sauvegarde nocturne suivante vérifiée.
+On ne purge que la ligne `Install:` de la transaction ; les paquets de sa ligne `Upgrade:` (bibliothèques communes à PVE et PBS) **restent** dans leur nouvelle version : c'est pourquoi on les relit, avant d'installer, dans la simulation jointe au go/no-go (lignes `Inst <paquet> [<version actuelle>] (<nouvelle version> …)`). La simulation ne doit retirer **aucun** paquet `proxmox-backup*`, `proxmox-kernel*` ni `ifupdown2` : sinon, arrêt et purge paquet par paquet. Le `diff` final doit être vide. Contrôles du §3 côté PBS, sauvegarde nocturne suivante vérifiée.
 
 **Limite écrite** : ce retour arrière n'est pas documenté par Proxmox ; il repose sur l'historique d'APT. La restauration complète (réinstallation de PBS par ISO et import du datastore, qui reste intact sur son disque) est le dernier recours.

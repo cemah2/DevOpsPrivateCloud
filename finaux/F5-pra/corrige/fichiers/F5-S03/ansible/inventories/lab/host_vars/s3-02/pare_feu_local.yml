@@ -1,0 +1,8 @@
+---
+# host_vars/s3-02/pare_feu_local.yml — flux d'entrée propres à s3-02 (F5-S03 ; S06 : k8s-par2). Seule la
+# passerelle S3 (8333) écoute sur le réseau (rôle seaweedfs) ; master, volume et filer restent en local.
+pare_feu_local_regles:
+  - {source: [10.10.10.10, 10.20.20.0/24, 10.255.3.0/24], proto: tcp, ports: 8333,
+     motif: "API S3 : adm01 (OpenTofu, checks), PAR2 INFRA (adm02, k8s-par2, bao-par2), VPN de secours", ref: F5-S03}
+pare_feu_local_verifications:
+  - {port: 8333, motif: "API S3"}

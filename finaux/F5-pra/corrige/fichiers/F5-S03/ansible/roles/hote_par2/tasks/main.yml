@@ -17,6 +17,25 @@
   check_mode: false
   failed_when: hote_par2_pve.rc != 0 or 'pve-manager/9.2' not in hote_par2_pve.stdout
 
+- name: Garde-fou — l'interface LAN déclarée porte bien la route par défaut de hp01
+  ansible.builtin.command: ip -4 route show default
+  register: hote_par2_defaut
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    hote_par2_interface_lan | length == 0 or
+    ('dev ' ~ hote_par2_interface_lan ~ ' ') not in (hote_par2_defaut.stdout ~ ' ')
+
+- name: Garde-fou — le pare-feu de l'hôte (inet filter, M00-E21) a reçu les ajouts F5 (RB-353 §6)
+  ansible.builtin.command: nft list table inet filter
+  register: hote_par2_filtre
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    hote_par2_filtre.rc != 0 or
+    (hote_par2_pont not in hote_par2_filtre.stdout) or
+    ('51823' not in hote_par2_filtre.stdout)
+
 # --- Stockage et pool -----------------------------------------------------------------------------
 - name: Jeu ZFS de par2-vms avec quota (si ZFS)
   when: hote_par2_zfs_jeu | length > 0
@@ -72,14 +91,20 @@
 
 # --- Pont vmbr2 -----------------------------------------------------------------------------------
 # Par l'API réseau de Proxmox VE (comme l'interface web) : la configuration est écrite dans
-# /etc/network/interfaces.new puis appliquée par ifupdown2 (ifreload). vmbr0, vmbr1 et wg0 ne changent
-# pas ; wg0, géré par wg-quick, n'est pas dans ce fichier et n'est pas touché par le rechargement.
+# /etc/network/interfaces.new puis appliquée par ifupdown2 (ifreload). L'interface LAN et vmbr1 ne
+# changent pas ; wg0 et wg1, gérés par wg-quick, ne sont pas dans ce fichier et ne sont pas touchés.
 - name: Lire vmbr2
   ansible.builtin.command: "pvesh get /nodes/{{ hote_par2_noeud }}/network/{{ hote_par2_pont }} --output-format json"
   register: hote_par2_vmbr2
   changed_when: false
   failed_when: false
   check_mode: false
+
+- name: Aucune modification réseau en attente (sinon ifreload appliquerait aussi celles d'un autre)
+  ansible.builtin.stat:
+    path: /etc/network/interfaces.new
+  register: hote_par2_attente
+  failed_when: hote_par2_vmbr2.rc != 0 and hote_par2_attente.stat.exists
 
 - name: Créer vmbr2 (pont sans port physique)
   ansible.builtin.command: >-
@@ -124,10 +149,13 @@
     content: |
       # Gérée par Ansible (rôle hote_par2, F5-S03). Charge /etc/nftables.d/par2.nft, qui commence par
       # « destroy table inet par2 » : aucune autre table n'est touchée (pas de « flush ruleset »).
+      # PartOf : un « systemctl restart nftables » (flush ruleset de /etc/nftables.conf) recharge aussi
+      # cette table ; sans lui, PAR2 INFRA perdrait sa sortie Internet et le set « isoles » en silence.
       [Unit]
       Description=Table nftables du site PAR2 (NAT et filtrage de PAR2 INFRA)
-      After=network-online.target
+      After=network-online.target nftables.service
       Wants=network-online.target
+      PartOf=nftables.service
 
       [Service]
       Type=oneshot

@@ -1,8 +1,11 @@
 #!/usr/sbin/nft -f
 # {{ ansible_managed | default('Géré par Ansible') }} — rôle hote_par2 (F5-S03, CHG-3503).
 # Table du site PAR2 sur hp01. Elle ne filtre QUE le trafic TRANSITÉ par hp01 (chaîne forward) et
-# traduit la sortie Internet de PAR2 INFRA. Elle ne touche pas à l'entrée de hp01 (PBS, SSH, API) :
-# un filtrage d'entrée de hp01 est un autre changement, avec son propre retour arrière.
+# traduit la sortie Internet de PAR2 INFRA. L'entrée de hp01 (PBS, SSH, API, NTP, wg1) reste filtrée par
+# la table « inet filter » de /etc/nftables.conf (M00-E21, gérée à la main) : ses ajouts F5 sont dans
+# RB-353 §6. ⚠️ Cette table-là a aussi une chaîne forward en « policy drop » : un paquet doit être
+# accepté par LES DEUX chaînes forward. inet filter laisse passer ce qui touche vmbr2 ou wg1 ; c'est
+# ICI que se fait le filtrage fin.
 # « destroy » (nftables ≥ 1.0.8, Debian 13) : supprime la table si elle existe, sans erreur sinon.
 destroy table inet par2
 
@@ -23,6 +26,11 @@ table inet par2 {
         type filter hook forward priority filter; policy drop;
         ct state established,related accept
         ct state invalid drop
+        # Trafic INTERNE à PAR2 INFRA (VM ↔ VM sur vmbr2). Normalement commuté par le pont sans passer par
+        # cette chaîne ; il n'y passe que si br_netfilter est actif (bridge-nf-call-iptables = 1, par
+        # exemple quand le pare-feu de Proxmox VE est activé sur une VM). Sans cette règle, la politique
+        # « drop » couperait alors tout PAR2 INFRA, y compris bao-par2 → kms01 restauré (S05).
+        iifname "{{ hote_par2_pont }}" oifname "{{ hote_par2_pont }}" accept
         ip saddr @isoles counter drop comment "hôte isolé (bac à sable) : aucune sortie de PAR2 INFRA"
         ip daddr @isoles counter drop comment "hôte isolé : aucune entrée depuis l'extérieur de PAR2 INFRA"
 

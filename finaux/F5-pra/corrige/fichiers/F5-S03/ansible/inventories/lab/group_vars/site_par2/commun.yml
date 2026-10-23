@@ -4,23 +4,28 @@ ansible_user: admin
 site: par2
 site_domaine: par2.medisphere.internal
 
+# Variables des rôles de PAR1 (même code), valeurs de PAR2 :
+ms_site: par2
+ms_domaine: par2.medisphere.internal
+
 # Temps : la passerelle de PAR2 INFRA (hp01), qui garde une source Internet (rôle hote_par2).
-chrony_serveurs:
+# ⚠️ group_vars/all/temps.yml (M07-E25) calcule .2 et .3 du VLAN, en NTS : ces adresses n'existent pas
+# à PAR2, et chrony de hp01 ne sert pas NTS (pas de certificat) → valeurs propres au site.
+base_ntp_serveurs:
   - 10.20.20.1
+base_ntp_nts: false
 
-# Résolution : dns03 (récurseur local) ; dns01 en secours tant que PAR1 existe.
-resolveurs:
-  - 10.20.20.11
-  - 10.10.20.10
+# Résolution : posée par cloud-init (envs/par2, module vm-par2 : dns03 puis dns01). Racine MédiSphère :
+# la même qu'à PAR1 (rôle certificats_acme, M06) ; l'autorité de PAR2 (S05) n'est qu'un émetteur de
+# plus sous cette racine.
 
-# Racine MédiSphère : la même qu'à PAR1 (certificat public, M06). L'autorité intermédiaire de PAR2
-# (S05) n'est qu'un émetteur de plus sous cette racine : rien à ajouter au magasin des VMs.
-ca_racine_fichier: /usr/local/share/ca-certificates/medisphere-root-ca.crt
-
-# Pare-feu local (rôle pare_feu_local, M06-E30) : SSH depuis MGMT de PAR1 (adm01, runner01), depuis
-# adm02 et depuis le VPN de secours ; supervision node_exporter depuis mon01 (S04) et adm02.
-pare_feu_local_ssh_sources:
-  - 10.10.10.10      # adm01
-  - 10.10.20.15      # runner01 (pipeline Ansible)
-  - 10.20.20.10      # adm02
-  - 10.255.3.0/24    # wg1 de hp01
+# Pare-feu local (rôle pare_feu_local, M06-E30) — appliqué à dns03 et s3-02 seulement (comme dns01/dns02
+# à PAR1 ; jamais au nœud Kubernetes ni à reg02, dont Docker gère ses propres règles nftables).
+# Flux communs : SSH (adm01, runner01, adm02, VPN de secours), node_exporter (mon01, adm02), ACME HTTP-01.
+pare_feu_local_communes:
+  - {source: [10.10.10.10, 10.10.20.15, 10.20.20.10, 10.255.3.0/24], proto: tcp, ports: 22,
+     motif: "SSH : adm01, runner01, adm02, VPN de secours wg1", ref: F5-S03}
+  - {source: [10.10.20.19, 10.20.20.10], proto: tcp, ports: 9100,
+     motif: "node_exporter : témoin de mon01 (veille), Prometheus de secours de adm02 (PRA)", ref: F5-S03}
+  - {source: 10.10.20.11, proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 depuis ca01", ref: F5-S03}

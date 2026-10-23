@@ -1,0 +1,41 @@
+# /etc/nftables.conf sur hp01 (nœud pbs01) — AJOUTS F5-S03 (CHG-3503, RB-353 §4.1), table inet filter.
+# Ce fichier vient du M00-E21 (complété en M01-E28 et M06-E28) et n'est PAS géré par Ansible : on
+# l'édite à la main, avec les précautions du M00-E21 (copie datée du fichier, « nft -c -f » avant
+# d'appliquer, session SSH ouverte ET console iLO prête, retour arrière programmé). Rien n'est retiré :
+# chaque ligne ci-dessous est un AJOUT, repérable par « F5-S03 » ; le retour arrière les supprime.
+#
+# Pourquoi c'est nécessaire : la table inet filter de hp01 a des chaînes input ET forward en
+# « policy drop ». Un paquet doit être accepté par TOUTES les chaînes de base d'un même crochet : la
+# table inet par2 (rôle hote_par2) ne peut rien ouvrir que inet filter refuse.
+#
+# Valeurs d'exemple : $LAN_IF, $ADMIN_SRC sont les définitions existantes du M00-E21.
+
+table inet filter {
+	chain input {
+		# … règles existantes (M00-E21, M01-E28, M06-E28), inchangées …
+
+		# --- F5-S03 : hyperviseur et site PAR2 ---------------------------------------------------------
+		iifname $LAN_IF udp dport 51823 accept comment "F5-S03 wg1 : VPN de secours de PAR2 (poste de l'apprenant)"
+		iifname "wg0" ip saddr $ADMIN_SRC tcp dport 8006 accept comment "F5-S03 API et interface de Proxmox VE depuis adm01 (OpenTofu envs/par2)"
+		iifname "wg1" ip saddr 10.255.3.0/24 tcp dport { 22, 8006, 8007 } accept comment "F5-S03 administration de hp01 par le VPN de secours"
+		iifname "vmbr2" ip saddr 10.20.20.10 tcp dport { 22, 8006, 8007 } accept comment "F5-S03 adm02 : administration de hp01, OpenTofu de PAR2"
+		iifname "vmbr2" ip saddr 10.20.20.0/24 udp dport 123 accept comment "F5-S03 NTP servi à PAR2 INFRA (chrony de hp01)"
+	}
+
+	chain forward {
+		# policy drop conservée. Ce qui touche PAR2 INFRA ou le VPN de secours est délégué à la table
+		# inet par2 (forward, policy drop, filtrage fin : isolés, LAN maison interdit, wg1 → PAR2 seulement).
+		iifname { "vmbr2", "wg1" } accept comment "F5-S03 délégué à inet par2"
+		oifname "vmbr2" accept comment "F5-S03 délégué à inet par2"
+	}
+}
+
+# Application (RB-353 §4.1) :
+#   root@pbs01:~# cp -a /etc/nftables.conf /root/f5/nftables.conf.avant-F5
+#   root@pbs01:~# vi /etc/nftables.conf                       # ajouts ci-dessus
+#   root@pbs01:~# nft -c -f /etc/nftables.conf && echo syntaxe OK
+#   root@pbs01:~# systemd-run --on-active=5min --unit=retour-nft /bin/sh -c 'cp /root/f5/nftables.conf.avant-F5 /etc/nftables.conf && systemctl restart nftables'
+#   root@pbs01:~# systemctl restart nftables && nft list table inet filter | grep -c F5-S03   # 7 règles
+#   (nouvelle session SSH depuis adm01 ET depuis le LAN maison : OK)  root@pbs01:~# systemctl stop retour-nft.timer
+# « systemctl restart nftables » recharge aussi la table inet par2 si elle existe déjà (PartOf de
+# nftables-par2.service) ; au tout premier passage, elle n'existe pas encore.

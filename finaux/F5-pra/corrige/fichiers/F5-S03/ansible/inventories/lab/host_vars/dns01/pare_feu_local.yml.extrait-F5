@@ -1,0 +1,5 @@
+# host_vars/dns01/pare_feu_local.yml — EXTRAIT (F5-S03, CHG-3503) : à AJOUTER à pare_feu_local_regles
+# (fichier du M15-E14). Sans lui, dns03 ne reçoit jamais la zone : le filtrage local de dns01 n'ouvre
+# 5300 qu'à dns02, adm01 et aux nœuds de k8s-par1. La bordure (pare_feu.yml) doit AUSSI le laisser passer.
+  - {source: 10.20.20.11, proto: tcp_udp, ports: 5300,
+     motif: "AXFR signé TSIG de dns03 (secondaire de PAR2)", ref: F5-S03}

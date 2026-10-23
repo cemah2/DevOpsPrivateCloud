@@ -1,0 +1,10 @@
+---
+# host_vars/dns03/pare_feu_local.yml — flux d'entrée propres à dns03 (F5-S03), en plus des communs de
+# group_vars/site_par2/commun.yml. Même logique que dns01/dns02 (M06-E30, M15-E14).
+pare_feu_local_regles:
+  - {source: [10.20.0.0/16, 10.10.0.0/16, 10.255.3.0/24], proto: tcp_udp, ports: 53,
+     motif: "récurseur : PAR2, contrôles depuis PAR1 (adm01), VPN de secours", ref: F5-S03}
+  - {source: [10.10.20.10, 10.20.20.10], proto: tcp_udp, ports: 5300,
+     motif: "autoritaire secondaire : NOTIFY de dns01, diagnostic depuis adm02", ref: F5-S03}
+pare_feu_local_verifications:
+  - {port: 53, motif: "DNS"}

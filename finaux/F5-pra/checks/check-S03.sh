@@ -130,5 +130,7 @@ _f5_s03_source_hors_par1() {
   _f5p_hp01 'chronyc -n sources 2>/dev/null' | awk 'NR > 2 { print $2 }' | grep -Evq '^(10\.10\.|10\.255\.)'
 }
 check_cmd "hp01 : une source de temps qui ne passe pas par PAR1" _f5_s03_source_hors_par1
-check_cmd "dns03 se synchronise sur 10.20.20.1" \
-  _f5p_ssh "$_f5p_dns03_hote" 'chronyc -n sources 2>/dev/null | grep -q "10\.20\.20\.1"'
+# Source choisie (^*) ou combinable (^+) : prouve que hp01 répond en NTP (pare-feu de l'hôte compris),
+# pas seulement que la ligne est configurée.
+check_cmd "dns03 se synchronise sur 10.20.20.1 (source joignable et retenue par chrony)" \
+  _f5p_ssh "$_f5p_dns03_hote" 'chronyc -n sources 2>/dev/null | awk "\$2 == \"10.20.20.1\" && \$1 ~ /^\^[*+]/ { ok = 1 } END { exit !ok }"'

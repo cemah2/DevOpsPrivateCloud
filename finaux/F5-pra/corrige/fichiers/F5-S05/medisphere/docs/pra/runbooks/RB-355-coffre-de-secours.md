@@ -12,6 +12,11 @@
 ## 1. Préalables (go)
 
 - `nft list set inet par2 isoles` sur `hp01` contient 10.20.20.24.
+- **Répétition seulement** (PAR1 vivant) : `bao-par2` devient une **copie de la production** dès la restauration de l'instantané. Au démarrage, OpenBao révoque les baux expirés qu'il trouve : pour le moteur `db-mediagenda`, c'est un `DROP ROLE` exécuté… sur la base de **production** si elle est joignable. On isole donc aussi 10.20.20.21 pendant toute la répétition (la bordure ne laisse rien passer de PAR2 INFRA vers la base, c'est la seconde ceinture) :
+  ```
+  root@pbs01:~# nft add element inet par2 isoles '{ 10.20.20.21 }' && nft list set inet par2 isoles
+  ```
+  Le set revient à son contenu de référence (10.20.20.24 seul) au prochain rechargement de `nftables-par2` (§6). En PRA, PAR1 est isolé : inutile.
 - Dernière sauvegarde de 1024 visible dans `pbs-local` ; son **âge** est noté (il borne la validité du jeton de seal, §5).
 - Trois gardiens de parts présents (ou joignables pour saisir leur part sur `adm02` l'un après l'autre).
 - Répétition seulement : écrire à PAR1, **après** le dernier instantané horaire, un secret témoin `bao kv put -mount=kv wb-essais/rpo-par2 ecrit_a="$(date +%T)"` : il doit être **absent** de la copie (mesure du RPO du coffre).
@@ -33,7 +38,7 @@ root@pbs01:~# qm set 3501 --net0 virtio=<MAC>,bridge=vmbr2
 ```
 Les noms d'unités et le chemin du certificat sont ceux des rôles `openbao_kms`, `alloy`, `certificats_acme` de ton dépôt : lis-les dans la copie. Le certificat doit être **encore valide** (ACME, 30 jours) au nom `kms01.par1.medisphere.internal`.
 
-Contrôle d'isolement **avant** le descellement : depuis la copie, `qm guest exec 3501 -- curl -sS -m 5 https://s3-01.par1.medisphere.internal:8333` **échoue** ; les compteurs des règles `isoles` (`nft list chain inet par2 forward`) augmentent.
+Contrôle d'isolement **avant** le descellement (la copie a gardé le nom `kms01` et ses noms de PAR1 se résolvent toujours vers PAR1 par `dns03` : seule l'adresse **10.20.20.24** désigne la copie dans les commandes, jamais `kms01.par1.medisphere.internal`, qui est la production) : depuis la copie, `qm guest exec 3501 -- curl -sS -m 5 https://s3-01.par1.medisphere.internal:8333` **échoue** ; les compteurs des règles `isoles` (`nft list chain inet par2 forward`) augmentent.
 
 ## 3. Desceller la copie
 
@@ -81,6 +86,7 @@ Mesures dans `docs/pra/mesures/repetition-coffre-<AAAA-MM-JJ>.md`.
 admin@adm02:~$ ssh bao-par2 'sudo systemctl stop openbao && sudo find /var/lib/openbao -mindepth 1 -delete'
 root@pbs01:~# qm shutdown 1055
 root@pbs01:~# /root/f5/restaurer-kms01-par2.sh --detruire
+root@pbs01:~# systemctl reload nftables-par2 && nft list set inet par2 isoles      # 10.20.20.24 seul
 admin@adm02:~$ shred -u "$XDG_RUNTIME_DIR/par2-init.json"
 ```
 `bao-par2` revient **non initialisé** : aucune copie du coffre au repos à PAR2 hors PRA. Aucun jeton n'a été créé à PAR1 : rien à révoquer côté production. Enveloppe rescellée (journal de `enveloppe.md`). Puis `lab/bin/check F5 5`.

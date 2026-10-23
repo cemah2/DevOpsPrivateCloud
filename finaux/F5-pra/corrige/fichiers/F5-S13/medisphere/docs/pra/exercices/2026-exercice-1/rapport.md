@@ -90,7 +90,7 @@ Décomposition du RTO de MédiAgenda :
 | E5 | Aucune copie hors de `hp01` des données écrites pendant le PRA (avant 15:10) | perte totale de la journée si `hp01` tombait | PRA v1 conçu pour reprendre, pas pour durer | PLAT-3533 : cible de sauvegarde chez un tiers HDS (ADR-0350 révisée) |
 | E6 | Droit `List` manquant sur l'identité de lecture de `cnpg-k8s-par2` (retour) | 12 min de retour | flux de retour jamais essayé | PLAT-3538 : le test trimestriel lit l'archive de PAR2 depuis PAR1 |
 | E7 | Legacy-RDV : 7 h 37 de rendez-vous à ressaisir | charge pour les cabinets | RPO de 24 h accepté en S01 (application en fin de vie) | aucune (accepté) ; à rappeler dans l'ADR-0340 |
-| E8 | Rejeu des notifications fait à la main | 12 min, risque d'erreur | pas de fonction de rejeu dans MédiAgenda | DEV-3539 (équipe MédiAgenda) |
+| E8 | Rejeu des notifications fait à la main | 12 min, risque d'erreur | pas de fonction de rejeu dans MédiAgenda | PLAT-3539 (avec l'équipe MédiAgenda) |
 
 ## 5. Ce qui a bien marché
 
@@ -120,7 +120,7 @@ Décomposition du RTO de MédiAgenda :
 | PLAT-3536 | RB-350 : reconfiguration du moteur `db-mediagenda` déplacée en vague 3 | Plateforme | 2027-01-15 |
 | PLAT-3537 | supervision minimale de PAR2 permanente (en veille aussi) ; `objectifs.md` révisé | Plateforme | 2027-01-31 |
 | PLAT-3538 | test de reprise trimestriel automatisé, avec lecture de l'archive de PAR2 depuis PAR1 | Plateforme | 2027-01-15 |
-| DEV-3539 | fonction de rejeu des notifications dans MédiAgenda | Julien Petit | 2027-T1 |
+| PLAT-3539 | fonction de rejeu des notifications dans MédiAgenda | Julien Petit | 2027-T1 |
 
 ## 8. Révisions décidées
 

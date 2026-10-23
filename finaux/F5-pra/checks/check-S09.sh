@@ -18,24 +18,30 @@ if [[ -z "$_f5_s09_t0" ]]; then
 else
   check_cmd "sinistre en cours : T0 = $(date -d "@$_f5_s09_t0" '+%F %H:%M:%S')" true
 fi
-_f5_s09_par1_coupe() { ! curl -s -o /dev/null --max-time 3 "https://git01.par1.medisphere.internal/" 2>/dev/null; }
-check_cmd "PAR1 reste injoignable depuis PAR2 (isolement non levé)" _f5_s09_par1_coupe
+_f5_s09_par1_coupe() { ! _f5e_par1_joignable; }
+check_cmd "PAR1 reste injoignable depuis PAR2 (dns01:53 et git01:443 par adresse ; isolement non levé)" _f5_s09_par1_coupe
 
 _f5_s09_cname() { dig +short +time="$WB_TIMEOUT" +tries=1 "@$_f5p_dns03" "$1" CNAME 2>/dev/null | grep -Eq '\.apps\.par2\.medisphere\.internal\.?$'; }
+# TTL lu sur l'autoritaire de dns03 (port 5300) ; à défaut, sur son récurseur (le TTL d'une réponse en
+# cache ne dépasse jamais celui de la zone : un TTL de zone long finit par s'y voir).
 _f5_s09_ttl() {
   local t
-  t="$(dig +noall +answer +time="$WB_TIMEOUT" +tries=1 "@$_f5p_dns03" -p 5300 "$1" CNAME 2>/dev/null | awk '{print $2; exit}')" || return 1
-  [[ -n "$t" ]] && ((t <= 300))
+  t="$(dig +noall +answer +time="$WB_TIMEOUT" +tries=1 "@$_f5p_dns03" -p 5300 "$1" CNAME 2>/dev/null | awk '{print $2; exit}')" || t=""
+  [[ -n "$t" ]] || t="$(dig +noall +answer +time="$WB_TIMEOUT" +tries=1 "@$_f5p_dns03" "$1" CNAME 2>/dev/null | awk '{print $2; exit}')" || t=""
+  [[ -n "$t" ]] || return 2
+  ((t <= 300))
 }
 for _f5_n in "${_F5E_NOMS[@]}"; do
   check_cmd "dns03 : $_f5_n → *.apps.par2.medisphere.internal" _f5_s09_cname "$_f5_n"
   _f5_s09_site="$(_f5e_site "$_f5_n" 2>/dev/null || true)"
   check_cmd "$_f5_n répond (2xx) avec X-MediSphere-Site: par2 (reçu : ${_f5_s09_site:-aucune réponse})" test "$_f5_s09_site" = par2
 done
-if _f5_s09_ttl mediagenda.medisphere.internal; then
-  check_cmd "TTL des noms globaux toujours court (≤ 300 s) sur l'autoritaire de dns03" true
+_f5_s09_rc=0
+_f5_s09_ttl mediagenda.medisphere.internal || _f5_s09_rc=$?
+if ((_f5_s09_rc == 2)); then
+  check_cmd "TTL de mediagenda.medisphere.internal lisible sur dns03 (autoritaire ou récurseur)" false
 else
-  skip "TTL des noms globaux" "autoritaire de dns03 non interrogeable sur le port 5300 depuis adm02"
+  check_cmd "TTL des noms globaux court (≤ 300 s) sur dns03" test "$_f5_s09_rc" -eq 0
 fi
 
 # RTO mesurés par la sonde.

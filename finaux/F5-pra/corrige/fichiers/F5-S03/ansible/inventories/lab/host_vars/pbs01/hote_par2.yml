@@ -5,9 +5,10 @@ hote_par2_pont: vmbr2
 hote_par2_adresse: 10.20.20.1/24
 hote_par2_reseau: 10.20.20.0/24
 
-# Interface LAN de hp01 (sortie Internet de PAR2 INFRA). Lis-la sur hp01 (ip route get 1.1.1.1) : avec
-# le noyau 7.0 de PBS 4.2, les noms peuvent changer ; c'est le PONT du LAN qui porte l'adresse (vmbr0).
-hote_par2_interface_lan: vmbr0
+# Interface LAN de hp01 (sortie Internet de PAR2 INFRA) : la CARTE qui porte <IP-HP01-LAN> (M00-E20 :
+# pas de pont vmbr0 sur hp01). Lis-la sur hp01 (ip route get 1.1.1.1) : avec le noyau 7.0 de PBS 4.2,
+# les noms peuvent changer. Le rôle vérifie qu'elle porte la route par défaut.
+hote_par2_interface_lan: "<NIC-HP01-LAN>"     # ex. eno1
 hote_par2_lan_maison: "<LAN-MAISON>"         # ex. 192.168.1.0/24 : PAR2 INFRA n'y a PAS accès
 
 # VPN de secours : n'ouvre que PAR2.

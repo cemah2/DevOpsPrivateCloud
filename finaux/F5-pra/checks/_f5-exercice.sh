@@ -97,6 +97,16 @@ _f5e_levee() {
   _f5e_lire gw01 /var/lib/workbook/f5-levee 2>/dev/null | sed -n 's/^LEVEE_EPOCH=\([0-9][0-9]*\)$/\1/p' | head -n1
 }
 
+# _f5e_par1_joignable — vrai si une adresse de PAR1 répond en TCP depuis ce poste (dns01:53, git01:443),
+# par ADRESSE : un nom de PAR1 qui ne se résout plus ne prouve pas que l'isolement tient.
+_f5e_par1_joignable() {
+  local cible
+  for cible in 10.10.20.10/53 10.10.20.12/443; do
+    timeout 3 bash -c "exec 3<>/dev/tcp/$cible" 2>/dev/null && return 0
+  done
+  return 1
+}
+
 # ---------------------------------------------------------------------------------------------
 # Kubernetes
 # ---------------------------------------------------------------------------------------------

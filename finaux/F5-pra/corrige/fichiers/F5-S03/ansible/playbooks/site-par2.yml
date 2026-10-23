@@ -4,7 +4,7 @@
 #   uv run ansible-playbook playbooks/site-par2.yml --limit pbs01 --diff        (hôte : après RB-353 §3)
 #   uv run ansible-playbook playbooks/site-par2.yml --limit site_par2 --diff    (VMs)
 # Les rôles des VMs sont CEUX DE PAR1 (même code) : base, chrony client, certificats ACME, node_exporter,
-# pare_feu_local, powerdns_auth/powerdns_recursor (dns03), seaweedfs (s3-02)…
+# pare_feu_local (dns03, s3-02), powerdns_auth/powerdns_recursor (dns03), seaweedfs (s3-02)…
 
 - name: hp01 — hyperviseur de PAR2 à côté de PBS
   hosts: hote_par2
@@ -17,9 +17,19 @@
   become: true
   roles:
     - base
-    - pare_feu_local
     - certificats_acme
     - node_exporter
+
+# Filtrage local : comme à PAR1 (dns01, dns02… M06-E30), seulement sur les services du socle. Jamais sur
+# k8s-par2-n01 (Cilium) ni reg02 (Docker) : le « flush ruleset » du rôle effacerait leurs règles.
+- name: dns03 et s3-02 — filtrage local (un à la fois)
+  hosts: role_dns_par2:role_s3_par2
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  roles:
+    - role: pare_feu_local
+      tags: [pare_feu_local]
 
 - name: dns03 — DNS secondaire et récurseur de PAR2
   hosts: role_dns_par2

@@ -20,9 +20,14 @@ check_cmd "T0 (adm02 ou gw01) et heure de levée de l'isolement (gw01) lisibles 
   test -n "$_f5_s12_t0" -a -n "$_f5_s12_levee"
 
 # 1. Isolement levé, DNS revenu.
-_f5_s12_sans_table() { ! _f5p_sur "$1" 'sudo -n nft list tables' 2>/dev/null | grep -q 'f5_sinistre' && _f5p_sur "$1" true; }
-check_cmd "gw01 : plus de table f5_sinistre" _f5_s12_sans_table gw01
-check_cmd "gw02 : plus de table f5_sinistre" _f5_s12_sans_table gw02
+# Table absente ET garde de la panne S09 retiré (sinon la table reviendrait dans les 10 s).
+_f5_s12_sans_table() {
+  local t
+  t="$(_f5p_sur "$1" 'sudo -n nft list tables && echo FIN-NFT; systemctl is-active f5-sinistre-garde.timer 2>/dev/null || true' 2>/dev/null)" || return 1
+  grep -q '^FIN-NFT$' <<<"$t" && ! grep -q 'f5_sinistre' <<<"$t" && ! grep -qx 'active' <<<"$t"
+}
+check_cmd "gw01 : plus de table f5_sinistre ni de garde" _f5_s12_sans_table gw01
+check_cmd "gw02 : plus de table f5_sinistre ni de garde" _f5_s12_sans_table gw02
 _f5_s12_cname() { dig +short +time="$WB_TIMEOUT" +tries=1 "@$2" "$1" CNAME 2>/dev/null | grep -Eq '\.apps\.par1\.medisphere\.internal\.?$'; }
 _f5_s12_cname2() { _f5_s12_cname "$1" "$_f5p_dns01" && _f5_s12_cname "$1" "$_f5p_dns03"; }
 for _f5_n in "${_F5E_NOMS[@]}"; do
@@ -72,19 +77,25 @@ check_cmd "s3-02 : réplication filer.sync depuis s3-01 reprise" _f5p_filersync_
 
 # 3. Rien de ce qui a été écrit pendant le PRA n'est perdu.
 _f5_s12_mesures="docs/pra/mesures/$_f5e_exercice"
+# CHAQUE témoin du fichier (pas un échantillon) : une seule invocation de curl (connexion réutilisée), une
+# URL par identifiant ; les réponses 2xx sont filtrées par jq, les identifiants manquants comptés.
+_F5_S12_MANQUANTS=""
+_F5_S12_API="https://mediagenda.medisphere.internal/api/v1/rendez-vous"
 _f5_s12_temoins() {
-  local c ids n=0 ok=0 id r
+  local c ids trouves
   c="$(_f5p_fichier "$_f5p_projet_doc" "$_f5_s12_mesures/temoins-par2.csv" 2>/dev/null)" || return 1
-  ids="$(sed -n 's/^\([0-9][0-9]*\),.*/\1/p' <<<"$c")"
+  ids="$(sed -n 's/^\([0-9][0-9]*\),.*/\1/p' <<<"$c" | LC_ALL=C sort -u)"
   (($(grep -c . <<<"$ids") >= 10)) || return 1
-  while IFS= read -r id; do
-    n=$((n + 1))
-    r="$(curl -sf --max-time "$WB_TIMEOUT" "https://mediagenda.medisphere.internal/api/v1/rendez-vous/$id" 2>/dev/null)" || continue
-    jq -e '.praticien == "PRA-TEMOIN"' >/dev/null 2>&1 <<<"$r" && ok=$((ok + 1))
-  done < <(awk 'NR % 5 == 1' <<<"$ids" | head -n 40)
-  ((n > 0 && ok == n))
+  trouves="$(awk -v b="$_F5_S12_API" '{ printf "url = \"%s/%s\"\n", b, $0 }' <<<"$ids" \
+    | curl -s -f --max-time "$WB_TIMEOUT" -K - 2>/dev/null \
+    | jq -r 'select(.praticien? == "PRA-TEMOIN") | .id' 2>/dev/null | LC_ALL=C sort -u)" || true
+  _F5_S12_MANQUANTS="$(LC_ALL=C comm -23 <(printf '%s\n' "$ids") <(printf '%s\n' "$trouves") | grep -c . || true)"
+  ((_F5_S12_MANQUANTS == 0))
 }
-check_cmd "témoins écrits à PAR2 pendant le PRA ($_f5_s12_mesures/temoins-par2.csv) tous servis par PAR1" _f5_s12_temoins
+_f5_s12_temoins_ok=0
+_f5_s12_temoins && _f5_s12_temoins_ok=1
+check_cmd "chaque témoin écrit à PAR2 pendant le PRA ($_f5_s12_mesures/temoins-par2.csv, au moins 10) servi par PAR1 (manquants : ${_F5_S12_MANQUANTS:-?})" \
+  test "$_f5_s12_temoins_ok" -eq 1
 _f5_s12_documents() {
   local c ids n=0 ok=0 id
   c="$(_f5p_fichier "$_f5p_projet_doc" "$_f5_s12_mesures/medidoc-par2.csv" 2>/dev/null)" || return 1
@@ -93,10 +104,10 @@ _f5_s12_documents() {
   while IFS= read -r id; do
     n=$((n + 1))
     [[ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://medidoc.medisphere.internal/documents/$id" 2>/dev/null)" == 200 ]] && ok=$((ok + 1))
-  done < <(head -n 30 <<<"$ids")
+  done <<<"$ids"
   ((n > 0 && ok == n))
 }
-check_cmd "documents MédiDoc déposés à PAR2 ($_f5_s12_mesures/medidoc-par2.csv) tous servis par PAR1" _f5_s12_documents
+check_cmd "chaque document MédiDoc déposé à PAR2 ($_f5_s12_mesures/medidoc-par2.csv) servi par PAR1" _f5_s12_documents
 
 # 4. Coupure du retour, documents.
 if [[ -n "$_f5_s12_levee" ]] && _f5e_csv >/dev/null 2>&1; then

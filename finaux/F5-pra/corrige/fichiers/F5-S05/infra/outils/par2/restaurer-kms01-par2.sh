@@ -3,7 +3,7 @@
 # RB-355 §2) : VMID 3501, carte réseau COUPÉE, adresse changée en 10.20.20.24, puis carte rebranchée sur
 # vmbr2 (où la table inet par2 l'isole : jamais routé hors de PAR2 INFRA). Projet plateforme/infra.
 # À lancer EN ROOT SUR hp01. Ne touche JAMAIS au kms01 de PAR1 (il est sur pve01 ; ce script ne parle
-# qu'à l'hyperviseur local et au stockage PBS « pbs-local »).
+# qu'à l'hyperviseur local et au stockage PBS « pbs-local », espace de noms par1/secrets, RB-353 §4).
 #
 # Usage : restaurer-kms01-par2.sh [INSTANTANÉ]     (défaut : le plus récent de vm/1024)
 #         restaurer-kms01-par2.sh --detruire          (fin de répétition : arrêt et destruction de 3501)
@@ -20,6 +20,8 @@ erreur() { echo "restaurer-kms01-par2 : $*" >&2; exit 1; }
 
 if [[ "${1:-}" == "--detruire" ]]; then
   qm status "$vmid" >/dev/null 2>&1 || { echo "3501 absente : rien à faire"; exit 0; }
+  # Garde-fou : on ne détruit que la COPIE posée par ce script (étiquette pra-kms01).
+  qm config "$vmid" | grep -Eq '^tags:.*pra-kms01' || erreur "la VM $vmid n'a pas l'étiquette pra-kms01 : ce n'est pas une copie de kms01, rien n'est détruit"
   qm stop "$vmid" --skiplock 1 || true
   qm destroy "$vmid" --purge 1 --destroy-unreferenced-disks 1
   echo "3501 détruite."
