@@ -1,0 +1,226 @@
+# plateforme/ci-templates — composant « validation » v2.11.0 (M29-E10, PLAT-3010).
+#
+# La base de la pyramide de tests de la plateforme, à CHAQUE MR, en quelques secondes, sans cluster :
+#   - rendu de ce qui sera appliqué (overlays Kustomize, charts des Applications Argo CD) ;
+#   - schémas : kubeconform -strict, Kubernetes ET CRD du cluster (paquet schemas-crd de plateforme/k8s) ;
+#   - règles : conftest sur les manifestes rendus (rego/kubernetes de plateforme/politiques, épinglé) ;
+#   - les politiques elles-mêmes : opa check, opa fmt, opa test, conftest verify (plateforme/politiques) ;
+#   - pour les plans OpenTofu : un modèle .validation:conftest-plan à appeler DANS le job de plan
+#     (le JSON d'un plan contient les valeurs sensibles en clair : il ne sort pas du job) ;
+#   - Testinfra (facultatif) : tests/infra contre le parc, sur runner01, planifié ou manuel.
+# Utilisation :
+#   include:
+#     - component: $CI_SERVER_FQDN/plateforme/ci-templates/validation@v2.11.0
+#       inputs:
+#         schemas_crd_version: "2026.10.23"
+#         politiques_ref: v1.4.0
+#         manifestes: [espaces, rbac, admission]
+# Pré-requis (une fois) : dans plateforme/k8s et plateforme/politiques, Settings > CI/CD > Job token
+# permissions : autoriser les projets consommateurs (lecture du paquet et du dépôt par CI_JOB_TOKEN).
+spec:
+  description: "Validation statique (kubeconform + CRD du cluster, conftest/OPA) et tests d'infrastructure (Testinfra)."
+  component: [version]
+  inputs:
+    stage:
+      default: valider
+    runner:
+      default: k8s
+    image:
+      description: "Image outils-validation (kubeconform, conftest, opa, kustomize, helm, yq) — étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/plateforme/outils-validation:1.0.0@sha256:<EMPREINTE-1.0.0>
+      regex: ^registry\.par1\.medisphere\.internal/.+:[^:@]+@sha256:([a-f0-9]{64}|<EMPREINTE-[0-9.]+>)$
+    version_kubernetes:
+      description: "Version du cluster (schémas de base de kubeconform, --kube-version de helm)"
+      default: "1.36.5"
+      regex: ^1\.[0-9]+\.[0-9]+$
+    schemas_crd_version:
+      description: "Version du paquet générique schemas-crd de plateforme/k8s (AAAA.MM.JJ[-N])"
+      regex: ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-[0-9]+)?$
+    politiques_ref:
+      description: "Étiquette de plateforme/politiques dont on prend les règles Rego (jamais une branche)"
+      regex: ^v[0-9]+\.[0-9]+\.[0-9]+$
+    manifestes:
+      description: "Dossiers ou fichiers de manifestes à valider tels quels"
+      type: array
+      default: []
+    overlays:
+      description: "Overlays Kustomize à rendre puis valider (chemins depuis la racine du dépôt)"
+      type: array
+      default: []
+    charts_argocd:
+      description: "Rendre les charts des Applications de plateforme/ (outils/rendre-charts.sh de plateforme/gitops)"
+      type: boolean
+      default: false
+    regles_kubernetes:
+      description: "Appliquer rego/kubernetes de plateforme/politiques aux manifestes rendus"
+      type: boolean
+      default: true
+    tests_rego:
+      description: "Ce dépôt EST plateforme/politiques : vérifier et tester ses règles Rego"
+      type: boolean
+      default: false
+    testinfra:
+      description: "Ajouter le job validation:testinfra (plateforme/ansible seulement)"
+      type: boolean
+      default: false
+    testinfra_hotes:
+      description: "Motif d'hôtes Testinfra (ansible://<motif>)"
+      default: socle
+      regex: ^[A-Za-z0-9_:,!&*-]+$
+---
+# --- Rendu, schémas et règles des manifestes -------------------------------------------------------
+validation:manifestes:
+  stage: $[[ inputs.stage ]]
+  image:
+    name: $[[ inputs.image ]]
+    entrypoint: [""]
+  tags: ["$[[ inputs.runner ]]"]
+  interruptible: true
+  rules:
+    - if: '"$[[ inputs.tests_rego ]]" == "true"'
+      when: never
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+  variables:
+    MANIFESTES: "$[[ inputs.manifestes ]]"
+    OVERLAYS: "$[[ inputs.overlays ]]"
+    SCHEMAS_VERSION: "$[[ inputs.schemas_crd_version ]]"
+    POLITIQUES_REF: "$[[ inputs.politiques_ref ]]"
+  script:
+    - echo "composant validation $[[ component.version ]] — schémas $SCHEMAS_VERSION, politiques $POLITIQUES_REF"
+    - kubeconform -v && conftest --version && kustomize version && helm version --short
+    - liste() { printf '%s' "$1" | tr -d '[]"' | tr ',' ' '; }
+    # 1. Schémas des CRD du cluster : paquet générique de plateforme/k8s, vérifié par son empreinte.
+    - mkdir -p /tmp/schemas && cd /tmp
+    - |
+      base="$CI_API_V4_URL/projects/plateforme%2Fk8s/packages/generic/schemas-crd/$SCHEMAS_VERSION"
+      for f in schemas-crd.tar.gz schemas-crd.tar.gz.sha256; do
+        curl -fsS -H "JOB-TOKEN: $CI_JOB_TOKEN" -o "$f" "$base/$f"
+      done
+      sha256sum -c schemas-crd.tar.gz.sha256
+      tar -xzf schemas-crd.tar.gz -C /tmp/schemas
+    - cd "$CI_PROJECT_DIR" && mkdir -p rendu
+    # 2. Rendus : overlays, puis charts des Applications (si demandé).
+    - |
+      for o in $(liste "$OVERLAYS"); do
+        nom="$(printf '%s' "$o" | tr '/' '-')"
+        kustomize build "$o" > "rendu/kustomize-$nom.yaml"
+      done
+    - |
+      if [ "$[[ inputs.charts_argocd ]]" = "true" ]; then
+        SCHEMAS=/tmp/schemas KUBERNETES_VERSION="$[[ inputs.version_kubernetes ]]" outils/rendre-charts.sh rendu
+      fi
+    # 3. Schémas. Aucune option pour ignorer les schémas manquants : un type sans schéma est une ERREUR (CRD absente
+    #    du paquet = paquet à régénérer, ou faute de frappe dans apiVersion/kind).
+    #    Ignorés : valeurs de charts, extraits, fichiers kustomization (ce ne sont pas des objets).
+    - |
+      kubeconform -strict -output junit -kubernetes-version "$[[ inputs.version_kubernetes ]]" \
+        -schema-location default \
+        -schema-location '/tmp/schemas/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+        -ignore-filename-pattern 'values\.ya?ml$' -ignore-filename-pattern '\.extrait' \
+        -ignore-filename-pattern 'kustomization\.ya?ml$' \
+        $(liste "$MANIFESTES") rendu/ > kubeconform-junit.xml || { cat kubeconform-junit.xml; exit 1; }
+    # 4. Règles Rego de la plateforme sur les rendus et les manifestes.
+    - |
+      if [ "$[[ inputs.regles_kubernetes ]]" = "true" ]; then
+        git clone -q --depth 1 --branch "$POLITIQUES_REF" \
+          "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/plateforme/politiques.git" /tmp/politiques
+        fichiers="$(find $(liste "$MANIFESTES") rendu -type f \( -name '*.yaml' -o -name '*.yml' \) 2>/dev/null \
+          | grep -Ev 'values\.ya?ml$|\.extrait|kustomization\.yaml$' || true)"
+        if [ -n "$fichiers" ]; then
+          # shellcheck disable=SC2086
+          conftest test --namespace kubernetes -p /tmp/politiques/rego/kubernetes --output junit $fichiers > conftest-junit.xml \
+            || { cat conftest-junit.xml; exit 1; }
+        fi
+      fi
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths: [rendu/]
+    reports:
+      junit: ["kubeconform-junit.xml", "conftest-junit.xml"]
+
+# --- Les politiques elles-mêmes (plateforme/politiques) ----------------------------------------------
+validation:rego:
+  stage: $[[ inputs.stage ]]
+  image:
+    name: $[[ inputs.image ]]
+    entrypoint: [""]
+  tags: ["$[[ inputs.runner ]]"]
+  interruptible: true
+  rules:
+    - if: '"$[[ inputs.tests_rego ]]" != "true"'
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+  script:
+    - opa version | head -1 && conftest --version
+    # Rego v1 strict (variables inutilisées, imports en double…) ; format canonique exigé.
+    - opa check --strict rego/
+    - test -z "$(opa fmt --list rego/)" || { echo "Fichiers à formater (opa fmt -w) :"; opa fmt --list rego/; exit 1; }
+    # Racines explicites : chaque racine charge ses données à data.<clé> (rego/donnees/plages-vmid.yaml →
+    # data.plages_vmid). « opa test rego/ » rangerait les données sous data.donnees et chargerait les
+    # plans d'exemple comme des données (erreur « merge error »).
+    - opa test -v rego/tofu rego/kubernetes rego/donnees
+    # Mêmes tests par conftest (le moteur des jobs) : un écart de version d'OPA se voit ici.
+    - conftest verify -p rego/tofu --data rego/donnees
+    - conftest verify -p rego/kubernetes
+    # Les exemples de plans gardent leur verdict (conforme : 0 ; défauts : refus).
+    - |
+      echo '{"contexte":{"etat":"envs/m29"}}' > /tmp/contexte.json
+      conftest test --namespace tofu -p rego/tofu --data rego/donnees --data /tmp/contexte.json rego/exemples/plan-envs-m29-conforme.json
+      ! conftest test --namespace tofu -p rego/tofu --data rego/donnees --data /tmp/contexte.json rego/exemples/plan-envs-m29-defauts.json
+
+# --- Plans OpenTofu : à appeler DANS le job de plan (runner01, shell) -----------------------------
+# Usage, dans .plan de plateforme/infra, après « tofu plan -out=plan.tfplan » :
+#   script:
+#     - …
+#     - !reference [.validation:conftest-plan, script]
+# Le job doit avoir DOSSIER (socle, envs/m29…) ; conftest 0.71 est installé sur runner01 (rôle
+# gitlab_runner). Le JSON du plan reste dans /tmp du job : il contient les valeurs sensibles en clair.
+.validation:conftest-plan:
+  script:
+    - |
+      travail="$(mktemp -d)"
+      tofu show -json plan.tfplan > "$travail/plan.json"
+      etiquettes="$(printf '%s' "${CI_MERGE_REQUEST_LABELS:-}" | jq -Rc 'split(",") | map(select(. != ""))')"
+      jq -n --arg etat "$DOSSIER" --argjson e "$etiquettes" '{contexte: {etat: $etat, etiquettes_mr: $e}}' > "$travail/contexte.json"
+      git clone -q --depth 1 --branch "$[[ inputs.politiques_ref ]]" \
+        "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/plateforme/politiques.git" "$travail/politiques"
+      rc=0
+      conftest test --no-color --namespace tofu -p "$travail/politiques/rego/tofu" \
+        --data "$travail/politiques/rego/donnees" --data "$travail/contexte.json" "$travail/plan.json" || rc=$?
+      rm -rf "$travail"
+      if [ "$rc" -ne 0 ]; then
+        echo "Plan REFUSÉ par les politiques de plateforme/politiques@$[[ inputs.politiques_ref ]] ($DOSSIER)."
+        exit 1
+      fi
+
+# --- Tests d'infrastructure (plateforme/ansible) -----------------------------------------------------
+# Sur runner01 (shell) : il joint le socle en SSH (clé ansible-ci). Les secrets (OpenBao, clé SSH)
+# viennent du modèle .socle de plateforme/ansible : le consommateur COMPLÈTE ce job chez lui
+#   validation:testinfra:
+#     extends: .socle
+# (un « extends » ici casserait le pipeline des dépôts qui n'ont pas de .socle, même job désactivé).
+validation:testinfra:
+  stage: $[[ inputs.stage ]]
+  tags: [shell]
+  interruptible: true
+  timeout: 30m
+  rules:
+    - if: '"$[[ inputs.testinfra ]]" != "true"'
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $PLANIF == "testinfra"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      when: manual
+      allow_failure: true
+  script:
+    - uv run pytest tests/infra --hosts="ansible://$[[ inputs.testinfra_hotes ]]"
+        --ssh-identity-file="$ANSIBLE_PRIVATE_KEY_FILE" -n 4
+  artifacts:
+    when: always
+    expire_in: 30 days
+    reports:
+      junit: rapports/junit/testinfra.xml

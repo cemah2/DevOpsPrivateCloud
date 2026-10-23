@@ -1,0 +1,9 @@
+# plateforme/ansible — pyproject.toml : groupe de dépendances AJOUTÉ en M29-E04 (PLAT-3004).
+# Ajouté par :  uv add --group tests "pytest-testinfra==10.2.2" "pytest-xdist>=3.8,<4"
+# (uv met à jour uv.lock ; « uv sync --locked » le respecte en CI). Groupe séparé : les jobs qui
+# n'exécutent que des playbooks n'ont pas besoin de pytest. Configuration de pytest : tests/infra/pytest.ini.
+[dependency-groups]
+tests = [
+    "pytest-testinfra==10.2.2",
+    "pytest-xdist>=3.8,<4",
+]

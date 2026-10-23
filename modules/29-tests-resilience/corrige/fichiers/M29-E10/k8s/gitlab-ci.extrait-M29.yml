@@ -1,0 +1,9 @@
+# plateforme/k8s — .gitlab-ci.yml : EXTRAIT (M29-E10, PLAT-3010). Le job valider-manifestes du M15
+# (schémas de ci/schemas/, régénérés à la main) est REMPLACÉ par le composant : mêmes dossiers, schémas
+# du paquet schemas-crd (que ce dépôt publie, outils/schemas-crd.sh), règles Rego en plus.
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/validation@v2.11.0
+    inputs:
+      schemas_crd_version: "2026.10.23"     # dernière version publiée (outils/schemas-crd.sh publier)
+      politiques_ref: v1.4.0                # dernière étiquette de plateforme/politiques
+      manifestes: [composants, espaces, rbac, admission]

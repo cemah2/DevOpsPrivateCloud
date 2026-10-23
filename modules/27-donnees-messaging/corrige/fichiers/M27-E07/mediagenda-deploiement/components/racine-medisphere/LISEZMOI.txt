@@ -1,0 +1,3 @@
+Copier ici la racine MédiSphère (certificat public) avant le premier rendu :
+  cp /usr/local/share/ca-certificates/medisphere-root-ca.crt components/racine-medisphere/
+Le fichier est versionné (ce n'est pas un secret) ; le corrigé ne le fournit pas (chaque lab a la sienne).

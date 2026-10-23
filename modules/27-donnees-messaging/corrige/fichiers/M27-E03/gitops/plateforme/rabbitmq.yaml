@@ -1,0 +1,35 @@
+# plateforme/gitops — plateforme/rabbitmq.yaml (M27-E03, PLAT-2803)
+# Grappe messagerie/rabbitmq (RabbitmqCluster, certificat, PDB, politique réseau, route, compte
+# wb-checks). SkipDryRunOnMissingResource : à la toute première synchronisation, les CRD de
+# rabbitmq.com peuvent ne pas encore être connues de l'API (Application rabbitmq-operateurs).
+# Pas de prune automatique d'un RabbitmqCluster supprimé par erreur du dépôt : Prune=false sur
+# l'objet (annotation dans rabbitmqcluster.yaml si tu le souhaites) ; les PVC de la grappe, eux,
+# ne sont jamais supprimés par l'opérateur quand on supprime la grappe (persistentVolumeClaim
+# Retain du StatefulSet) — à vérifier sur ta version avant de t'y fier.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rabbitmq
+  namespace: argocd
+  labels:
+    medisphere.internal/domaine: donnees
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    medisphere.internal/ticket: "PLAT-2803"
+spec:
+  project: plateforme
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: messagerie
+  source:
+    repoURL: https://git01.par1.medisphere.internal/plateforme/donnees.git
+    targetRevision: main
+    path: rabbitmq
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false
+      - SkipDryRunOnMissingResource=true

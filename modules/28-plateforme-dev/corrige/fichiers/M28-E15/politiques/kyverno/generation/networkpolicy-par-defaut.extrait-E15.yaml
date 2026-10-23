@@ -1,0 +1,11 @@
+# plateforme/politiques — kyverno/generation/networkpolicy-par-defaut.yaml : EXTRAIT (M28-E15, SEC-2915)
+# E15 — trou n°2 bis : la GeneratingPolicy du M26 ne se déclenche que sur medisphere.internal/equipe ;
+# un espace de libre-service ne porte que l'étiquette de Capsule. On élargit la condition (le reste du
+# fichier est inchangé). Les espaces existants ont déjà leurs politiques (generateExisting reste false).
+spec:
+  matchConditions:
+    - name: espace-d-equipe
+      expression: >-
+        has(object.metadata.labels) &&
+        ('medisphere.internal/equipe' in object.metadata.labels
+         || 'capsule.clastix.io/tenant' in object.metadata.labels)

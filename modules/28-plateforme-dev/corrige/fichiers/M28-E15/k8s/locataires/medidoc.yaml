@@ -1,0 +1,112 @@
+# plateforme/k8s — locataires/medidoc.yaml (M28-E05, PLAT-2905 ; complété en M28-E14 et M28-E15 :
+# PLAT-2914, SEC-2915) — Application Argo CD « locataires ».
+# Locataire Capsule « medidoc » : propriétaire = groupe OIDC oidc:medidoc (jamais une personne : une arrivée ou un
+# départ se gère dans l'annuaire, ce fichier ne change pas).
+#
+# ⚠️ Les espaces rattachés portent une référence de propriétaire vers ce Tenant : le supprimer
+# supprimerait ces espaces (production comprise). D'où preventDeletion (refus par le webhook de
+# Capsule) ET les options d'Argo CD (jamais élagué, jamais supprimé avec l'Application).
+apiVersion: capsule.clastix.io/v1beta2
+kind: Tenant
+metadata:
+  name: medidoc
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    medisphere.internal/equipe: medidoc
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    medisphere.internal/ticket: "PLAT-2905"
+spec:
+  preventDeletion: true
+  forceTenantPrefix: true
+  owners:
+    # Dans TOUS les espaces du locataire (environnements compris) : lecture seule, comme les
+    # liaisons oidc-* du M24 (pas de « admin » par défaut de Capsule sur la production).
+    - kind: Group
+      name: "oidc:medidoc"
+      clusterRoles:
+        - view
+  namespaceOptions:
+    # Espaces existants rattachés + espaces de libre-service.
+    quota: 5
+    # Ce que l'équipe ne peut ni poser ni changer sur ses espaces : l'étiquette qui distingue un
+    # environnement (medisphere.internal/environnement), le niveau Pod Security, les étiquettes de
+    # la plateforme.
+    forbiddenLabels:
+      deniedRegex: '^(medisphere\.internal|pod-security\.kubernetes\.io)/.*'
+    # Posé d'office sur les espaces de LIBRE-SERVICE (sans étiquette d'environnement).
+    additionalMetadataList:
+      - namespaceSelector:
+          matchExpressions:
+            - key: medisphere.internal/environnement
+              operator: DoesNotExist
+        labels:
+          pod-security.kubernetes.io/enforce: restricted
+          pod-security.kubernetes.io/enforce-version: latest
+          pod-security.kubernetes.io/warn: restricted
+          medisphere.internal/libre-service: "oui"
+          medisphere.internal/proprietaire: medidoc
+  # Seule classe autorisée (cephfs, ceph-rbd-retain, ceph-rbd-chiffre refusées) ; un PVC sans classe
+  # reçoit celle-ci.
+  # M28-E14 — classes de priorité autorisées aux pods du locataire (pas de production dans k8s-par1 : medisphere-critique interdite) ;
+  # un pod sans classe reçoit medisphere-standard (et non 0, sous medisphere-lot).
+  priorityClasses:
+    allowed: [medisphere-standard, medisphere-lot]
+    default: medisphere-standard
+  storageClasses:
+    allowed:
+      - ceph-rbd
+    default: ceph-rbd
+  rules:
+    # Espaces de libre-service (sans étiquette d'environnement) : l'équipe y est administratrice et
+    # peut les supprimer ; budget de ressources PARTAGÉ entre ces espaces (GlobalResourceQuota
+    # « medidoc-libre-service »). Les environnements gardent leurs quotas de plateforme/k8s/espaces/.
+    - namespaceSelector:
+        matchExpressions:
+          - key: medisphere.internal/environnement
+            operator: DoesNotExist
+      permissions:
+        bindings:
+          - clusterRoleName: admin
+            subjects:
+              - apiGroup: rbac.authorization.k8s.io
+                kind: Group
+                name: "oidc:medidoc"
+          - clusterRoleName: capsule-namespace-deleter
+            subjects:
+              - apiGroup: rbac.authorization.k8s.io
+                kind: Group
+                name: "oidc:medidoc"
+      quota:
+        - name: libre-service
+          hard:
+            requests.cpu: "2"
+            requests.memory: 4Gi
+            limits.memory: 8Gi
+            pods: "30"
+            persistentvolumeclaims: "5"
+            requests.storage: 20Gi
+            services.loadbalancers: "0"
+            services.nodeports: "0"
+    # M28-E14 — budget GLOBAL du locataire (tous ses espaces, environnements compris) : une règle
+    # sans namespaceSelector vise tous les espaces du locataire ; Capsule en tire un
+    # GlobalResourceQuota (kubectl get globalresourcequotas). Il s'AJOUTE aux quotas d'espace de
+    # plateforme/k8s/espaces/ et au budget « libre-service » ci-dessus. Valeurs : capacite.md.
+    - quota:
+        - name: budget
+          hard:
+            requests.cpu: "3"
+            requests.memory: 6Gi
+            limits.memory: 9Gi
+            pods: "40"
+    # M28-E15 (SEC-2915) — aucun Service exposé hors du cluster ni alias DNS externe par un
+    # locataire, dans TOUS ses espaces (le quota « services.loadbalancers: 0 » ne couvrait ni
+    # ExternalName ni les espaces dont le quota d'espace l'oublie). L'exposition passe par la
+    # Gateway de la plateforme (HTTPRoute).
+    - enforce:
+        action: deny
+        services:
+          types:
+            - LoadBalancer
+            - NodePort
+            - ExternalName

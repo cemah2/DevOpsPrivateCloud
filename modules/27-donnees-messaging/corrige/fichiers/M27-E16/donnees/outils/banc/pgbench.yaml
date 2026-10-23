@@ -1,0 +1,52 @@
+# plateforme/donnees — outils/banc/pgbench.yaml (M27-E16)
+# Job pgbench générique. Point de départ : kubectl cnpg pgbench bench-essai -n wb-essais --db-name banc
+#   --job-name x --dry-run -- … (manifeste du plugin), modifié pour viser l'hôte voulu (PGHOST) :
+#     direct   : bench-essai-rw         (Service du primaire, 5432)
+#     pooler   : bench-essai-pooler-rw  (Service du pooler, 5432)
+# Identifiants : Secret bench-essai-app (créé par CNPG pour le propriétaire « banc »).
+# Lancer une mesure (exemple : pooler, 80 clients, une connexion par transaction) :
+#   sed -e 's/@HOTE@/bench-essai-pooler-rw/' -e 's/@NOM@/pooler-c80-C/' -e 's/@ARGS@/"-c","80","-j","4","-T","60","-C","-P","10"/' \
+#     outils/banc/pgbench.yaml | kubectl apply -f -
+#   kubectl -n wb-essais logs -f job/pgbench-pooler-c80-C
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pgbench-@NOM@
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: pgbench
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pgbench
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 26
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: pgbench
+          image: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
+          command: ["pgbench"]
+          args: [@ARGS@]
+          env:
+            - {name: PGHOST, value: "@HOTE@"}
+            - {name: PGSSLMODE, value: require}
+            - name: PGUSER
+              valueFrom: {secretKeyRef: {name: bench-essai-app, key: username}}
+            - name: PGPASSWORD
+              valueFrom: {secretKeyRef: {name: bench-essai-app, key: password}}
+            - name: PGDATABASE
+              valueFrom: {secretKeyRef: {name: bench-essai-app, key: dbname}}
+          resources:
+            requests: {cpu: 500m, memory: 64Mi}
+            limits: {cpu: "2", memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}

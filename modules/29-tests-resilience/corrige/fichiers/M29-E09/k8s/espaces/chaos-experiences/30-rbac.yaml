@@ -1,0 +1,102 @@
+# plateforme/k8s — espaces/chaos-experiences/30-rbac.yaml (M29-E09, PLAT-3009)
+# Qui mène des expériences : les administrateurs de la plateforme (groupe OIDC, M24). Le webhook
+# « validate-auth » de Chaos Mesh vérifie, par une SubjectAccessReview, que l'auteur peut CRÉER ce
+# type d'expérience dans CHAQUE espace visé : il faut donc le droit dans chaos-experiences (où vit
+# l'objet) ET dans l'espace visé. On le donne dans les trois espaces autorisés, et nulle part ailleurs.
+# Lecture seule pour l'équipe Plateforme et pour l'équipe MédiAgenda (voir ce qui touche sa recette).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: chaos-experimentateur
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+rules:
+  - apiGroups: ["chaos-mesh.org"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: chaos-lecteur
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+rules:
+  - apiGroups: ["chaos-mesh.org"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: chaos-experimentateurs
+  namespace: chaos-experiences
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: chaos-experimentateur
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: oidc:plateforme-admins
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: chaos-lecteurs
+  namespace: chaos-experiences
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: chaos-lecteur
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: oidc:plateforme
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: oidc:mediagenda
+---
+# Espaces VISÉS : même rôle, pour que validate-auth accepte l'expérience. La ValidatingAdmissionPolicy
+# medisphere-chaos-espaces refuse qu'on crée l'objet de chaos ailleurs que dans chaos-experiences.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: chaos-experimentateurs
+  namespace: mediagenda-recette
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: chaos-experimentateur
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: oidc:plateforme-admins
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: chaos-experimentateurs
+  namespace: medinotif-recette
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: chaos-experimentateur
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: oidc:plateforme-admins
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: chaos-experimentateurs
+  namespace: wb-essais
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: chaos-experimentateur
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: oidc:plateforme-admins

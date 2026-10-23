@@ -1,0 +1,7 @@
+# plateforme/k8s — admission/20-interdire-hostpath.yaml : clé AJOUTÉE à la ConfigMap
+# medisphere-hostpath (M29-E09, EXC-K-006). Chemins relevés sur le rendu du chart chaos-mesh 2.8.6
+# avec nos valeurs (helm template … | yq '…hostPath.path') : le démon monte le DOSSIER de la socket
+# de containerd (/run/containerd, monté en /host-run), /sys et /lib/modules. Sans cette ligne, le
+# DaemonSet chaos-daemon est refusé à la synchronisation (« volume(s) hostPath interdit(s) »).
+data:
+  chaos-mesh: "/run/containerd,/sys,/lib/modules"

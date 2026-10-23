@@ -1,0 +1,146 @@
+# components/valkey/statefulset.yaml (M27-E07, PLAT-2807)
+# Même nom (valkey), même sélecteur, même Service que l'ancien StatefulSet de « dependances » : en
+# dev et en prod, Argo CD le met à jour sur place (un redémarrage, cache vidé). En recette, l'ancien
+# objet (M16) a un volumeClaimTemplates, immuable : il est supprimé avant la synchronisation (E07).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: valkey
+  labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/part-of: mediagenda
+  annotations:
+    # Comptes changés dans OpenBao → nouveau fichier ACL → redémarrage (Reloader, M25-E15).
+    # Le certificat, lui, est relu par Valkey sans redémarrage (tls-auto-reload-interval).
+    secret.reloader.stakater.com/reload: "valkey-comptes"
+spec:
+  serviceName: valkey
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: valkey
+        app.kubernetes.io/part-of: mediagenda
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: harbor-pull
+      terminationGracePeriodSeconds: 10
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999        # utilisateur « valkey » de l'image ; l'exportateur tourne aussi sous cet UID
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: valkey
+          image: registry.par1.medisphere.internal/dockerhub/valkey/valkey:9.1.2-trixie
+          # Sans le docker-entrypoint.sh de l'image (il ne sert qu'à changer d'utilisateur quand on est root).
+          command: ["valkey-server", "/etc/valkey/valkey.conf"]
+          ports:
+            - name: valkey
+              containerPort: 6379
+          env:
+            # Mot de passe de la sonde, lu par valkey-cli (jamais en argument : visible par ps).
+            - name: VALKEYCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: valkey-comptes
+                  key: sonde
+          # valkey-cli rend 0 même sur NOAUTH ou WRONGPASS : on vérifie la RÉPONSE. --cacert : la racine
+          # (valkey-cli vérifie la chaîne, pas le nom ; 127.0.0.1 par défaut).
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - valkey-cli --tls --cacert /etc/medisphere/racine/medisphere-root-ca.crt --user sonde --no-auth-warning PING | grep -q '^PONG$'
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - valkey-cli --tls --cacert /etc/medisphere/racine/medisphere-root-ca.crt --user sonde --no-auth-warning PING | grep -q '^PONG$'
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 160Mi
+            limits:
+              memory: 160Mi
+          volumeMounts:
+            - {name: config, mountPath: /etc/valkey/valkey.conf, subPath: valkey.conf, readOnly: true}
+            - {name: acl, mountPath: /etc/valkey/acl, readOnly: true}
+            - {name: tls, mountPath: /etc/valkey/tls, readOnly: true}
+            - {name: racine, mountPath: /etc/medisphere/racine, readOnly: true}
+            - {name: donnees, mountPath: /data}
+        - name: exportateur
+          image: registry.par1.medisphere.internal/dockerhub/oliver006/redis_exporter:v1.95.0
+          ports:
+            - name: metriques
+              containerPort: 9121
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            # Le nom du certificat, résolu vers 127.0.0.1 par hostAliases (overlay) : l'exportateur
+            # vérifie la chaîne ET le nom, sans quitter le pod.
+            - name: REDIS_ADDR
+              value: rediss://valkey.$(POD_NAMESPACE).svc:6379
+            - name: REDIS_USER
+              value: exportateur
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: valkey-comptes
+                  key: exportateur
+            - name: REDIS_EXPORTER_TLS_CA_CERT_FILE
+              value: /etc/medisphere/racine/medisphere-root-ca.crt
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - {name: racine, mountPath: /etc/medisphere/racine, readOnly: true}
+      volumes:
+        - name: config
+          configMap:
+            name: valkey-config
+        - name: acl
+          secret:
+            secretName: valkey-comptes
+            items:
+              - {key: users.acl, path: users.acl}
+        - name: tls
+          secret:
+            secretName: valkey-tls
+        - name: racine
+          configMap:
+            name: racine-medisphere
+        - name: donnees
+          emptyDir:
+            sizeLimit: 256Mi

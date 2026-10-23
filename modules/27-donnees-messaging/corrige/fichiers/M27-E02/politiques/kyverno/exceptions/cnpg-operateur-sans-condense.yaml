@@ -1,0 +1,40 @@
+# plateforme/politiques — kyverno/exceptions/cnpg-operateur-sans-condense.yaml (M26-E18, CHG-2718 ;
+# étendue au M27-E02, PLAT-2802)
+# Dérogation PARTIELLE et DATÉE à exiger-digest, enregistrée dans docs/securite/durcissement/exceptions.md.
+# Constat du M26 : les pods de CloudNativePG portent un conteneur d'initialisation
+# « bootstrap-controller » dont l'image est celle de l'OPÉRATEUR, désignée par étiquette.
+# M27-E02 : c'est AUSSI vrai des pods PgBouncer d'un Pooler (même conteneur d'initialisation,
+# cnpg.io/podRole=pooler, posée aussi sur le Deployment). Sans cette extension, le Pooler de prod
+# n'a aucun pod : la création de son Deployment par l'opérateur est refusée à l'admission (règle
+# générée pour les Deployments : « image(s) sans condensé en production : … cloudnative-pg:1.30.1 »),
+# visible dans les journaux de l'opérateur et les rapports de Kyverno, pas dans le statut du Pooler.
+# Le PostgreSQL (imageName) et PgBouncer (spec.pgbouncer.image) restent contrôlés : par condensé.
+apiVersion: policies.kyverno.io/v1
+kind: PolicyException
+metadata:
+  name: cnpg-operateur-sans-condense
+  labels:
+    medisphere.internal/registre-exceptions: "oui"
+spec:
+  policyRefs:
+    - name: exiger-digest
+      kind: ValidatingPolicy
+  # Pods d'instance OU de pooler d'un Cluster CNPG, en production, et rien d'autre.
+  matchConditions:
+    - name: pods-cnpg-prod
+      expression: >-
+        object.metadata.namespace == 'mediagenda-prod' &&
+        has(object.metadata.labels) && 'cnpg.io/cluster' in object.metadata.labels &&
+        'cnpg.io/podRole' in object.metadata.labels &&
+        object.metadata.labels['cnpg.io/podRole'] in ['instance', 'pooler']
+  images:
+    - registry.par1.medisphere.internal/ghcr/cloudnative-pg/cloudnative-pg:1.30.1
+  expiresAt: "2027-01-15T00:00:00Z"
+  reportResult: skip
+  properties:
+    raison: "image de l'opérateur CNPG par étiquette dans bootstrap-controller (instances et poolers) ; correction CHG-2718 (opérateur par condensé)"
+    ticket: "CHG-2718"
+    valideur: "sophie.laurent"
+    demandeur: "karim.benali"
+    revue: "2027-01-08"
+    registre: "docs/securite/durcissement/exceptions.md#EXC-K-001"

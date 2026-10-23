@@ -1,0 +1,42 @@
+# plateforme/politiques — .gitlab-ci.yml (EXTRAIT M29-E19, SEC-3019) : non-régression des politiques
+# OpenTofu sur des plans RÉELS. Les tests unitaires (opa test) prouvent qu'une règle se déclenche sur
+# l'entrée simulée de son test ; ce job prouve qu'elle se déclenche sur la structure d'un vrai plan, avec
+# les MÊMES arguments que la CI des projets (espaces évalués).
+#
+# CONFTEST_ESPACES doit être identique à l'entrée du composant validation de plateforme/ci-templates
+# (une seule source : si l'un change, l'autre aussi, dans la même MR — règle de revue, CODEOWNERS).
+# Le second script refuse tout paquet de règles de rego/tofu qui ne serait pas dans cette liste.
+variables:
+  CONFTEST_ESPACES: "--namespace tofu.socle"   # ← recopie exacte de l'entrée du composant validation
+
+non-regression-plans:
+  stage: test
+  image:
+    name: registry.par1.medisphere.internal/dockerhub/openpolicyagent/conftest:v0.71.1
+    entrypoint: [""]
+  tags: [k8s]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  script:
+    - |
+      # 1. Le plan dangereux DOIT être refusé : code 1 ET au moins un FAIL (un code 2 = erreur d'analyse,
+      #    un « command not found » = 127 : ce ne sont pas des refus).
+      rc=0
+      sortie="$(conftest test --no-color -p rego/tofu $CONFTEST_ESPACES tests/plans/plan-dangereux.json 2>&1)" || rc=$?
+      echo "$sortie"
+      if [ "$rc" -ne 1 ] || ! echo "$sortie" | grep -q '^FAIL'; then
+        echo "RÉGRESSION : le plan de référence dangereux n'est plus refusé (code $rc : règle muette, espace non évalué ou erreur)."
+        exit 1
+      fi
+      echo "OK : plan dangereux refusé."
+    - conftest test --no-color -p rego/tofu $CONFTEST_ESPACES tests/plans/plan-sain.json
+    - |
+      # 2. Tout paquet de règles de rego/tofu est dans les espaces évalués.
+      evalues=" $(echo "$CONFTEST_ESPACES" | sed 's/--namespace//g') "
+      for p in $(grep -h '^package ' $(find rego/tofu -name '*.rego' ! -name '*_test.rego') | awk '{print $2}' | sort -u); do
+        case "$evalues" in
+          *" $p "*) ;;
+          *) echo "Le paquet « $p » n'est pas évalué par la CI ($CONFTEST_ESPACES)"; exit 1 ;;
+        esac
+      done

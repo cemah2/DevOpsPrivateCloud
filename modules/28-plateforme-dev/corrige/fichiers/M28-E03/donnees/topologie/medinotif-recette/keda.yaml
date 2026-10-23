@@ -1,0 +1,71 @@
+# plateforme/donnees — topologie/medinotif-recette/keda.yaml (M28-E03, PLAT-2903, SEC relu par Sophie Laurent)
+# Compte RabbitMQ du scaler de KEDA pour la recette de MédiNotif. Même construction que les comptes de
+# M27-E04 (utilisateurs.yaml, permissions.yaml du même dossier) : ExternalSecret
+# « rabbitmq-utilisateur-<utilisateur> » par le ClusterSecretStore openbao, User et Permission ; pas
+# d'espace écrit : l'Application rabbitmq-topologie les pose dans « messagerie ». À ajouter aux
+# « resources » de topologie/medinotif-recette/kustomization.yaml.
+#
+# Protocole retenu : HTTP (API de gestion, HTTPS 15671), pas AMQP.
+#   - AMQP : le scaler fait une déclaration PASSIVE de la file ; depuis RabbitMQ 4.3.1, elle exige au
+#     moins UNE permission (configure, write ou read) sur la file « notifications » : read permettrait
+#     de consommer (voler) des notifications, write d'en publier, configure de supprimer la file.
+#     Et AMQP ne compte que les messages prêts (pas les non acquittés).
+#   - HTTP : étiquette « management » (voir les objets des vhosts où l'utilisateur a une entrée de
+#     permissions) + une entrée de permissions sur le vhost dont les trois motifs ne correspondent à
+#     AUCUNE ressource (« ^$ ») : accès au vhost, aucun pouvoir sur un échange ou une file.
+#     « monitoring » aurait suffi aussi, mais il voit TOUS les vhosts (dont medinotif-prod).
+# Le mot de passe vient d'OpenBao (kv/medinotif/recette/keda), jamais de Git.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: rabbitmq-utilisateur-keda-recette
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: rabbitmq-utilisateur-keda-recette
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      data:
+        # Clés attendues par importCredentialsSecret du Messaging Topology Operator.
+        username: "{{ .utilisateur }}"
+        password: "{{ .mot_de_passe }}"
+  data:
+    - secretKey: utilisateur
+      remoteRef:
+        key: medinotif/recette/keda
+        property: utilisateur
+    - secretKey: mot_de_passe
+      remoteRef:
+        key: medinotif/recette/keda
+        property: mot_de_passe
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: User
+metadata:
+  name: keda-recette
+spec:
+  rabbitmqClusterReference:
+    name: rabbitmq
+  tags:
+    - management
+  importCredentialsSecret:
+    name: rabbitmq-utilisateur-keda-recette
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Permission
+metadata:
+  name: keda-recette
+spec:
+  vhost: medinotif-recette
+  userReference:
+    name: keda-recette
+  permissions:
+    configure: "^$"
+    write: "^$"
+    read: "^$"
+  rabbitmqClusterReference:
+    name: rabbitmq

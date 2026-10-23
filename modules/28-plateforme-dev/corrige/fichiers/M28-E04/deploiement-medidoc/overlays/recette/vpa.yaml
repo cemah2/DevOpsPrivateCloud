@@ -1,0 +1,13 @@
+# medidoc/deploiement — overlays/recette/vpa.yaml (M28-E04, PLAT-2904) — à ajouter aux « resources ».
+# MédiDoc n'a pas encore de production : recommandations mesurées sur la recette.
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: medidoc
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: medidoc
+  updatePolicy:
+    updateMode: "Off"

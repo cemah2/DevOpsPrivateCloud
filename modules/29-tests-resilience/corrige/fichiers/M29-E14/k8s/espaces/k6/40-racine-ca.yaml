@@ -1,0 +1,16 @@
+# plateforme/k8s — espaces/k6/40-racine-ca.yaml (M29-E14)
+# Racine « MédiSphère Root CA » (PUBLIQUE) pour que k6 vérifie le certificat de
+# https://mediagenda-recette.apps.par1.medisphere.internal (Go lit SSL_CERT_FILE). Même contenu que
+# espaces/ci-jobs/40-racine-ca.yaml (M19-E07).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medisphere-racine
+  namespace: k6
+  labels:
+    medisphere.internal/composant: k6
+data:
+  medisphere-root-ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    <CONTENU DE medisphere-root-ca.crt, RECOPIÉ TEL QUEL>
+    -----END CERTIFICATE-----

@@ -1,0 +1,35 @@
+# plateforme/k8s — espaces/k6/50-rbac-ci.yaml (M29-E14, PLAT-3014)
+# Droits de l'agent GitLab k8s-par1 (gitlab-agent/gitlab-agent) dans k6, pour le job planifié de
+# plateforme/resilience (non-régression de performance). En édition gratuite, tout job autorisé par
+# ci_access agit avec l'identité de l'agent (M19-E18) : ces droits sont donc les plus étroits possible —
+# créer, lire et supprimer des TestRun et la ConfigMap du script, lire les pods et leurs journaux.
+# Rien d'autre (ni Secret, ni Deployment, ni RBAC).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ci-charge
+  namespace: k6
+rules:
+  - apiGroups: [k6.io]
+    resources: [testruns]
+    verbs: [get, list, watch, create, delete]
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [pods, pods/log]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gitlab-agent-ci-charge
+  namespace: k6
+subjects:
+  - kind: ServiceAccount
+    name: gitlab-agent
+    namespace: gitlab-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ci-charge

@@ -1,0 +1,102 @@
+# plateforme/medisphere — catalog-info.yaml (M28-E07, PLAT-2907)
+# Le registre d'architecture : domaine, systèmes et ressources PARTAGÉES de MédiSphère. Les composants
+# sont décrits dans leurs propres dépôts (catalog-info.yaml de chaque projet).
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: soins
+  title: Parcours de soins
+  description: Applications au service des patients et des praticiens.
+spec:
+  owner: group:default/direction
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: mediagenda
+  title: MédiAgenda
+  description: Prise de rendez-vous en ligne.
+spec:
+  owner: group:default/mediagenda
+  domain: soins
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: medinotif
+  title: MédiNotif
+  description: Notifications SMS et courriel des rendez-vous.
+spec:
+  owner: group:default/mediagenda
+  domain: soins
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: medidoc
+  title: MédiDoc
+  description: Documents des patients.
+spec:
+  owner: group:default/medidoc
+  domain: soins
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: plateforme
+  title: Plateforme MédiSphère
+  description: Cloud privé, clusters, livraison, observabilité, sécurité, portail.
+spec:
+  owner: group:default/plateforme
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: mediagenda-db
+  title: Base PostgreSQL de MédiAgenda
+  description: Cluster CloudNativePG mediagenda-db (recette, prod), pooler PgBouncer.
+spec:
+  type: database
+  owner: group:default/plateforme
+  system: mediagenda
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: mediagenda-valkey
+  title: Cache Valkey de MédiAgenda
+spec:
+  type: cache
+  owner: group:default/plateforme
+  system: mediagenda
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: rabbitmq
+  title: RabbitMQ (messagerie/rabbitmq)
+  description: Grappe de trois nœuds ; vhosts medinotif-recette et medinotif-prod.
+spec:
+  type: message-broker
+  owner: group:default/plateforme
+  system: plateforme
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: medidoc-documents
+  title: Compartiment des documents de MédiDoc (RGW)
+spec:
+  type: s3-bucket
+  owner: group:default/plateforme
+  system: medidoc
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: portail-db
+  title: Base PostgreSQL du portail
+spec:
+  type: database
+  owner: group:default/plateforme
+  system: plateforme

@@ -1,0 +1,80 @@
+# plateforme/k8s — admission/50-chaos-espaces.yaml (M29-E09, PLAT-3009)
+# ValidatingAdmissionPolicy native (CEL dans le kube-apiserver) : GARDE-FOU n° 3 de Chaos Mesh.
+# Le filtre d'espaces (enableFilterNamespace) n'injecte que dans les espaces annotés
+# chaos-mesh.org/inject=enabled ; mais n'importe qui peut annoter un espace qu'il a le droit de
+# modifier (propriétaire d'un locataire Capsule, M28), et l'annotation n'est pas couverte par
+# medisphere-etiquettes-espace-protegees (M26-E17, étiquettes seulement). Cette politique :
+#   1. refuse l'annotation chaos-mesh.org/inject=enabled hors de la liste fermée (mediagenda-recette,
+#      medinotif-recette, wb-essais) — pour TOUT LE MONDE, administrateurs compris : élargir la
+#      liste se fait par MR sur ce fichier, jamais par un « kubectl annotate » ;
+#   2. refuse un objet de chaos créé ailleurs que dans chaos-experiences ;
+#   3. refuse une expérience dont selector.namespaces sort de la liste fermée.
+# Le contrôleur de Chaos Mesh crée lui-même des objets internes (PodNetworkChaos, PodIOChaos,
+# PodHttpChaos dans l'espace des pods visés ; WorkflowNode ; expériences filles d'un Schedule) :
+# ses requêtes sont exclues (matchConditions), sinon il ne pourrait plus injecter.
+# ⚠️ Avant [Deny] : « kubectl get ns -o json | jq » pour vérifier qu'aucun espace HORS liste n'a déjà
+# l'annotation (une mise à jour de cet espace serait refusée tant qu'on ne la retire pas).
+# ⚠️ Non testée en conditions réelles à la rédaction : passe d'abord par [Warn, Audit] (voir la liaison).
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: medisphere-chaos-espaces
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+  annotations:
+    medisphere.internal/ticket: PLAT-3009
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["namespaces"]
+      - apiGroups: ["chaos-mesh.org"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["*"]
+  matchConditions:
+    - name: hors-controleur-chaos-mesh
+      expression: "request.userInfo.username != 'system:serviceaccount:chaos-mesh:chaos-controller-manager'"
+  variables:
+    - name: autorises
+      expression: "['mediagenda-recette', 'medinotif-recette', 'wb-essais']"
+    - name: estEspace
+      expression: "request.resource.group == '' && request.resource.resource == 'namespaces'"
+    - name: injectionDemandee
+      expression: >-
+        variables.estEspace && has(object.metadata.annotations) &&
+        'chaos-mesh.org/inject' in object.metadata.annotations &&
+        object.metadata.annotations['chaos-mesh.org/inject'] == 'enabled'
+    - name: cibles
+      expression: >-
+        !variables.estEspace && has(object.spec) && has(object.spec.selector) &&
+        has(object.spec.selector.namespaces) ? object.spec.selector.namespaces : []
+  validations:
+    - expression: "!variables.injectionDemandee || object.metadata.name in variables.autorises"
+      messageExpression: >-
+        'annotation chaos-mesh.org/inject=enabled interdite sur l\'espace ' + object.metadata.name +
+        ' (autorisés : ' + variables.autorises.join(', ') + ') — PLAT-3009'
+      reason: Forbidden
+    - expression: "variables.estEspace || request.namespace == 'chaos-experiences'"
+      messageExpression: >-
+        'les objets de chaos se créent dans l\'espace chaos-experiences, pas dans ' + request.namespace
+      reason: Forbidden
+    - expression: "variables.cibles.all(n, n in variables.autorises)"
+      messageExpression: >-
+        'expérience visant un espace non autorisé : ' + variables.cibles.filter(n, !(n in variables.autorises)).join(', ')
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: medisphere-chaos-espaces
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+spec:
+  policyName: medisphere-chaos-espaces
+  # Étape 1 : ["Warn", "Audit"] le temps de vérifier l'existant ; étape 2 (MR) : ["Deny"].
+  validationActions: ["Deny"]

@@ -1,0 +1,18 @@
+# medinotif/deploiement — overlays/prod/kustomization.yaml : EXTRAIT (M28-E13, PLAT-2913).
+# Même construction que la recette (M28-E03) : les trois objets de KEDA, et spec.replicas retiré du
+# Deployment (il appartient à l'HPA que KEDA crée ; sinon Argo CD et l'HPA se battent). La prod est
+# synchronisée À LA MAIN : relis « argocd app diff medinotif-prod » avant.
+resources:
+  # … ressources du M27 …
+  - keda/externalsecret.yaml
+  - keda/triggerauthentication.yaml
+  - keda/scaledobject.yaml
+patches:
+  # … correctifs du M27 …
+  - target:
+      group: apps
+      kind: Deployment
+      name: medinotif
+    patch: |-
+      - op: remove
+        path: /spec/replicas

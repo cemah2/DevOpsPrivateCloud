@@ -1,0 +1,21 @@
+# Module 29 — paliers 3, 4 et mini-projet (M29-E13 à E25) : variables de lab/lab.env, à fusionner dans
+# lab/lab.env.example (section « Bloc G — module 29 »). Toutes facultatives : les valeurs ci-dessous sont
+# les défauts des checks et des pannes.
+#WB_M29_RECETTE_URL="https://mediagenda-recette.apps.par1.medisphere.internal"   # cible du trafic de mesure (pannes E20, E23)
+#WB_M29_CHAOS_NS=chaos-experiences                    # espace des expériences de chaos (exception ADR-0290)
+#WB_M29_PROJET_RESILIENCE=plateforme/resilience       # bibliothèque de chaos, charge, journées de jeu
+#WB_M29_PROJET_POLITIQUES=plateforme/politiques       # politiques Rego (E19)
+#WB_M29_PROJET_INFRA=plateforme/infra                 # projet dont la CI valide les plans (E19)
+#WB_M29_PROJET_CI_TEMPLATES=plateforme/ci-templates   # composant validation (E19, E25)
+#WB_M29_COMPOSANT_VALIDATION=templates/validation/template.yml
+#WB_M29_CONFTEST_ARGS=""                              # arguments d'espaces de conftest de la CI, si la détection automatique échoue
+#                                                     #   ex. "--namespace tofu.socle --namespace tofu.etiquettes" ou "--all-namespaces"
+#WB_M29_E19_PLAN="$WB_ROOT/modules/29-tests-resilience/ressources/E19-plan-dangereux/plan-dangereux.json"   # plan de référence refusé
+#WB_M29_PROJET_GITOPS=plateforme/gitops               # valeurs de Chaos Mesh (panne E20 v2)
+#WB_M29_FICHIER_VALEURS_CHAOS=valeurs/chaos-mesh/values.yaml
+#WB_M29_PROJET_DEPLOIEMENT=mediagenda/deploiement     # overlay de recette (panne E23)
+#WB_M29_FICHIER_KUSTO_RECETTE=overlays/recette/kustomization.yaml
+#WB_M29_PROJET_TOFU_MODULES=plateforme/tofu-modules   # Terratest et nettoyeur (E21, E25)
+#WB_M29_TERRATEST_TMP=/tmp                            # où Terratest laisse ses copies temporaires sur adm01 (E21)
+#WB_M29_E22_HOTES="nbx01 mon01"                       # VMs non critiques où E22 pose une dérive
+#WB_M29_TESTINFRA_CMD='cd ~/src/ansible && uv run pytest tests/infra -q -p no:cacheprovider --hosts=ansible://{hote}'   # {hote} remplacé

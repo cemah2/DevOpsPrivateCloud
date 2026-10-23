@@ -1,0 +1,26 @@
+# ~/m27/e02/essai-maj.yaml — grappe JETABLE pour voir une vraie montée MINEURE (M27-E02, étape 13).
+# wb-essais est l'espace des essais (M14) : kubectl apply y est permis. Supprimée à la fin :
+#   kubectl -n wb-essais delete cluster essai-maj    (le PVC part avec : c'est voulu, rien à garder)
+# Étapes : appliquer en 18.4, attendre « Cluster in healthy state », créer une table témoin, puis
+# changer imageName en 18.6 (kubectl patch ou édition du fichier + apply) et suivre :
+#   kubectl cnpg status essai-maj -n wb-essais ; kubectl -n wb-essais get pods -w
+# Avec deux instances, l'ordre est visible : la réplique d'abord, puis bascule, puis l'ancien primaire.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: essai-maj
+  namespace: wb-essais
+spec:
+  instances: 2
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.4-minimal-trixie
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  storage:
+    storageClass: ceph-rbd
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 512Mi

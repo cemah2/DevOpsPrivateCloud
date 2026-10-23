@@ -1,0 +1,29 @@
+# plateforme/observabilite/supervision/cnp-ecriture-k6.yaml (M29-E14, PLAT-3014) — complète
+# prometheus-ecriture-tempo (M23-E13) : les EXÉCUTEURS des TestRun de k6 (étiquette runner: "true" posée
+# par k6-operator) écrivent dans Prometheus par l'écriture distante. Ni l'opérateur, ni l'initialiseur, ni
+# le démarreur, ni aucun autre espace.
+# enableDefaultDeny.ingress: false : cette politique n'ajoute qu'une autorisation, elle ne fait pas
+# passer Prometheus en refus par défaut si les politiques du M21 ne l'ont pas déjà fait.
+# Flux à reporter dans docs/kubernetes/reseau/matrice-flux-cluster.md :
+#   k6/<exécuteurs TestRun> → supervision/prometheus 9090 (POST /api/v1/write)
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: prometheus-ecriture-k6
+  namespace: supervision
+spec:
+  description: "Écriture distante des exécuteurs k6 (k6-operator) vers Prometheus"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: prometheus}
+  enableDefaultDeny: {ingress: false}
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: k6
+            app: k6
+            runner: "true"
+      toPorts:
+        - ports: [{port: "9090", protocol: TCP}]
+          rules:
+            http:
+              - {method: POST, path: "/api/v1/write"}

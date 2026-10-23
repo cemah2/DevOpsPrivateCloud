@@ -1,0 +1,26 @@
+# mediagenda/deploiement — components/recommandations/vpa.yaml (M28-E04, PLAT-2904)
+# Le VPA vise le ROLLOUT : c'est lui qui possède les ReplicaSets des pods (le Deployment « mediagenda »
+# n'est que le gabarit, à 0 réplica depuis M20-E16). Le recommender remonte des pods à leur
+# propriétaire de plus haut niveau, et lit la sous-ressource « scale » des types qu'il ne connaît pas.
+# updateMode "Off" : recommandations SEULEMENT. Jamais de mode actif ici : l'HPA « mediagenda » pilote
+# le nombre de pods sur le CPU en POURCENTAGE DES REQUESTS ; un VPA qui changerait ces requests
+# changerait la mesure de l'HPA (les deux boucles se répondraient).
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: mediagenda
+spec:
+  targetRef:
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    name: mediagenda
+  updatePolicy:
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: api
+        controlledResources: ["cpu", "memory"]
+        # Bornes de bon sens : une recommandation hors de cet intervalle est plafonnée (et
+        # « uncappedTarget » montre la valeur brute).
+        minAllowed: {cpu: 50m, memory: 128Mi}
+        maxAllowed: {cpu: "1", memory: 1Gi}

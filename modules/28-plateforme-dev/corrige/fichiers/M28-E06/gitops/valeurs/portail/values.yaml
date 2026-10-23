@@ -1,0 +1,113 @@
+# plateforme/gitops — valeurs/portail/values.yaml (M28-E06, PLAT-2906) — chart backstage 2.10.2.
+# Clés vérifiées dans le values.yaml du chart 2.10.2 et rendues par « helm template ».
+# Le chart déploie NOTRE image (plateforme/portail) : il ne contient pas Backstage.
+# Son archive embarque deux sous-charts Bitnami : « common » (bibliothèque de gabarits, aucune
+# image) et « postgresql » (désactivé ici : la base est CloudNativePG). Aucune image Bitnami n'est
+# donc déployée — vérifié dans le rendu (grep image:).
+
+fullnameOverride: portail
+
+backstage:
+  image:
+    registry: registry.par1.medisphere.internal
+    repository: plateforme/portail
+    # Version promue par MR (étiquette posée par semantic-release) ET empreinte : l'étiquette dit
+    # quoi, l'empreinte garantit quoi.
+    tag: "<VERSION-PORTAIL>@sha256:<DIGEST-PORTAIL>"
+    pullPolicy: IfNotPresent
+  replicas: 1
+  # Le chart lance « node packages/backend » (commande) : les --config de l'image ne s'appliquent
+  # PLUS. Sans ces arguments, le backend démarrerait avec app-config.yaml seul (SQLite en mémoire).
+  command: ["node", "packages/backend"]
+  args:
+    - "--config"
+    - "app-config.yaml"
+    - "--config"
+    - "app-config.production.yaml"
+  # Variables : secrets par ESO (Secret « portail », clés = noms de variables), base par le Secret
+  # « portail-db-app » de CloudNativePG.
+  extraEnvVarsSecrets:
+    - portail
+  extraEnvVars:
+    - name: POSTGRES_HOST
+      value: portail-db-rw
+    - name: POSTGRES_PORT
+      value: "5432"
+    - name: POSTGRES_USER
+      valueFrom:
+        secretKeyRef: {name: portail-db-app, key: username}
+    - name: POSTGRES_PASSWORD
+      valueFrom:
+        secretKeyRef: {name: portail-db-app, key: password}
+    # Racine MédiSphère pour Node.js (Keycloak, GitLab, LDAPS d'ipa01, s3-01).
+    - name: NODE_EXTRA_CA_CERTS
+      value: /etc/medisphere/medisphere-root-ca.crt
+  extraVolumes:
+    - name: racine-medisphere
+      configMap:
+        name: racine-medisphere
+    - name: portail-db-ca
+      secret:
+        secretName: portail-db-ca
+        items:
+          - key: ca.crt
+            path: ca.crt
+    - name: tmp
+      emptyDir: {}
+  extraVolumeMounts:
+    - name: racine-medisphere
+      mountPath: /etc/medisphere
+      readOnly: true
+    - name: portail-db-ca
+      mountPath: /etc/portail-db
+      readOnly: true
+    - name: tmp
+      mountPath: /tmp
+  # Pod Security « restricted » : utilisateur NUMÉRIQUE (l'image dit « USER node », un nom que
+  # runAsNonRoot ne peut pas vérifier).
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+    # Lecture seule : Backstage écrit dans /tmp (monté) ; à vérifier sur ton lab (TechDocs en
+    # constructeur externe ne génère rien localement).
+    readOnlyRootFilesystem: true
+  resources:
+    requests: {cpu: 100m, memory: 512Mi}
+    limits: {memory: 1Gi}
+  # Premier démarrage d'une version : migrations des schémas des plugins (≈ 30-60 s).
+  startupProbe:
+    httpGet: {path: /.backstage/health/v1/liveness, port: 7007, scheme: HTTP}
+    periodSeconds: 10
+    failureThreshold: 30
+
+serviceAccount:
+  # Compte du pod : il porte les droits de lecture du plugin Kubernetes (E10).
+  create: true
+  name: portail
+  automountServiceAccountToken: true
+
+service:
+  type: ClusterIP
+
+httpRoute:
+  enabled: true
+  parentRefs:
+    - name: gw-par1
+      namespace: passerelles
+      sectionName: https
+  hostnames:
+    - portail.apps.par1.medisphere.internal
+  annotations:
+    # ExternalDNS (M15) publie le nom à partir des hostnames de la route.
+    medisphere.internal/ticket: "PLAT-2906"
+
+postgresql:
+  enabled: false

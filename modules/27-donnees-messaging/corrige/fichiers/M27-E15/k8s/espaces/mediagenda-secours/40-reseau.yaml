@@ -1,0 +1,87 @@
+# plateforme/k8s — espaces/mediagenda-secours/40-reseau.yaml (M27-E15)
+# Refus par défaut en entrée ET en sortie, puis seulement : DNS, opérateur CNPG → instances (8000, 5432),
+# instances entre elles (réplication en cascade, 5432, 8000), Prometheus → 9187, instances → s3-01:8333
+# (lecture de l'archive). Le plugin Barman Cloud tourne en sidecar : sa sortie S3 est celle du pod.
+# Aucune application ne se connecte à cette base tant qu'elle n'est pas promue (RB-275 ouvre ce flux).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: refus-par-defaut
+  namespace: mediagenda-secours
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: secours-postgresql
+  namespace: mediagenda-secours
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: cnpg.io/cluster, operator: Exists}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: cnpg-system}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: cloudnative-pg}
+      ports:
+        - {protocol: TCP, port: 8000}
+        - {protocol: TCP, port: 5432}
+    - from:
+        - podSelector:
+            matchExpressions:
+              - {key: cnpg.io/cluster, operator: Exists}
+      ports:
+        - {protocol: TCP, port: 5432}
+        - {protocol: TCP, port: 8000}
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: supervision}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: prometheus}
+      ports:
+        - {protocol: TCP, port: 9187}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - podSelector:
+            matchExpressions:
+              - {key: cnpg.io/cluster, operator: Exists}
+      ports:
+        - {protocol: TCP, port: 5432}
+        - {protocol: TCP, port: 8000}
+    # s3-01 (archive des WAL et sauvegardes de base de la production), lecture.
+    - to:
+        - ipBlock: {cidr: 10.10.20.14/32}
+      ports:
+        - {protocol: TCP, port: 8333}
+---
+# API Kubernetes : le gestionnaire d'instance lit et met à jour l'état du Cluster et le Lease du
+# primaire. Les adresses des nœuds ne sont pas des « CIDR » pour Cilium (identités host/remote-node) :
+# une NetworkPolicy ipBlock ne les couvre pas, d'où l'entité kube-apiserver (Service 10.96.0.1:443
+# traduit en amont vers les kube-apiserver en 6443).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: secours-api-kubernetes
+  namespace: mediagenda-secours
+spec:
+  endpointSelector:
+    matchExpressions:
+      - {key: cnpg.io/cluster, operator: Exists}
+  egress:
+    - toEntities: [kube-apiserver]
+      toPorts:
+        - ports:
+            - {port: "6443", protocol: TCP}

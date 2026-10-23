@@ -1,0 +1,14 @@
+# components/valkey/podmonitor.yaml (M27-E07) — l'exportateur, collecté par Prometheus (M21).
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: valkey
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+  podMetricsEndpoints:
+    - port: metriques
+      interval: 30s

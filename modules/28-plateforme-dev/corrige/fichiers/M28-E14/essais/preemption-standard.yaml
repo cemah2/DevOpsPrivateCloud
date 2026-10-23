@@ -1,0 +1,22 @@
+# Pod « standard » qui ne tient pas sur k8s-w01 sans déloger des pods « lot » (M28-E14, étape 5).
+# Remplace medisphere-standard par medisphere-lot pour la seconde partie de l'essai : il reste Pending
+# (preemptionPolicy: Never, et de toute façon aucune victime de priorité inférieure).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: essai-standard
+  namespace: wb-essais
+  labels: {app.kubernetes.io/name: essai-standard, medisphere.internal/equipe: plateforme}
+spec:
+  priorityClassName: medisphere-standard
+  nodeSelector: {kubernetes.io/hostname: k8s-w01}
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: dort
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command: ["sleep", "3600"]
+      resources:
+        requests: {cpu: 10m, memory: 2Gi}
+        limits: {memory: 2Gi}
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}

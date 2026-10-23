@@ -1,0 +1,11 @@
+# plateforme/ansible — roles/supervision_temoin/tasks/configuration.yml : tâche ajoutée en M29-E07.
+# EXTRAIT, à placer après « Règles de surveillance du cluster » (M21-E28).
+- name: Règles de l'essai Goss (validées par promtool)
+  ansible.builtin.copy:
+    src: regles/goss.yml
+    dest: "{{ supervision_temoin_dossier_config }}/regles/goss.yml"
+    owner: root
+    group: prometheus
+    mode: "0640"
+    validate: /usr/local/bin/promtool check rules %s
+  notify: Recharger prometheus

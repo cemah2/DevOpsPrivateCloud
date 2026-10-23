@@ -1,0 +1,38 @@
+# plateforme/observabilite — regles/portail.yaml (M28-E16, PLAT-2916)
+# Disponibilité du portail et fraîcheur de la sauvegarde de sa base.
+#  - kube_deployment_status_replicas_available : kube-state-metrics (Deployment « portail » :
+#    fullnameOverride du chart, M28-E06).
+#  - probe_success{job="blackbox-portail"} : sonde HTTPS du blackbox_exporter de mon01 (M21), cible
+#    https://portail.apps.par1.medisphere.internal/.backstage/health/v1/readiness — à ajouter à la liste
+#    des sondes de mon01 (rôle Ansible) ; le Prometheus du cluster la reçoit par fédération.
+#  - cnpg_collector_last_available_backup_timestamp : exportateur des instances CNPG (PodMonitor, M27).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: portail
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision-regles: "oui"
+spec:
+  groups:
+    - name: portail
+      rules:
+        - alert: PortailIndisponible
+          expr: >-
+            (sum(kube_deployment_status_replicas_available{namespace="portail", deployment="portail"}) or vector(0)) == 0
+            or max(probe_success{job="blackbox-portail"}) == 0
+          for: 5m
+          labels: {gravite: critique, equipe: plateforme}
+          annotations:
+            resume: "Le portail développeurs est indisponible"
+            description: "Aucun réplica prêt ou sonde HTTPS en échec depuis 5 min. Les applications tournent ; plus aucune création de service par le portail."
+            runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/plateforme-dev/runbooks/RB-284-portail-indisponible.md"
+        - alert: PortailSauvegardeAncienne
+          expr: >-
+            time() - max(cnpg_collector_last_available_backup_timestamp{namespace="portail"}) > 26 * 3600
+          for: 30m
+          labels: {gravite: avertissement, equipe: plateforme}
+          annotations:
+            resume: "Dernière sauvegarde de portail-db vieille de plus de 26 h"
+            description: "La sauvegarde nocturne (ScheduledBackup portail-db-nuit) n'a pas abouti : kubectl -n portail get backups."
+            runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/plateforme-dev/runbooks/RB-284-portail-indisponible.md"

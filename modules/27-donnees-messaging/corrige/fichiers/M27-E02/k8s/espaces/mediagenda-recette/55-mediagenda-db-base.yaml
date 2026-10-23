@@ -1,0 +1,25 @@
+# plateforme/k8s — espaces/mediagenda-recette/55-mediagenda-db-base.yaml (M27-E02, PLAT-2802)
+# La base « mediagenda » EXISTE (créée par bootstrap.initdb au M16) : l'opérateur constate qu'elle
+# existe et n'applique que les écarts (propriétaire, extensions, limite de connexions…) ; à
+# vérifier dans status.applied et dans les journaux de l'instance primaire (aucun CREATE DATABASE).
+# ⚠️ databaseReclaimPolicy: retain — supprimer cet objet (ou l'Application qui le porte) ne
+#    supprime PAS la base. « delete » exécuterait DROP DATABASE : jamais sur une base qui compte.
+# ⚠️ spec.cluster est IMMUABLE : pour viser une autre grappe, on crée un autre objet Database.
+# Le nom de l'OBJET est libre (mediagenda-db-mediagenda : grappe + base) ; le nom de la BASE est
+# spec.name.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: mediagenda-db-mediagenda
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  cluster:
+    name: mediagenda-db
+  name: mediagenda
+  owner: mediagenda
+  ensure: present
+  databaseReclaimPolicy: retain
+  # pg_stat_statements est créée par l'opérateur dans chaque base (paramètre du Cluster) : la
+  # déclarer ici aussi ne change rien ; on ne déclare que ce que le Cluster ne fait pas.

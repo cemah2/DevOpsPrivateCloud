@@ -1,0 +1,28 @@
+# plateforme/gitops — applications/${{ values.nom }}.yaml (proposé par le portail, modèle nouveau-service)
+# Application de l'environnement dev ; projet Argo CD de l'équipe propriétaire du locataire.
+# L'AppProject « ${{ values.locataire }} » doit autoriser le dépôt ${{ values.locataire }}/${{ values.nom }}-deploiement
+# et l'espace ${{ values.nom }}-dev (motifs ${{ values.locataire }}/* et ${{ values.locataire }}-* : sinon, MR sur projets/).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ${{ values.nom }}-dev
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: ${{ values.equipe }}
+    medisphere.internal/environnement: dev
+spec:
+  project: ${{ values.locataire }}
+  source:
+    repoURL: https://git01.par1.medisphere.internal/${{ values.locataire }}/${{ values.nom }}-deploiement.git
+    targetRevision: main
+    path: overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ${{ values.nom }}-dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

@@ -1,0 +1,15 @@
+# mediagenda/api — ci/migrations.yml (M27-E05, DEV-2805) : PIPELINE ENFANT de l'image de migration.
+# Pourquoi un pipeline enfant : les composants CI/CD ont des noms de jobs FIXES (image:construction,
+# image:publication, securite:…) ; les inclure une seconde fois dans .gitlab-ci.yml pour une autre
+# image écraserait les jobs de l'API. Dans un pipeline enfant, ils existent une seconde fois, à part.
+# Même référence, mêmes règles que le parent : sur une étiquette vX.Y.Z, l'image est publiée sous
+# medisphere/mediagenda-migrations:vX.Y.Z (même version que l'API) puis signée (runner protégé).
+# Versions des composants : les MÊMES que dans .gitlab-ci.yml (garde les tiennes).
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/construction-image@v2.0.0
+    inputs:
+      image_nom: medisphere/mediagenda-migrations
+      dockerfile: Dockerfile.migrations
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/securite@v2.9.0
+
+stages: [lint, construction, securite, publication, signature]

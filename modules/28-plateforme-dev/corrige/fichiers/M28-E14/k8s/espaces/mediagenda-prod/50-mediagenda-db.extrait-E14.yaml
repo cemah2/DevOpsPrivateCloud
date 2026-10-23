@@ -1,0 +1,6 @@
+# plateforme/k8s — espaces/mediagenda-prod/50-mediagenda-db.yaml : EXTRAIT (M28-E14, PLAT-2914).
+# La base de production est aussi critique que l'API : sans elle, l'API ne sert rien. Champ
+# spec.priorityClassName du Cluster CNPG 1.30 (appliqué aux pods des instances ; changement par
+# redémarrage progressif des répliques puis bascule, comme une mise à jour mineure).
+spec:
+  priorityClassName: medisphere-critique

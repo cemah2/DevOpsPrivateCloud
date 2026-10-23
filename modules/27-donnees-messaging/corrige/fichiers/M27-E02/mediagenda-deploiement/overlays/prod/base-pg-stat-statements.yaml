@@ -1,0 +1,13 @@
+# mediagenda/deploiement — overlays/prod/base-pg-stat-statements.yaml (M27-E02, PLAT-2802)
+# Correctif stratégique du Cluster de prod (rendu par components/dependances) : pg_stat_statements.
+# Changer shared_preload_libraries REDÉMARRE les trois instances (réplicas puis bascule, comme une
+# mise à jour d'image) : à synchroniser hors des heures de pointe, sauvegarde « Completed » d'abord.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db
+spec:
+  postgresql:
+    parameters:
+      pg_stat_statements.max: "5000"
+      pg_stat_statements.track: top

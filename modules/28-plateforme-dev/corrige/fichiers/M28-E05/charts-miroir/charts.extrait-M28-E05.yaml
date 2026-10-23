@@ -1,0 +1,10 @@
+# À INTÉGRER dans plateforme/charts-miroir — charts.yaml (format de M20-E13), M28-E05 (PLAT-2905).
+#   curl -s https://projectcapsule.github.io/charts/index.yaml | yq '.entries.capsule[] | select(.version == "0.15.1") | .digest'
+# (vérifiée à la rédaction le 23/10/2026).
+charts:
+  # … entrées existantes …
+  - nom: capsule
+    depot: https://projectcapsule.github.io/charts
+    version: 0.15.1
+    empreinte: sha256:369bf1658bdceddb30d451203ef2af2d9849253117ea563f04a4f8dafaa72632
+    usage: "Multi-locataire (M28-E05), Application plateforme/gitops plateforme/capsule.yaml"

@@ -1,0 +1,73 @@
+# plateforme/k8s — espaces/portail/20-reseau.yaml (M28-E06, PLAT-2906 ; sorties E07 et E10 incluses)
+# Pod du portail : entrée par la Gateway (entité « ingress » de Cilium) ; sorties vers la base,
+# l'API du cluster (plugin Kubernetes, E10), DNS, et hors cluster : SSO (VIP lb 10.10.70.200:443),
+# git01 443 (E07), ipa01 636 (E07), s3-01 8333 (E10). Tous ces flux sont déjà ouverts à la bordure
+# pour les travailleurs (blocs D à F) : rien à changer dans pare_feu.yml, seulement la matrice.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: portail
+  namespace: portail
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: backstage
+      app.kubernetes.io/instance: portail
+  ingress:
+    - fromEntities: [ingress]
+      toPorts:
+        - ports: [{port: "7007", protocol: TCP}]
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            cnpg.io/cluster: portail-db
+      toPorts:
+        - ports: [{port: "5432", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports: [{port: "53", protocol: ANY}]
+    - toEntities: [kube-apiserver]
+    - toCIDR: [10.10.70.200/32]
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]
+    - toCIDR: [10.10.20.12/32]
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]
+    - toCIDR: [10.10.20.31/32]
+      toPorts:
+        - ports: [{port: "636", protocol: TCP}]
+    - toCIDR: [10.10.20.14/32]
+      toPorts:
+        - ports: [{port: "8333", protocol: TCP}]
+---
+# Base : seul le portail (et l'opérateur CNPG, qui la gère) y entre.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: portail-db
+  namespace: portail
+spec:
+  endpointSelector:
+    matchLabels:
+      cnpg.io/cluster: portail-db
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: backstage
+            app.kubernetes.io/instance: portail
+      toPorts:
+        - ports: [{port: "5432", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: cnpg-system
+      toPorts:
+        - ports: [{port: "8000", protocol: TCP}, {port: "5432", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports: [{port: "9187", protocol: TCP}]

@@ -1,0 +1,18 @@
+# mediagenda/deploiement — overlays/prod : SEULEMENT si la prod n'archivait pas encore (M27-E15, étape 0).
+# Correctif à ajouter à overlays/prod/base-openbao.yaml (ou à un fichier de correctifs de la prod) ; la
+# recette archive déjà sous « mediagenda-db » (M16-E19), la prod prend donc un AUTRE nom.
+# Prérequis : ObjectStore cnpg-s3 et Secrets dans mediagenda-prod (même modèle que la recette, identité
+# en écriture) ; flux mediagenda-prod → s3-01:8333. Ajouter ce bloc redémarre les instances une à une
+# (sidecar) : en fenêtre, CHG-2815. Puis sauvegarde de base immédiate (kubectl cnpg backup) et
+# ScheduledBackup quotidien, sans quoi le réplica de secours n'a rien pour démarrer.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db
+spec:
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: cnpg-s3
+        serverName: mediagenda-db-prod

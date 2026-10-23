@@ -1,0 +1,229 @@
+# plateforme/observabilite — regles/alertes-donnees.yaml (M27-E14, PLAT-2814 ; secours M27-E15 ;
+# publication et rebut M27-E23). Ajouté à regles/kustomization.yaml.
+# Conventions du M21-E15 : étiquettes gravite (critique | avertissement | info) et equipe ; annotations
+# resume, description, runbook_url ; valeurs mesurées dans les annotations, jamais dans les étiquettes.
+# Production en critique, recette en avertissement (le routage d'Alertmanager du M21 ne réveille que
+# pour « critique »). Collecte toutes les 30 s : une fenêtre de 5 min = 10 points.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alertes-donnees
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    # ------------------------------------------------------------------------------------------------
+    - name: donnees.postgresql
+      rules:
+        # Retard de rejeu d'un réplica, en secondes (requête pg_replication de CNPG : 0 quand le réplica
+        # a tout rejoué, même sans écriture récente). 30 s pendant 5 min : un réplica qui décroche
+        # vraiment, pas un VACUUM ponctuel. Le réplica de secours a sa propre règle (archive).
+        - alert: PostgresqlReplicationEnRetard
+          expr: max by (namespace, pod) (cnpg_pg_replication_lag{namespace=~"mediagenda-(recette|prod)"}) > 30
+          for: 5m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.namespace }}/{{ $labels.pod }} : réplica en retard de {{ $value | humanizeDuration }}"
+            description: >-
+              Le réplica {{ $labels.pod }} rejoue les WAL avec {{ $value | humanizeDuration }} de retard
+              depuis 5 min. Il ne peut plus servir de réplica synchrone et une bascule sur lui perdrait du temps.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-274-alertes-donnees.md#postgresqlreplicationenretard
+        # Aucune instance qui réponde ET soit hors récupération dans un espace qui a des instances.
+        # « unless » : une série par espace qui a des collecteurs mais pas de primaire. absent() couvre
+        # le cas où plus AUCUNE instance de la prod n'est collectée.
+        - alert: PostgresqlPrimaireAbsent
+          expr: |
+            (
+              count by (namespace) (cnpg_collector_up{namespace=~"mediagenda-(recette|prod)"})
+              unless on (namespace)
+              count by (namespace) (
+                cnpg_collector_up{namespace=~"mediagenda-(recette|prod)"} == 1
+                and on (namespace, pod)
+                cnpg_pg_replication_in_recovery == 0
+              )
+            )
+            or
+            label_replace(absent(cnpg_collector_up{namespace="mediagenda-prod"}), "namespace", "mediagenda-prod", "", "")
+          for: 1m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.namespace }} : aucun primaire PostgreSQL"
+            description: >-
+              Aucune instance de mediagenda-db ({{ $labels.namespace }}) n'est primaire et joignable depuis
+              1 min : les écritures de MédiAgenda échouent. Une bascule devrait être en cours ; si elle ne
+              finit pas en 2 min, intervenir.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-274-alertes-donnees.md#postgresqlprimaireabsent
+        # dataDurability: required : sans réplica en flux, CHAQUE validation attend. Le primaire publie
+        # le nombre de réplicas connectés (cnpg_pg_replication_streaming_replicas).
+        - alert: PostgresqlSynchroneSansReplica
+          expr: |
+            max by (namespace) (
+              cnpg_pg_replication_streaming_replicas{namespace=~"mediagenda-(recette|prod)"}
+              and on (namespace, pod) cnpg_pg_replication_in_recovery == 0
+            ) < 1
+          for: 1m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.namespace }} : aucun réplica connecté, écritures suspendues"
+            description: >-
+              Le primaire de mediagenda-db ({{ $labels.namespace }}) n'a plus aucun réplica en réplication
+              (réplication synchrone, dataDurability: required) : les validations attendent indéfiniment.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-274-alertes-donnees.md#postgresqlsynchronesansreplica
+        - alert: PostgresqlInstanceIsolee
+          expr: max by (namespace, pod) (cnpg_collector_fencing_on{namespace=~"mediagenda-(recette|prod)"}) == 1
+          for: 5m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.namespace }}/{{ $labels.pod }} : instance isolée (fencing)"
+            description: "L'instance {{ $labels.pod }} est isolée depuis 5 min (annotation cnpg.io/fencedInstances) : qui l'a posée, et pourquoi ?"
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-274-alertes-donnees.md#postgresqlinstanceisolee
+        # Clients du pooler en attente d'une connexion serveur : la réserve est trop petite ou les
+        # connexions serveur sont tenues (transactions longues). 5 clients pendant 2 min.
+        - alert: PgbouncerClientsEnAttente
+          expr: sum by (namespace) (cnpg_pgbouncer_pools_cl_waiting{namespace=~"mediagenda-(recette|prod)"}) > 5
+          for: 2m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.namespace }} : {{ $value }} clients attendent une connexion du pooler"
+            description: >-
+              Des clients de mediagenda-db-pooler-rw ({{ $labels.namespace }}) attendent une connexion
+              serveur depuis 2 min : requêtes ralenties. Voir SHOW POOLS (maxwait) et les transactions longues.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-274-alertes-donnees.md#pgbouncerclientsenattente
+        # M27-E15 : le réplica de secours ne reçoit que l'archive ; archive_timeout de CNPG = 5 min.
+        # Au-delà de deux intervalles (10 min) pendant 10 min, il décroche.
+        - alert: PostgresqlSecoursEnRetard
+          expr: max by (namespace, pod) (cnpg_pg_replication_lag{namespace="mediagenda-secours"}) > 600
+          for: 10m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Réplica de secours en retard de {{ $value | humanizeDuration }}"
+            description: >-
+              mediagenda-db-secours n'a rien rejoué depuis {{ $value | humanizeDuration }} : l'archive des WAL
+              de la production n'arrive plus, ou le réplica ne la lit plus. Le RPO de reprise s'allonge d'autant.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-275-reprise-secours.md
+    # ------------------------------------------------------------------------------------------------
+    - name: donnees.rabbitmq
+      rules:
+        # Les métriques par file viennent de /metrics/detailed (préfixe rabbitmq_detailed_) ; une file
+        # quorum est rapportée par le nœud de son leader : on agrège par vhost et file (un changement de
+        # leader change l'étiquette pod). deriv() sur un sous-requête de la somme, pour la même raison.
+        # 100 messages ET une pente positive sur 15 min : un pic de rappels du matin ne sonne pas.
+        - alert: RabbitmqFileQuiGrossit
+          expr: |
+            sum by (vhost, queue) (rabbitmq_detailed_queue_messages_ready{queue="notifications"}) > 100
+            and
+            deriv(sum by (vhost, queue) (rabbitmq_detailed_queue_messages_ready{queue="notifications"})[15m:1m]) > 0
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.vhost }}/{{ $labels.queue }} : {{ $value }} messages et la file grossit"
+            description: >-
+              La file {{ $labels.queue }} du vhost {{ $labels.vhost }} grossit depuis 15 min : les
+              consommateurs ne suivent pas (trop lents, trop peu nombreux, ou bloqués sur un message).
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-274-alertes-donnees.md#rabbitmqfilequigrossit
+        - alert: RabbitmqFileSansConsommateur
+          expr: sum by (vhost, queue) (rabbitmq_detailed_queue_consumers{queue="notifications", vhost="medinotif-prod"}) == 0
+          for: 5m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.vhost }}/{{ $labels.queue }} : aucun consommateur"
+            description: "Plus aucun MédiNotif ne consomme {{ $labels.queue }} ({{ $labels.vhost }}) depuis 5 min : aucune notification ne part."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-277-consommateur-arrete.md
+        - alert: RabbitmqFileSansConsommateur
+          expr: sum by (vhost, queue) (rabbitmq_detailed_queue_consumers{queue="notifications", vhost!="medinotif-prod"}) == 0
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.vhost }}/{{ $labels.queue }} : aucun consommateur"
+            description: "Plus aucun MédiNotif ne consomme {{ $labels.queue }} ({{ $labels.vhost }}) depuis 15 min."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-277-consommateur-arrete.md
+        # Une alarme mémoire ou disque bloque TOUS les publieurs de la grappe (prod comprise).
+        - alert: RabbitmqAlarmeRessource
+          expr: |
+            max by (pod) (rabbitmq_alarms_memory_used_watermark) > 0
+            or
+            max by (pod) (rabbitmq_alarms_free_disk_space_watermark) > 0
+          for: 1m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "RabbitMQ {{ $labels.pod }} : alarme de ressource, publications bloquées"
+            description: >-
+              Le nœud {{ $labels.pod }} a levé une alarme mémoire ou disque : toutes les connexions qui
+              publient sont bloquées dans toute la grappe (MédiAgenda ne publie plus, en recette comme en prod).
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-274-alertes-donnees.md#rabbitmqalarmeressource
+        - alert: RabbitmqDisquePresqueAuSeuil
+          expr: max by (pod) (rabbitmq_disk_space_available_bytes / rabbitmq_disk_space_available_limit_bytes) < 2
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "RabbitMQ {{ $labels.pod }} : disque libre à moins de deux fois le seuil d'alarme"
+            description: "L'alarme disque se lèvera bientôt sur {{ $labels.pod }} : agrandir le volume ou vider ce qui s'accumule."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-274-alertes-donnees.md#rabbitmqalarmeressource
+    # ------------------------------------------------------------------------------------------------
+    - name: donnees.valkey
+      rules:
+        # Avec allkeys-lru, un cache plein est normal. Anormal : plein ET un taux de succès effondré
+        # (il évince ce qu'il vient de recevoir), ou des erreurs de cache vues par l'API.
+        - alert: ValkeyCachePlein
+          expr: |
+            max by (namespace) (redis_memory_used_bytes / (redis_memory_max_bytes > 0)) > 0.95
+            and on (namespace)
+            (
+              sum by (namespace) (rate(mediagenda_cache_total{resultat="hit"}[15m]))
+              / sum by (namespace) (rate(mediagenda_cache_total{resultat=~"hit|miss"}[15m]))
+            ) < 0.3
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.namespace }} : cache Valkey plein et inefficace"
+            description: >-
+              Valkey de {{ $labels.namespace }} est à plus de 95 % de maxmemory et le taux de succès du cache
+              de MédiAgenda est sous 30 % : la mémoire ne suffit plus pour le jeu de clés utile.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-279-cache-valkey.md
+        - alert: MediagendaCacheEnErreur
+          expr: sum by (namespace) (rate(mediagenda_cache_total{resultat="erreur"}[5m])) > 0
+          for: 5m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.namespace }} : MédiAgenda n'arrive plus à lire son cache"
+            description: >-
+              L'API sert en mode dégradé (créneaux recalculés depuis la base) : accès refusé, Valkey
+              injoignable, TLS ou mémoire. Voir les journaux « cache indisponible ».
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-279-cache-valkey.md
+        - alert: ValkeyInjoignable
+          expr: max by (namespace, pod) (redis_up{namespace=~"mediagenda-(recette|prod)"}) == 0
+          for: 2m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.namespace }} : l'exportateur ne joint plus Valkey"
+            description: "redis_up = 0 depuis 2 min pour {{ $labels.pod }} : Valkey arrêté, ou l'exportateur n'est plus autorisé (ACL, TLS)."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-279-cache-valkey.md

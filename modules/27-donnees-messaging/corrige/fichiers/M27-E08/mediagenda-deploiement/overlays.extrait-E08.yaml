@@ -1,0 +1,15 @@
+# mediagenda/deploiement — overlays/recette/kustomization.yaml et overlays/prod/kustomization.yaml :
+# EXTRAIT (M27-E08). À FUSIONNER dans les deux (remplacer <env> par recette ou prod).
+components:
+  # … existant (… identifiants-dynamiques, racine-medisphere, valkey) …
+  - ../../components/notifications
+  - ../../components/livraison         # toujours le dernier
+patches:
+  - target:
+      group: external-secrets.io
+      kind: ExternalSecret
+      labelSelector: app.kubernetes.io/name=notifications
+    patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: mediagenda/<env>/amqp

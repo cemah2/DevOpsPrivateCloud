@@ -1,0 +1,9 @@
+# À INTÉGRER dans plateforme/k8s — espaces/mediagenda-recette/00-namespace.yaml (M29-E09, PLAT-3009).
+# Seule l'annotation s'ajoute : garde toutes les étiquettes et annotations existantes.
+# C'est une ANNOTATION (pas une étiquette) : Chaos Mesh lit metadata.annotations de l'espace.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mediagenda-recette
+  annotations:
+    chaos-mesh.org/inject: "enabled"

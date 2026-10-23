@@ -1,0 +1,45 @@
+# plateforme/donnees — rabbitmq-essai/rabbitmq-essai.yaml (M27-E15 étape 6 ; repris en M27-E16 et M27-E24)
+# Grappe JETABLE de répétition dans wb-essais : même version de départ que la prod (4.3.<z>), trois nœuds,
+# ressources réduites (le défaut de l'opérateur réserve 1 CPU et 2 Gi par nœud). Pas de TLS (essai
+# interne, aucun client hors de wb-essais), pas d'Application Argo CD : appliquée depuis adm01, supprimée
+# après la mesure (ses PVC avec elle : persistentVolumeClaimRetentionPolicy du StatefulSet de l'opérateur
+# à vérifier, sinon les supprimer à la main — wb-essais seulement).
+#   kubectl apply -f rabbitmq-essai/rabbitmq-essai.yaml
+#   … montée : spec.image → …:4.4.0-management (kubectl patch ou nouvelle application du fichier)
+#   kubectl -n wb-essais delete rabbitmqcluster rabbitmq-essai && kubectl -n wb-essais delete pvc -l app.kubernetes.io/name=rabbitmq-essai
+apiVersion: rabbitmq.com/v1beta1
+kind: RabbitmqCluster
+metadata:
+  name: rabbitmq-essai
+  namespace: wb-essais
+spec:
+  replicas: 3
+  # Même corrective que messagerie/rabbitmq (4.3.7 au relevé du 23/10/2026).
+  image: registry.par1.medisphere.internal/dockerhub/library/rabbitmq:4.3.7-management
+  imagePullSecrets:
+    - name: harbor-pull
+  # Active d'office les nouveaux feature flags APRÈS chaque montée (champ du Cluster Operator 2.23).
+  autoEnableAllFeatureFlags: true
+  resources:
+    requests: {cpu: 200m, memory: 512Mi}
+    limits: {cpu: "1", memory: 768Mi}
+  persistence:
+    storageClassName: ceph-rbd
+    storage: 1Gi
+  rabbitmq:
+    additionalPlugins:
+      - rabbitmq_prometheus
+      - rabbitmq_shovel
+      - rabbitmq_shovel_management
+    # Limite mémoire relative à la limite du conteneur (le Cluster Operator la règle d'après
+    # resources.limits.memory) ; pas de seuil disque exotique.
+    additionalConfig: |
+      disk_free_limit.absolute = 100MB
+  override:
+    statefulSet:
+      spec:
+        template:
+          spec:
+            securityContext:
+              seccompProfile:
+                type: RuntimeDefault

@@ -1,0 +1,8 @@
+# Module 28 — paliers 1 et 2 (rédacteur A) : variables à fusionner dans lab/lab.env.example (section bloc G).
+# Toutes facultatives : les valeurs par défaut conviennent au lab de référence.
+#WB_M28_PORTAIL_URL=https://portail.apps.par1.medisphere.internal        # portail Backstage (E06 et suivants)
+#WB_M28_S3_TECHDOCS="$HOME/.config/workbook/s3-techdocs.env"              # identité de LECTURE de portail-techdocs sur s3-01 (E10) : AWS_ACCESS_KEY_ID=… AWS_SECRET_ACCESS_KEY=…
+#WB_M28_APP_MEDINOTIF_RECETTE=medinotif-recette                         # nom de l'Application Argo CD de MédiNotif en recette (générée par l'ApplicationSet medinotif du M27, E03)
+#WB_M28_RABBITMQ_SVC=rabbitmq.messagerie.svc.cluster.local              # Service de la grappe RabbitMQ (documentation ; non lu par les checks des paliers 1-2)
+# Déjà définies par les blocs précédents et utilisées ici : WB_PROM_URL, WB_S3_ENDPOINT, WB_GITLAB_URL,
+# WB_GITLAB_TOKEN_FILE, WB_KEYCLOAK_CHECKS_FILE, WB_BACKSTAGE_TOKEN_FILE (check-lib, bloc G), WB_K8S_KUBECONFIG.

@@ -1,0 +1,15 @@
+# medinotif/deploiement — overlays/recette/vpa.yaml (M28-E04, PLAT-2904) — à ajouter aux « resources ».
+# Recommandations seulement. Le nombre de pods appartient à KEDA (HPA sur une métrique EXTERNE) :
+# un VPA actif sur le CPU ou la mémoire ne fausserait pas cette métrique, mais il évincerait des
+# workers en plein traitement — les requests se changent ici par MR, après lecture.
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: medinotif
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: medinotif
+  updatePolicy:
+    updateMode: "Off"

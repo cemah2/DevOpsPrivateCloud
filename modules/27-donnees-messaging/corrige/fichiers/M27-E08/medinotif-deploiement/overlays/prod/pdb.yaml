@@ -1,0 +1,10 @@
+# medinotif/deploiement — overlays/prod/pdb.yaml (M27-E08) : un drain n'arrête qu'un worker à la fois.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: medinotif
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: medinotif

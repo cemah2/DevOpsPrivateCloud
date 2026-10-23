@@ -1,0 +1,10 @@
+# plateforme/identite — annuaire/personnes.yml : EXTRAIT (M28-E15, SEC-2915). Compte d'ESSAI nominatif
+# pour l'essai d'intrusion d'un propriétaire de locataire ; membre du seul groupe medidoc
+# (annuaire/groupes.yml : membres: [essai-medidoc]). Fin de l'essai : etat: disabled et retrait du
+# groupe (même MR), comme un départ (RB-242). Jamais de suppression : la trace d'audit reste lisible.
+  - identifiant: essai-medidoc
+    prenom: Essai
+    nom: MédiDoc
+    courriel: plateforme@medisphere.internal
+    titre: "Compte d'essai d'isolation des locataires (M28-E15, SEC-2915)"
+    etat: disabled

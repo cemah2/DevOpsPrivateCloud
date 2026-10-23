@@ -1,0 +1,52 @@
+# Permissions par vhost : trois expressions régulières (configurer, écrire, lire) sur les NOMS des
+# ressources. « ^$ » = rien. Vérifiées sur RabbitMQ 4.3.7 :
+#   medinotif-recette   consomme la file notifications (DECLARER_FILE=0 : ne déclare rien) ;
+#                       publier sur l'échange lui est refusé (ACCESS_REFUSED, canal fermé) ;
+#   mediagenda-recette  publie sur l'échange notifications (confirmations comprises) ; ne lit rien ;
+#   wb-checks           permission VIDE : sans elle, /api/queues/medinotif-recette répond 404 même
+#                       pour l'étiquette monitoring ; avec elle, métadonnées visibles, messages non
+#                       (POST …/get → 403 « read access … refused »).
+apiVersion: rabbitmq.com/v1beta1
+kind: Permission
+metadata:
+  name: medinotif-recette
+spec:
+  vhost: medinotif-recette
+  userReference:
+    name: medinotif-recette
+  permissions:
+    configure: "^$"
+    write: "^$"
+    read: "^notifications$"
+  rabbitmqClusterReference:
+    name: rabbitmq
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Permission
+metadata:
+  name: mediagenda-recette
+spec:
+  vhost: medinotif-recette
+  userReference:
+    name: mediagenda-recette
+  permissions:
+    configure: "^$"
+    write: "^notifications$"
+    read: "^$"
+  rabbitmqClusterReference:
+    name: rabbitmq
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Permission
+metadata:
+  name: wb-checks-medinotif-recette
+spec:
+  vhost: medinotif-recette
+  # Utilisateur créé par rabbitmq/utilisateur-wb-checks.yaml (Application « rabbitmq »).
+  user: wb-checks
+  permissions:
+    configure: "^$"
+    write: "^$"
+    read: "^$"
+  rabbitmqClusterReference:
+    name: rabbitmq

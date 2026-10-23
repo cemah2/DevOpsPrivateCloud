@@ -1,0 +1,16 @@
+# Pooler des rappels — Lucas, DEV-2811
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: rappels-pooler
+  namespace: mediagenda-recette
+spec:
+  cluster:
+    name: mediagenda-db
+  instances: 1
+  type: rw
+  pgbouncer:
+    poolMode: transaction
+    parameters:
+      max_client_conn: "5000"
+      default_pool_size: "200"

@@ -1,0 +1,194 @@
+# plateforme/portail-modeles — modeles/nouveau-service/template.yaml (M28-E08, DEV-2908)
+# Modèle « nouveau service » : le chemin balisé de MédiSphère pour créer un service.
+#   CRÉE   : le projet du code (squelette qui se construit) et le projet de déploiement (Kustomize),
+#            dans le groupe GitLab du locataire, et les enregistre au catalogue ;
+#   PROPOSE (MR, jamais de poussée sur main) : l'espace <nom>-dev dans plateforme/k8s et
+#            l'Application Argo CD dans plateforme/gitops — fusionnées par la Plateforme.
+# Actions de la 1.56 : fetch:template (cœur), publish:gitlab et publish:gitlab:merge-request
+# (@backstage/plugin-scaffolder-backend-module-gitlab), catalog:register (cœur).
+# Toutes s'exécutent avec le jeton de l'intégration GitLab : compte de service svc-portail.
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: nouveau-service
+  title: Nouveau service
+  description: Crée un service MédiSphère (code, CI, déploiement Kustomize) et propose son espace et son Application Argo CD.
+  tags: [recommande, kubernetes, gitops]
+spec:
+  owner: group:default/plateforme
+  type: service
+
+  parameters:
+    - title: Le service
+      required: [equipe, locataire, nom, langage, description]
+      properties:
+        equipe:
+          title: Équipe propriétaire
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            catalogFilter:
+              kind: Group
+              spec.type: equipe
+        langage:
+          title: Langage
+          type: string
+          enum: [python, go]
+          enumNames: ["Python 3.13", "Go 1.26"]
+        description:
+          title: Description (une phrase)
+          type: string
+          maxLength: 200
+      # Le locataire (et donc le préfixe du nom) dépend de l'équipe : une équipe ne peut créer que
+      # dans SES locataires (Capsule, M28-E05). Validé par le formulaire ET par le backend, qui
+      # revalide les paramètres contre ce schéma.
+      dependencies:
+        equipe:
+          oneOf:
+            - properties:
+                equipe:
+                  const: group:default/medidoc
+                locataire:
+                  title: Locataire
+                  type: string
+                  enum: [medidoc]
+                nom:
+                  title: Nom du service
+                  type: string
+                  pattern: '^medidoc-[a-z][a-z0-9-]{1,28}[a-z0-9]$'
+                  ui:help: "medidoc-… : minuscules, chiffres, tirets"
+            - properties:
+                equipe:
+                  const: group:default/mediagenda
+                locataire:
+                  title: Locataire
+                  type: string
+                  enum: [mediagenda, medinotif]
+                nom:
+                  title: Nom du service
+                  type: string
+                  pattern: '^(mediagenda|medinotif)-[a-z][a-z0-9-]{1,28}[a-z0-9]$'
+                  ui:help: "<locataire>-… : minuscules, chiffres, tirets"
+
+  steps:
+    - id: code
+      name: Squelette du code
+      action: fetch:template
+      input:
+        url: ./squelettes/${{ parameters.langage }}
+        targetPath: ./service
+        values:
+          nom: ${{ parameters.nom }}
+          locataire: ${{ parameters.locataire }}
+          equipe: ${{ parameters.equipe | parseEntityRef | pick('name') }}
+          description: ${{ parameters.description }}
+          langage: ${{ parameters.langage }}
+
+    - id: deploiement
+      name: Base de déploiement
+      action: fetch:template
+      input:
+        url: ./squelettes/deploiement
+        targetPath: ./deploiement
+        values:
+          nom: ${{ parameters.nom }}
+          locataire: ${{ parameters.locataire }}
+          equipe: ${{ parameters.equipe | parseEntityRef | pick('name') }}
+          description: ${{ parameters.description }}
+          langage: ${{ parameters.langage }}
+
+    - id: propositions-k8s
+      name: Proposition pour plateforme/k8s
+      action: fetch:template
+      input:
+        url: ./propositions/k8s
+        targetPath: ./propositions-k8s
+        values:
+          nom: ${{ parameters.nom }}
+          locataire: ${{ parameters.locataire }}
+          equipe: ${{ parameters.equipe | parseEntityRef | pick('name') }}
+          description: ${{ parameters.description }}
+          langage: ${{ parameters.langage }}
+
+    - id: propositions-gitops
+      name: Proposition pour plateforme/gitops
+      action: fetch:template
+      input:
+        url: ./propositions/gitops
+        targetPath: ./propositions-gitops
+        values:
+          nom: ${{ parameters.nom }}
+          locataire: ${{ parameters.locataire }}
+          equipe: ${{ parameters.equipe | parseEntityRef | pick('name') }}
+          description: ${{ parameters.description }}
+          langage: ${{ parameters.langage }}
+
+    - id: publier-code
+      name: Projet du code
+      action: publish:gitlab
+      input:
+        repoUrl: git01.par1.medisphere.internal?owner=${{ parameters.locataire }}&repo=${{ parameters.nom }}
+        sourcePath: ./service
+        defaultBranch: main
+        repoVisibility: internal
+        gitCommitMessage: "feat: squelette initial (modèle nouveau-service du portail)"
+
+    - id: publier-deploiement
+      name: Projet de déploiement
+      action: publish:gitlab
+      input:
+        repoUrl: git01.par1.medisphere.internal?owner=${{ parameters.locataire }}&repo=${{ parameters.nom }}-deploiement
+        sourcePath: ./deploiement
+        defaultBranch: main
+        repoVisibility: internal
+        gitCommitMessage: "feat: base Kustomize et overlay dev (modèle nouveau-service du portail)"
+
+    - id: mr-k8s
+      name: MR de l'espace (plateforme/k8s)
+      action: publish:gitlab:merge-request
+      input:
+        repoUrl: git01.par1.medisphere.internal?owner=plateforme&repo=k8s
+        branchName: portail/${{ parameters.nom }}
+        title: "feat(espaces): ${{ parameters.nom }}-dev (nouveau service, locataire ${{ parameters.locataire }})"
+        description: "Demandé par ${{ user.entity.metadata.name }} depuis le portail (modèle nouveau-service). À relire : quota, LimitRange, étiquettes du locataire."
+        sourcePath: ./propositions-k8s
+        targetPath: espaces
+        # « create » : la MR échoue si un fichier existe déjà (pas d'écrasement d'un espace existant).
+        commitAction: create
+        removeSourceBranch: true
+        assignee: karim.benali
+
+    - id: mr-gitops
+      name: MR de l'Application (plateforme/gitops)
+      action: publish:gitlab:merge-request
+      input:
+        repoUrl: git01.par1.medisphere.internal?owner=plateforme&repo=gitops
+        branchName: portail/${{ parameters.nom }}
+        title: "feat(applications): ${{ parameters.nom }}-dev (nouveau service)"
+        description: "Demandé par ${{ user.entity.metadata.name }} depuis le portail. À fusionner APRÈS la MR de plateforme/k8s (l'espace doit exister)."
+        sourcePath: ./propositions-gitops
+        targetPath: applications
+        commitAction: create
+        removeSourceBranch: true
+        assignee: karim.benali
+
+    - id: catalogue
+      name: Enregistrement au catalogue
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publier-code'].output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+
+  output:
+    links:
+      - title: Projet du code
+        url: ${{ steps['publier-code'].output.remoteUrl }}
+      - title: Projet de déploiement
+        url: ${{ steps['publier-deploiement'].output.remoteUrl }}
+      - title: MR de l'espace
+        url: ${{ steps['mr-k8s'].output.mergeRequestUrl }}
+      - title: MR de l'Application
+        url: ${{ steps['mr-gitops'].output.mergeRequestUrl }}
+      - title: Dans le catalogue
+        icon: catalog
+        entityRef: ${{ steps['catalogue'].output.entityRef }}

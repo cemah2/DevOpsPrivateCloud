@@ -1,0 +1,219 @@
+diff --git a/src/mediagenda/app.py b/src/mediagenda/app.py
+index c5ad611..897985c 100644
+--- a/src/mediagenda/app.py
++++ b/src/mediagenda/app.py
+@@ -200,6 +200,8 @@ def create_app(
+             # et le motif ne sont JAMAIS mis en attribut.
+             span.set_attribute("mediagenda.praticien", rdv.praticien)
+             span.set_attribute("mediagenda.rendez_vous.duree_minutes", rdv.duree_minutes)
++            # Le canal choisi n'est pas une donnée personnelle ; le contact, si : jamais en attribut.
++            span.set_attribute("mediagenda.rappel.canal", rdv.rappel.canal)
+             try:
+                 cree = request.app.state.depot.creer(rdv)
+             except ConflitCreneau:
+diff --git a/src/mediagenda/depot.py b/src/mediagenda/depot.py
+index 4986a4e..fdaf9ad 100644
+--- a/src/mediagenda/depot.py
++++ b/src/mediagenda/depot.py
+@@ -13,12 +13,24 @@ from psycopg import errors
+ from psycopg.rows import dict_row
+ from psycopg_pool import ConnectionPool
+ 
+-from .modeles import RendezVous, RendezVousCreation
++from .modeles import Rappel, RendezVous, RendezVousCreation
+ 
+ # Liste de colonnes constante (jamais une entrée utilisateur) : l'interpolation
+ # f-string est sans risque ; les valeurs, elles, passent toujours en paramètres.
+-_COLONNES = "id, patient, praticien, debut, duree_minutes, motif, cree_le"
+-_INSERTION = f"INSERT INTO rendez_vous (patient, praticien, debut, duree_minutes, motif) VALUES (%s, %s, %s, %s, %s) RETURNING {_COLONNES}"  # noqa: S608
++# Liste EXPLICITE (jamais « SELECT * ») : une colonne ajoutée par une migration (expand)
++# ne change rien pour la version qui ne la connaît pas encore.
++# canal_rappel et contact_rappel : migration V3 (M27-E06) ; cette version de l'API exige V3.
++_COLONNES = (
++    "id, patient, praticien, debut, duree_minutes, motif, cree_le, canal_rappel, contact_rappel"
++)
++_INSERTION = f"INSERT INTO rendez_vous (patient, praticien, debut, duree_minutes, motif, canal_rappel, contact_rappel) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING {_COLONNES}"  # noqa: S608
++
++
++def _depuis_ligne(ligne: dict) -> RendezVous:
++    """Ligne de la table → modèle (les deux colonnes du rappel forment un objet)."""
++    canal = ligne.pop("canal_rappel")
++    contact = ligne.pop("contact_rappel")
++    return RendezVous(**ligne, rappel=Rappel(canal=canal, contact=contact))
+ 
+ 
+ class ConflitCreneau(Exception):
+@@ -62,22 +74,30 @@ class DepotPostgres:
+                 f"SELECT {_COLONNES} FROM rendez_vous ORDER BY debut LIMIT %s",  # noqa: S608
+                 (limite,),
+             )
+-            return [RendezVous(**ligne) for ligne in cur.fetchall()]
++            return [_depuis_ligne(ligne) for ligne in cur.fetchall()]
+ 
+     def obtenir(self, rdv_id: int) -> RendezVous | None:
+         with self._pool.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
+             cur.execute(f"SELECT {_COLONNES} FROM rendez_vous WHERE id = %s", (rdv_id,))  # noqa: S608
+             ligne = cur.fetchone()
+-            return RendezVous(**ligne) if ligne else None
++            return _depuis_ligne(ligne) if ligne else None
+ 
+     def creer(self, rdv: RendezVousCreation) -> RendezVous:
+         try:
+             with self._pool.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
+                 cur.execute(
+                     _INSERTION,
+-                    (rdv.patient, rdv.praticien, rdv.debut, rdv.duree_minutes, rdv.motif),
++                    (
++                        rdv.patient,
++                        rdv.praticien,
++                        rdv.debut,
++                        rdv.duree_minutes,
++                        rdv.motif,
++                        rdv.rappel.canal,
++                        rdv.rappel.contact,
++                    ),
+                 )
+-                return RendezVous(**cur.fetchone())
++                return _depuis_ligne(cur.fetchone())
+         except errors.UniqueViolation as exc:  # index unique de V2__index.sql
+             raise ConflitCreneau from exc
+ 
+@@ -88,7 +108,7 @@ class DepotPostgres:
+                 (rdv_id,),
+             )
+             ligne = cur.fetchone()
+-            return RendezVous(**ligne) if ligne else None
++            return _depuis_ligne(ligne) if ligne else None
+ 
+     def debuts_occupes(self, praticien: str | None, de: datetime, a: datetime) -> list[datetime]:
+         """Débuts des rendez-vous entre ``de`` et ``a`` ; tous praticiens si ``None``."""
+diff --git a/src/mediagenda/modeles.py b/src/mediagenda/modeles.py
+index bd9cb7a..955be73 100644
+--- a/src/mediagenda/modeles.py
++++ b/src/mediagenda/modeles.py
+@@ -2,9 +2,40 @@
+ 
+ from __future__ import annotations
+ 
++import re
+ from datetime import date, datetime
++from typing import Literal, Self
+ 
+-from pydantic import AwareDatetime, BaseModel, Field
++from pydantic import AwareDatetime, BaseModel, Field, model_validator
++
++# Mêmes formats que ceux qu'accepte MédiNotif (apps/medinotif, message.py) : un rappel que
++# MédiNotif refuserait est refusé dès la prise de rendez-vous (422), pas au moment d'envoyer.
++_TELEPHONE = re.compile(r"^\+?[0-9][0-9 .]{5,19}$")
++_COURRIEL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
++
++
++class Rappel(BaseModel):
++    """Choix du patient pour les rappels (M27-E06, DEV-2806).
++
++    Le consentement est explicite : sans choix, « aucun » (pas de rappel). Le contact est
++    une donnée personnelle : il n'apparaît jamais dans un journal ni dans une trace.
++    """
++
++    canal: Literal["sms", "mail", "aucun"] = "aucun"
++    contact: str | None = Field(default=None, max_length=254)
++
++    @model_validator(mode="after")
++    def _coherence(self) -> Self:
++        if self.canal == "aucun":
++            if self.contact is not None:
++                raise ValueError("contact interdit quand canal vaut « aucun »")
++        elif self.contact is None:
++            raise ValueError(f"contact obligatoire pour le canal {self.canal}")
++        elif self.canal == "sms" and not _TELEPHONE.fullmatch(self.contact):
++            raise ValueError("numéro de téléphone invalide")
++        elif self.canal == "mail" and not _COURRIEL.fullmatch(self.contact):
++            raise ValueError("adresse de courriel invalide")
++        return self
+ 
+ 
+ class RendezVousCreation(BaseModel):
+@@ -14,6 +45,9 @@ class RendezVousCreation(BaseModel):
+     debut: AwareDatetime
+     duree_minutes: int = Field(default=30, ge=5, le=240)
+     motif: str | None = Field(default=None, max_length=500)
++    # Facultatif dans l'API (un client qui ne le connaît pas continue de fonctionner) ; toujours
++    # écrit EXPLICITEMENT en base par l'application (la colonne n'a plus de défaut après V4).
++    rappel: Rappel = Field(default_factory=Rappel)
+ 
+ 
+ class RendezVous(RendezVousCreation):
+diff --git a/tests/test_rappel.py b/tests/test_rappel.py
+new file mode 100644
+index 0000000..5264feb
+--- /dev/null
++++ b/tests/test_rappel.py
+@@ -0,0 +1,68 @@
++"""Rappel du patient (M27-E06, DEV-2806) : validation, valeurs par défaut, persistance simulée."""
++
++from __future__ import annotations
++
++import pytest
++from pydantic import ValidationError
++
++from mediagenda.depot import _depuis_ligne
++from mediagenda.modeles import Rappel
++
++RDV = {"patient": "Jeanne Dupont", "praticien": "dr-morel", "debut": "2026-11-02T09:00:00+01:00"}
++
++
++def test_sans_rappel_par_defaut(client):
++    cree = client.post("/api/v1/rendez-vous", json=RDV)
++    assert cree.status_code == 201
++    assert cree.json()["rappel"] == {"canal": "aucun", "contact": None}
++
++
++@pytest.mark.parametrize(
++    ("rappel", "attendu"),
++    [
++        ({"canal": "sms", "contact": "+33612345678"}, 201),
++        ({"canal": "mail", "contact": "jeanne@exemple.fr"}, 201),
++        ({"canal": "sms"}, 422),  # contact manquant
++        ({"canal": "mail", "contact": "pas-un-courriel"}, 422),
++        ({"canal": "sms", "contact": "appelez-moi"}, 422),
++        ({"canal": "aucun", "contact": "+33612345678"}, 422),  # contact sans consentement
++        ({"canal": "pigeon", "contact": "x"}, 422),
++    ],
++)
++def test_validation_du_rappel(client, rappel, attendu):
++    assert client.post("/api/v1/rendez-vous", json={**RDV, "rappel": rappel}).status_code == attendu
++
++
++def test_rappel_relu(client):
++    rdv_id = client.post(
++        "/api/v1/rendez-vous", json={**RDV, "rappel": {"canal": "sms", "contact": "+33612345678"}}
++    ).json()["id"]
++    assert client.get(f"/api/v1/rendez-vous/{rdv_id}").json()["rappel"]["canal"] == "sms"
++
++
++def test_contact_jamais_journalise(client, caplog):
++    client.post(
++        "/api/v1/rendez-vous", json={**RDV, "rappel": {"canal": "sms", "contact": "+33612345678"}}
++    )
++    assert "33612345678" not in caplog.text
++
++
++def test_ligne_de_la_base_vers_le_modele():
++    ligne = {
++        "id": 3,
++        "patient": "P",
++        "praticien": "dr-x",
++        "debut": "2026-11-02T09:00:00+01:00",
++        "duree_minutes": 30,
++        "motif": None,
++        "cree_le": "2026-10-23T10:00:00+00:00",
++        "canal_rappel": "mail",
++        "contact_rappel": "p@exemple.fr",
++    }
++    rdv = _depuis_ligne(ligne)
++    assert rdv.rappel == Rappel(canal="mail", contact="p@exemple.fr")
++
++
++def test_modele_refuse_l_incoherence():
++    with pytest.raises(ValidationError):
++        Rappel(canal="mail")

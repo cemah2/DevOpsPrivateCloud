@@ -1,0 +1,17 @@
+# plateforme/donnees — rabbitmq/reseau.yaml : EXTRAIT (M27-E08, DEV-2808)
+# À AJOUTER à spec.ingress de la CiliumNetworkPolicy « rabbitmq », après les règles de recette (E04) :
+# AMQPS depuis les espaces de PRODUCTION qui publient (API MédiAgenda) et consomment (MédiNotif).
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: medinotif-prod
+            app.kubernetes.io/name: medinotif
+      toPorts:
+        - ports:
+            - {port: "5671", protocol: TCP}
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: mediagenda-prod
+            app.kubernetes.io/name: mediagenda
+      toPorts:
+        - ports:
+            - {port: "5671", protocol: TCP}

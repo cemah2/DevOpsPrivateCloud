@@ -1,0 +1,21 @@
+# plateforme/portail — catalog-info.yaml (M28-E06 ; découvert par le portail lui-même en E07)
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: portail
+  title: Portail développeurs (Backstage)
+  description: Portail développeurs de MédiSphère — catalogue, modèles, état des déploiements, documentation.
+  annotations:
+    gitlab.com/project-slug: plateforme/portail
+    backstage.io/kubernetes-id: portail
+  links:
+    - url: https://portail.apps.par1.medisphere.internal
+      title: Portail
+  tags: [backstage, typescript]
+spec:
+  type: website
+  lifecycle: production
+  owner: group:default/plateforme
+  system: plateforme
+  dependsOn:
+    - resource:default/portail-db

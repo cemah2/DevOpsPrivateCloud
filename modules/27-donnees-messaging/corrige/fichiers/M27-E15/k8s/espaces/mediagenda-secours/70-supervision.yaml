@@ -1,0 +1,19 @@
+# plateforme/k8s — espaces/mediagenda-secours/70-supervision.yaml (M27-E15)
+# Même PodMonitor que pour mediagenda-db (M21-E07). Alerte : PostgresqlSecoursEnRetard
+# (regles/alertes-donnees.yaml de plateforme/observabilite).
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: mediagenda-db-secours
+  namespace: mediagenda-secours
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  jobLabel: cnpg.io/cluster
+  selector:
+    matchLabels:
+      cnpg.io/cluster: mediagenda-db-secours
+      cnpg.io/podRole: instance
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 30s

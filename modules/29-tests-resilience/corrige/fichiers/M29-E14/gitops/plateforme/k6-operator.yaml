@@ -1,0 +1,39 @@
+# plateforme/gitops — plateforme/k6-operator.yaml (M29-E14, PLAT-3014)
+# Application « k6-operator », projet « plateforme » : chart grafana/k6-operator recopié dans Harbor par
+# plateforme/charts-miroir + valeurs de ce dépôt. L'espace k6 (PSA restricted, quota, politiques,
+# racine, RBAC de la CI) est créé par plateforme/k8s (espaces/k6/) : CreateNamespace=false et
+# namespace.create: false dans les valeurs.
+# Les CRD (testruns.k6.io, privateloadzones.k6.io) sont livrées par le chart (installCRDs: true) :
+# ServerSideApply évite la limite de taille de l'annotation last-applied sur ces gros CRD.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: k6-operator
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    medisphere.internal/ticket: "PLAT-3014"
+spec:
+  project: plateforme
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: k6
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: k6-operator
+      targetRevision: 4.7.0
+      helm:
+        releaseName: k6-operator
+        valueFiles:
+          - $values/valeurs/k6-operator/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

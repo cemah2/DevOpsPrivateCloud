@@ -1,0 +1,13 @@
+# formation/catalogue-essai — catalog-info.yaml (M28-E07, étape 5) : ESSAI d'usurpation.
+# Un dépôt qui se déclare une équipe et un membre : la règle du catalogue doit les refuser
+# (erreur de traitement « … not allowed by rules » sur l'emplacement), sans rien créer.
+# Pour que la découverte le voie : ajoute un fournisseur « formation » le temps de l'essai, ou
+# enregistre l'URL du fichier dans le portail (« Register an existing component »), puis retire-le.
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: mediagenda-bis
+spec:
+  type: equipe
+  children: []
+  members: [lucas.martin]

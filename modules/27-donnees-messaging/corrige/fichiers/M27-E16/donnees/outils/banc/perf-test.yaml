@@ -1,0 +1,51 @@
+# plateforme/donnees — outils/banc/perf-test.yaml (M27-E16)
+# rabbitmq-perf-test 2.25 contre la grappe de banc wb-essais/rabbitmq-essai (manifeste de M27-E15),
+# vhost « essai ». Identifiants JETABLES de la grappe de banc, passés par l'environnement (Secret de
+# l'opérateur rabbitmq-essai-default-user), jamais ceux de la production.
+# Mesure (exemple : 1 producteur, 100 confirmations en vol, 3 consommateurs, prefetch 50) :
+#   sed -e 's/@NOM@/c100-y3-q50/' -e 's/@ARGS@/-x 1 -y 3 -c 100 -q 50/' outils/banc/perf-test.yaml | kubectl apply -f -
+#   kubectl -n wb-essais logs -f job/perf-test-c100-y3-q50
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: perf-test-@NOM@
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: perf-test
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: perf-test
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 2000   # utilisateur perf-test de l'image
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: perf-test
+          image: registry.par1.medisphere.internal/dockerhub/pivotalrabbitmq/perf-test:2.25.0
+          command: ["/bin/sh", "-c"]
+          # File quorum durable « banc », messages persistants de 1 Kio, 60 s ; l'URI est construite ici
+          # pour ne pas apparaître dans la spécification du pod.
+          args:
+            - >-
+              exec java -jar /perf_test/perf-test.jar
+              --uri "amqp://${RMQ_UTILISATEUR}:${RMQ_MOT_DE_PASSE}@rabbitmq-essai.wb-essais.svc:5672/essai"
+              --quorum-queue -u banc --auto-delete false -f persistent -s 1024 -z 60
+              @ARGS@
+          env:
+            - name: RMQ_UTILISATEUR
+              valueFrom: {secretKeyRef: {name: rabbitmq-essai-default-user, key: username}}
+            - name: RMQ_MOT_DE_PASSE
+              valueFrom: {secretKeyRef: {name: rabbitmq-essai-default-user, key: password}}
+          resources:
+            requests: {cpu: "1", memory: 512Mi}
+            limits: {cpu: "2", memory: 1Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}

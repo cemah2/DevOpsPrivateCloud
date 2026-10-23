@@ -1,0 +1,61 @@
+---
+# plateforme/ansible — roles/ssh_durci/tasks/fichiers-inconnus.yml (M29-E22, PLAT-3022)
+# Inclus au début de tasks/main.yml (AVANT la pose de 01-ssh-durci.conf) :
+#   - name: Fichiers de sshd_config.d inconnus
+#     ansible.builtin.import_tasks: fichiers-inconnus.yml
+# Un rôle qui ne gère que SES fichiers ne voit pas un fichier de plus posé à côté : --check annonçait
+# « rien à changer » alors que la configuration effective avait dérivé (INC de M29-E22). Ici le rôle
+# possède le RÉPERTOIRE : tout fichier *.conf inconnu est signalé, puis retiré (sauvegarde gardée).
+
+- name: Lister les fichiers de /etc/ssh/sshd_config.d
+  ansible.builtin.find:
+    paths: /etc/ssh/sshd_config.d
+    patterns: "*.conf"
+    file_type: file
+  register: _ssh_durci_presents
+
+- name: Calculer les fichiers inconnus
+  ansible.builtin.set_fact:
+    _ssh_durci_inconnus: >-
+      {{ _ssh_durci_presents.files | map(attribute='path') | map('basename')
+         | reject('in', ssh_durci_fichiers_connus) | list }}
+
+- name: Refuser les fichiers inconnus (si on ne doit pas les retirer)
+  ansible.builtin.assert:
+    that: _ssh_durci_inconnus | length == 0
+    fail_msg: >-
+      Fichiers de /etc/ssh/sshd_config.d inconnus sur {{ inventory_hostname }} : {{ _ssh_durci_inconnus | join(', ') }}.
+      Ajoute-les à ssh_durci_fichiers_connus s'ils sont légitimes, sinon passe ssh_durci_retirer_inconnus à true.
+    quiet: true
+  when: not ssh_durci_retirer_inconnus
+
+# Sauvegarde avant retrait : le fichier part dans /var/backups/ssh_durci/ (trace de la dérive).
+- name: Répertoire des sauvegardes
+  ansible.builtin.file:
+    path: /var/backups/ssh_durci
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when:
+    - ssh_durci_retirer_inconnus
+    - _ssh_durci_inconnus | length > 0
+
+- name: Sauvegarder les fichiers inconnus
+  ansible.builtin.copy:
+    src: "/etc/ssh/sshd_config.d/{{ item }}"
+    dest: "/var/backups/ssh_durci/{{ item }}.{{ ansible_facts['date_time']['iso8601_basic_short'] }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ _ssh_durci_inconnus }}"
+  when: ssh_durci_retirer_inconnus
+
+- name: Retirer les fichiers inconnus
+  ansible.builtin.file:
+    path: "/etc/ssh/sshd_config.d/{{ item }}"
+    state: absent
+  loop: "{{ _ssh_durci_inconnus }}"
+  when: ssh_durci_retirer_inconnus
+  notify: Recharger sshd

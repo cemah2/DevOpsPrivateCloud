@@ -1,0 +1,8 @@
+# mediagenda/deploiement — base/kustomization.yaml : bloc AJOUTÉ (M28-E10). Étiquette sur tous les
+# objets ET les gabarits de pods (donc Rollout, ReplicaSets, pods, Services, HPA), jamais dans les
+# sélecteurs (un sélecteur de Deployment est immuable).
+labels:
+  - pairs:
+      backstage.io/kubernetes-id: mediagenda-api
+    includeSelectors: false
+    includeTemplates: true

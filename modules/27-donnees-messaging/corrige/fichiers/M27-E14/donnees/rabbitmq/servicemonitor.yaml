@@ -1,0 +1,38 @@
+# plateforme/donnees — rabbitmq/servicemonitor.yaml (M27-E14, PLAT-2814). Ajouté à rabbitmq/kustomization.yaml.
+# Collecte du plugin rabbitmq_prometheus (port nommé « prometheus », 15692, sur chaque nœud : le
+# Service « rabbitmq » de l'opérateur résout vers les trois pods).
+#   1. /metrics : métriques AGRÉGÉES (nœud, alarmes, mémoire, disque, connexions, totaux). Faible cardinalité.
+#   2. /metrics/detailed : métriques PAR FILE, seulement les familles et les vhosts utiles (préfixe
+#      rabbitmq_detailed_). /metrics/per-object renverrait TOUT, pour toutes les files et tous les canaux :
+#      coûteux pour le courtier et pour Prometheus, d'après la documentation du plugin.
+# Modèle : observability/prometheus/monitors/rabbitmq-servicemonitor.yml du Cluster Operator 2.23.1.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: rabbitmq
+  namespace: messagerie
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  jobLabel: app.kubernetes.io/name
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rabbitmq
+      app.kubernetes.io/component: rabbitmq
+  endpoints:
+    - port: prometheus
+      scheme: http
+      interval: 30s
+      scrapeTimeout: 25s
+    - port: prometheus
+      scheme: http
+      path: /metrics/detailed
+      params:
+        family:
+          - queue_coarse_metrics
+          - queue_consumer_count
+        vhost:
+          - medinotif-recette
+          - medinotif-prod
+      interval: 30s
+      scrapeTimeout: 25s

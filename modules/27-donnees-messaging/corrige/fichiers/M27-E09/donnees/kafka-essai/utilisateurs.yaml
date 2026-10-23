@@ -1,0 +1,35 @@
+# plateforme/donnees — kafka-essai/utilisateurs.yaml (M27-E09)
+# L'opérateur d'utilisateurs crée un Secret du même nom (password, sasl.jaas.config) et les ACL.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: mediagenda
+  labels:
+    strimzi.io/cluster: kafka-essai
+spec:
+  authentication:
+    type: scram-sha-512
+  authorization:
+    type: simple
+    acls:
+      - resource: {type: topic, name: rendez-vous.evenements, patternType: literal}
+        operations: [Write, Describe]
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: medinotif
+  labels:
+    strimzi.io/cluster: kafka-essai
+spec:
+  authentication:
+    type: scram-sha-512
+  authorization:
+    type: simple
+    acls:
+      - resource: {type: topic, name: rendez-vous.evenements, patternType: literal}
+        operations: [Read, Describe]
+      - resource: {type: group, name: medinotif, patternType: literal}
+        operations: [Read]
+      - resource: {type: topic, name: notifications.rebut, patternType: literal}
+        operations: [Write, Describe]

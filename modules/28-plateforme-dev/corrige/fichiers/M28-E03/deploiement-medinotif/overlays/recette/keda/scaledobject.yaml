@@ -1,0 +1,43 @@
+# medinotif/deploiement — overlays/recette/keda/scaledobject.yaml (M28-E03, PLAT-2903)
+# MédiNotif de recette suit la profondeur de la file « notifications » de son vhost.
+# KEDA crée et tient à jour l'HPA « keda-hpa-medinotif » (métrique externe) ; il gère seul le passage
+# 0 ↔ 1 — inutilisé ici : minReplicaCount 1 jusqu'au palier 3 (M28-E13).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: medinotif
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: medinotif
+  minReplicaCount: 1
+  maxReplicaCount: 5
+  # Interrogation de la file toutes les 15 s (défaut 30 s).
+  pollingInterval: 15
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          # Une campagne de rappels arrive par vagues : on garde les pods 5 min après la vague.
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 60
+  triggers:
+    - type: rabbitmq
+      # Pas de « host » ici : l'adresse (HTTPS, API de gestion) vient de la TriggerAuthentication ;
+      # le certificat est vérifié (racine montée dans keda-operator, --ca-dir).
+      metadata:
+        protocol: http
+        vhostName: medinotif-recette
+        queueName: notifications
+        mode: QueueLength
+        # Un pod traite ≈ 20 messages/s (MEDINOTIF_DELAI_ENVOI_MS = 50 ms, prefetch 1) ; 100 messages
+        # d'avance par pod = ≈ 5 s de retard toléré avant d'ajouter un pod.
+        value: "100"
+        # Compte les messages prêts ET non acquittés (en cours de traitement) : défaut, voulu.
+        excludeUnacknowledged: "false"
+      authenticationRef:
+        name: medinotif-rabbitmq

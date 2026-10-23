@@ -1,0 +1,13 @@
+# plateforme/donnees — rabbitmq/pdb.yaml (M27-E03, PLAT-2803)
+# Le Cluster Operator ne crée PAS de PodDisruptionBudget : un drainage de deux travailleurs en même
+# temps évincerait deux nœuds et ferait perdre la majorité des files quorum et de Khepri.
+# maxUnavailable: 1 → un nœud RabbitMQ à la fois, quel que soit l'ordre des drainages.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rabbitmq
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rabbitmq

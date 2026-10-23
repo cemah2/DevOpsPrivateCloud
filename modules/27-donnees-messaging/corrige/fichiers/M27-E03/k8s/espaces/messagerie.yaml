@@ -1,0 +1,55 @@
+# plateforme/k8s — espaces/messagerie.yaml (M27-E03, PLAT-2803)
+# Espace de la grappe RabbitMQ « rabbitmq » (Application « rabbitmq ») et de sa topologie
+# (Application « rabbitmq-topologie » : Vhost, Queue, User… sont des objets de CET espace, qui
+# désignent la grappe par rabbitmqClusterReference).
+#   medisphere.internal/exposition: oui  → l'HTTPRoute de l'interface de gestion est acceptée par
+#                                          gw-par1 (allowedRoutes, M15-E12) ;
+#   PAS d'étiquette medisphere.internal/equipe : c'est un espace de PLATEFORME (les cloisons
+#                                          isolement-* et la collecte des équipes ne le visent pas).
+# Pod Security « restricted » : les pods de l'opérateur (StatefulSet rabbitmq-server, conteneur
+# d'initialisation setup-container) déclarent runAsNonRoot, seccompProfile RuntimeDefault,
+# capabilities drop ALL, allowPrivilegeEscalation false (internal/resource/statefulset.go, 2.23.1).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: messagerie
+  labels:
+    medisphere.internal/domaine: donnees
+    medisphere.internal/exposition: oui
+    medisphere.internal/supervision-regles: "oui"
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+---
+# 3 nœuds × 1 Gio (requêtes = limites pour la mémoire) + marge pour un pod de diagnostic.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota-plateforme
+  namespace: messagerie
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 5Gi
+    requests.storage: 40Gi
+    persistentvolumeclaims: "4"
+    pods: "8"
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limites-defaut
+  namespace: messagerie
+spec:
+  limits:
+    - type: Container
+      defaultRequest: {cpu: 50m, memory: 64Mi}
+      default: {cpu: 500m, memory: 256Mi}
+      max: {cpu: "2", memory: 2Gi}

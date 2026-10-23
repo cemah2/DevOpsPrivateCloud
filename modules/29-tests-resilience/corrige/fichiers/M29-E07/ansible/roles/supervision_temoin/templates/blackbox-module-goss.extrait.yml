@@ -1,0 +1,13 @@
+# plateforme/ansible — roles/supervision_temoin/templates/blackbox.yml.j2 : module ajouté en M29-E07.
+# EXTRAIT, à insérer dans « modules: ». goss serve répond en HTTP (pas de TLS : il ne publie qu'un
+# résultat de tests, sur le VLAN INFRA, à mon01 seul — pare-feu local de la VM).
+# 200 = tous les tests passent ; 503 = au moins un test échoue (la sonde échoue, et
+# probe_http_status_code distingue ce cas d'une absence de réponse : règles goss.yml).
+  goss_sante:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      valid_status_codes: [200]

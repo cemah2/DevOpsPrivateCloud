@@ -1,0 +1,11 @@
+# À INTÉGRER dans plateforme/charts-miroir — charts.yaml (format de M20-E13), M28-E04 (PLAT-2904).
+#   curl -s https://charts.fairwinds.com/stable/index.yaml | yq '.entries.vpa[] | select(.version == "5.1.0") | .digest'
+# (vérifiée à la rédaction le 23/10/2026). Le sous-chart metrics-server 3.14.0 est DANS l'archive
+# (désactivé par nos valeurs).
+charts:
+  # … entrées existantes …
+  - nom: vpa
+    depot: https://charts.fairwinds.com/stable
+    version: 5.1.0
+    empreinte: sha256:ad3e6619403b6b1e65a5afa84de837ac1995ebe72014e89e3f6b6195a988a166
+    usage: "Vertical Pod Autoscaler 1.7.1, recommandations (M28-E04), Application plateforme/gitops plateforme/vpa.yaml"

@@ -1,0 +1,46 @@
+# plateforme/k8s — espaces/rabbitmq-system.yaml (M27-E03, PLAT-2803)
+# Espace des deux opérateurs RabbitMQ (Cluster Operator, Messaging Topology Operator), installés par
+# l'Application « rabbitmq-operateurs » (plateforme/donnees, vendor/rabbitmq). Les manifestes amont
+# déclarent aussi ce Namespace : le correctif « $patch: delete » de vendor/ le leur retire.
+# Pod Security « restricted » : les Deployments amont la respectent tels quels (runAsNonRoot,
+# seccompProfile RuntimeDefault, capabilities drop ALL, allowPrivilegeEscalation false — vérifié sur
+# les manifestes 2.23.1 et 1.20.4 par « kubectl apply --dry-run=server » dans l'espace).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rabbitmq-system
+  labels:
+    medisphere.internal/domaine: donnees
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota-plateforme
+  namespace: rabbitmq-system
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 1Gi
+    limits.cpu: "2"
+    limits.memory: 2Gi
+    pods: "6"
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limites-defaut
+  namespace: rabbitmq-system
+spec:
+  limits:
+    - type: Container
+      defaultRequest: {cpu: 50m, memory: 64Mi}
+      default: {cpu: 500m, memory: 512Mi}
+      max: {cpu: "1", memory: 1Gi}

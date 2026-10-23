@@ -1,0 +1,76 @@
+# plateforme/observabilite — regles/tests/alertes-donnees.test.yaml (M27-E14).
+# Joué par la CI de plateforme/observabilite (M21) : les groupes de la PrometheusRule sont d'abord extraits
+#   yq '.spec' regles/alertes-donnees.yaml > /tmp/alertes-donnees.rules.yaml
+#   promtool test rules regles/tests/alertes-donnees.test.yaml
+rule_files:
+  - /tmp/alertes-donnees.rules.yaml
+evaluation_interval: 30s
+tests:
+  # 1. File sans consommateur en production : rien à 4 min, alerte à 6 min.
+  - interval: 30s
+    input_series:
+      - series: 'rabbitmq_detailed_queue_consumers{vhost="medinotif-prod", queue="notifications", pod="rabbitmq-server-1"}'
+        values: '1 1 0x20'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: RabbitmqFileSansConsommateur
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: RabbitmqFileSansConsommateur
+        exp_alerts:
+          - exp_labels:
+              vhost: medinotif-prod
+              queue: notifications
+              gravite: critique
+              equipe: plateforme
+            exp_annotations:
+              resume: "medinotif-prod/notifications : aucun consommateur"
+              description: "Plus aucun MédiNotif ne consomme notifications (medinotif-prod) depuis 5 min : aucune notification ne part."
+              runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-277-consommateur-arrete.md"
+  # 2. Primaire absent : deux réplicas en récupération, plus de primaire depuis 1 min ; et la recette,
+  #    elle, a son primaire (aucune alerte pour elle).
+  - interval: 30s
+    input_series:
+      - series: 'cnpg_collector_up{namespace="mediagenda-prod", pod="mediagenda-db-2"}'
+        values: '1x10'
+      - series: 'cnpg_collector_up{namespace="mediagenda-prod", pod="mediagenda-db-3"}'
+        values: '1x10'
+      - series: 'cnpg_pg_replication_in_recovery{namespace="mediagenda-prod", pod="mediagenda-db-2"}'
+        values: '1x10'
+      - series: 'cnpg_pg_replication_in_recovery{namespace="mediagenda-prod", pod="mediagenda-db-3"}'
+        values: '1x10'
+      - series: 'cnpg_collector_up{namespace="mediagenda-recette", pod="mediagenda-db-1"}'
+        values: '1x10'
+      - series: 'cnpg_pg_replication_in_recovery{namespace="mediagenda-recette", pod="mediagenda-db-1"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: PostgresqlPrimaireAbsent
+        exp_alerts:
+          - exp_labels:
+              namespace: mediagenda-prod
+              gravite: critique
+              equipe: plateforme
+            exp_annotations:
+              resume: "mediagenda-prod : aucun primaire PostgreSQL"
+              description: "Aucune instance de mediagenda-db (mediagenda-prod) n'est primaire et joignable depuis 1 min : les écritures de MédiAgenda échouent. Une bascule devrait être en cours ; si elle ne finit pas en 2 min, intervenir."
+              runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-274-alertes-donnees.md#postgresqlprimaireabsent"
+  # 3. Écritures suspendues : le primaire de recette n'a plus de réplica connecté.
+  - interval: 30s
+    input_series:
+      - series: 'cnpg_pg_replication_streaming_replicas{namespace="mediagenda-recette", pod="mediagenda-db-1"}'
+        values: '2 2 0x10'
+      - series: 'cnpg_pg_replication_in_recovery{namespace="mediagenda-recette", pod="mediagenda-db-1"}'
+        values: '0x12'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: PostgresqlSynchroneSansReplica
+        exp_alerts:
+          - exp_labels:
+              namespace: mediagenda-recette
+              gravite: critique
+              equipe: plateforme
+            exp_annotations:
+              resume: "mediagenda-recette : aucun réplica connecté, écritures suspendues"
+              description: "Le primaire de mediagenda-db (mediagenda-recette) n'a plus aucun réplica en réplication (réplication synchrone, dataDurability: required) : les validations attendent indéfiniment."
+              runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-274-alertes-donnees.md#postgresqlsynchronesansreplica"

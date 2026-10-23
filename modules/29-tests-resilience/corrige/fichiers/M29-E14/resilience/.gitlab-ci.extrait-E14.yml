@@ -1,0 +1,46 @@
+# plateforme/resilience — .gitlab-ci.yml (EXTRAIT M29-E14, PLAT-3014) : non-régression de performance.
+# Le job ne tourne QUE dans le pipeline planifié « non-regression-nocturne » (Build → Pipeline schedules,
+# chaque nuit à 2 h, branche main, variable NON_REGRESSION=1) ou à la main (web). Il agit sur le cluster
+# par l'agent GitLab k8s-par1 (ci_access de plateforme/resilience, espace k6, Role ci-charge) et lit
+# Prometheus par Thanos Query (CiliumNetworkPolicy thanos-query-lecture-charge, M29-E14).
+# Image : alpine/k8s (kubectl, jq, yq, curl) par le cache Harbor, comme les jobs de déploiement du M19.
+
+non-regression-performance:
+  stage: test
+  image: registry.par1.medisphere.internal/dockerhub/alpine/k8s:1.36.5
+  tags: [k8s]
+  resource_group: charge-recette        # jamais deux essais de charge en même temps
+  timeout: 30m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $NON_REGRESSION == "1"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $NON_REGRESSION == "1"'
+  variables:
+    PROM_URL: http://thanos-query.supervision.svc.cluster.local:9090
+  script:
+    - kubectl config use-context plateforme/k8s:k8s-par1
+    - export TESTID="nuit-${CI_PIPELINE_ID}"
+    - kubectl -n k6 create configmap charge-mediagenda-recette
+        --from-file=mediagenda-recette.js=charge/distribue/mediagenda-recette.js --dry-run=client -o yaml
+      | kubectl -n k6 apply -f -
+    - kubectl -n k6 delete testrun mediagenda-recette-distribue --ignore-not-found --wait=true
+    - export DEBUT="$(date +%s)"
+    - sed "s/TESTID/${TESTID}/" charge/distribue/testrun.yaml | kubectl -n k6 apply -f -
+    # cleanup: post supprime le TestRun en fin d'essai (stage finished OU error) : on attend sa
+    # disparition, en notant le dernier stage vu ; le verdict vient de Prometheus.
+    - |
+      dernier=""
+      for i in $(seq 1 120); do
+        s="$(kubectl -n k6 get testrun mediagenda-recette-distribue -o jsonpath='{.status.stage}' 2>/dev/null)" || s="SUPPRIME"
+        [ "$s" = "SUPPRIME" ] && break
+        [ -n "$s" ] && dernier="$s"
+        sleep 10
+      done
+      echo "dernier stage observé : ${dernier:-aucun}"
+      [ "$dernier" != "error" ] || { echo "TestRun en erreur"; exit 1; }
+    - export FIN="$(date +%s)"
+    - sleep 30   # dernier envoi de l'écriture distante (intervalle 10 s) + délai de Thanos
+    - outils/comparer-reference.sh --testid "$TESTID" --debut "$DEBUT" --fin "$FIN"
+  artifacts:
+    when: always
+    paths: [resultat.json]
+    expire_in: 90 days

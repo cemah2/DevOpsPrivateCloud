@@ -1,0 +1,101 @@
+# plateforme/gitops — valeurs/vc-essai/values.yaml (M28-E09, PLAT-2909) — chart loft/vcluster 0.37.4.
+# TEMPORAIRE : supprimé avec l'Application vc-essai à la fin de l'exercice.
+# Clés vérifiées dans le values.yaml du chart 0.37.4 et rendues par « helm template ».
+# Pas de controlPlane.advanced.defaultImageRegistry : il REMPLACE le registre de toutes les images
+# (ghcr.io comme Docker Hub) ; on fixe le registre image par image, vers le bon cache de Harbor.
+
+controlPlane:
+  distro:
+    k8s:
+      enabled: true
+      # Même mineure que l'hôte (1.36.5).
+      image:
+        registry: registry.par1.medisphere.internal/ghcr
+        repository: loft-sh/kubernetes
+        tag: "v1.36.5"
+      # Conteneur d'initialisation qui copie les binaires de la distribution : non-root aussi.
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        runAsUser: 12345
+        runAsGroup: 12345
+        capabilities:
+          drop: ["ALL"]
+        seccompProfile:
+          type: RuntimeDefault
+  # Stockage par défaut : SQLite embarqué (kine), sur un volume du StatefulSet. L'etcd embarqué
+  # est réservé à l'édition « Free » enregistrée : jamais ici.
+  statefulSet:
+    image:
+      # Le chart prend vcluster-pro par défaut (modules pro inclus, désactivés) : on veut l'OSS pur.
+      registry: registry.par1.medisphere.internal/ghcr
+      repository: loft-sh/vcluster-oss
+      tag: "0.37.4"
+    imagePullPolicy: IfNotPresent
+    # Le plan de contrôle tourne en root par défaut (runAsUser: 0) : refusé par Pod Security
+    # « restricted » de l'espace. Non-root documenté par vCluster (« Run as non-root »).
+    security:
+      podSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 12345
+        runAsGroup: 12345
+        fsGroup: 12345
+        seccompProfile:
+          type: RuntimeDefault
+      containerSecurityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        runAsUser: 12345
+        runAsGroup: 12345
+        capabilities:
+          drop: ["ALL"]
+    persistence:
+      volumeClaim:
+        enabled: true
+        size: 2Gi
+        storageClass: ceph-rbd
+    resources:
+      limits:
+        ephemeral-storage: 2Gi
+        memory: 1Gi
+      requests:
+        ephemeral-storage: 256Mi
+        cpu: 100m
+        memory: 384Mi
+  coredns:
+    enabled: true
+    deployment:
+      # Image de CoreDNS par le cache Docker Hub : relève l'étiquette que vCluster 0.37.4 utilise par
+      # défaut (images de la version, ou premier essai sans cette ligne) et épingle-la.
+      image: "registry.par1.medisphere.internal/dockerhub/coredns/coredns:<ETIQUETTE-COREDNS>"
+    security:
+      podSecurityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containerSecurityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+
+sync:
+  toHost:
+    pods:
+      rewriteHosts:
+        initContainer:
+          image:
+            registry: registry.par1.medisphere.internal/dockerhub
+            repository: library/alpine
+            tag: "3.20"
+
+# Les quotas et limites qui comptent sont ceux de l'HÔTE (locataire medidoc : budget du libre-service,
+# Pod Security de l'espace) : pas de quota supplémentaire posé par le chart dans l'espace hôte.
+policies:
+  resourceQuota:
+    enabled: false
+  limitRange:
+    enabled: false
+
+# Lab sans sortie vers Loft, et pas de données d'usage vers un tiers.
+telemetry:
+  enabled: false

@@ -1,0 +1,84 @@
+# plateforme/donnees — rabbitmq/reseau.yaml (M27-E03, PLAT-2803 ; entrées des applications : E04, E08)
+# Refus par défaut sur les pods de la grappe, puis seulement ce qui sert.
+# Ports : 5671 AMQPS (applications), 15672 gestion HTTP (Gateway), 15671 gestion HTTPS (Topology
+# Operator), 15692 Prometheus, 4369/25672 distribution Erlang + 35672-35682 (outils CLI, rabbitmqctl
+# entre nœuds). 5672 (AMQP en clair) : AUCUNE règle → fermé.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: rabbitmq
+spec:
+  description: "Grappe RabbitMQ de messagerie : entrées et sorties autorisées (PLAT-2803)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: rabbitmq
+  ingress:
+    # Entre nœuds de la grappe : distribution Erlang, outils, et AMQPS/gestion (rabbitmq-diagnostics
+    # depuis un pod vers un autre).
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: rabbitmq
+      toPorts:
+        - ports:
+            - {port: "4369", protocol: TCP}
+            - {port: "25672", protocol: TCP}
+            - {port: "35672", endPort: 35682, protocol: TCP}
+            - {port: "5671", protocol: TCP}
+            - {port: "15671", protocol: TCP}
+    # Interface de gestion par la Gateway (Envoy de Cilium : identité réservée « ingress »).
+    - fromEntities: ["ingress"]
+      toPorts:
+        - ports:
+            - {port: "15672", protocol: TCP}
+    # Opérateurs (rabbitmq-system) : API de gestion, en TLS (Topology Operator) ou non.
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: rabbitmq-system
+      toPorts:
+        - ports:
+            - {port: "15671", protocol: TCP}
+            - {port: "15672", protocol: TCP}
+    # Prometheus (supervision, M27-E14).
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - {port: "15692", protocol: TCP}
+    # Applications : AMQPS seulement. M27-E04 ajoute medinotif-recette et mediagenda-recette,
+    # M27-E08 medinotif-prod et mediagenda-prod (une règle par espace : liste explicite).
+    # - fromEndpoints:
+    #     - matchLabels: {io.kubernetes.pod.namespace: medinotif-recette}
+    #   toPorts:
+    #     - ports: [{port: "5671", protocol: TCP}]
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: rabbitmq
+      toPorts:
+        - ports:
+            - {port: "4369", protocol: TCP}
+            - {port: "25672", protocol: TCP}
+            - {port: "35672", endPort: 35682, protocol: TCP}
+            - {port: "5671", protocol: TCP}
+            - {port: "15671", protocol: TCP}
+    # Découverte des pairs (rabbit_peer_discovery_k8s) : API Kubernetes.
+    - toEntities: ["kube-apiserver"]
+      toPorts:
+        - ports:
+            - {port: "6443", protocol: TCP}
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+    # Keycloak (clés de signature des jetons) : sso.par1.medisphere.internal = VIP des répartiteurs.
+    # Flux K8S_TRAV → 10.10.70.200:443 déjà ouvert sur la bordure au M24.
+    - toCIDR: ["10.10.70.200/32"]
+      toPorts:
+        - ports:
+            - {port: "443", protocol: TCP}

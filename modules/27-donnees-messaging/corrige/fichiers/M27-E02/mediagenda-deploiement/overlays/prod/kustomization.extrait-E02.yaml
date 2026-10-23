@@ -1,0 +1,15 @@
+# mediagenda/deploiement — overlays/prod/kustomization.yaml : EXTRAIT (M27-E02, PLAT-2802).
+# À AJOUTER aux listes existantes (components, resources, patches du M25 et du M26 inchangés).
+resources:
+  # … ressources existantes (espace.yaml, reseau-openbao.yaml…) …
+  - pooler.yaml
+patches:
+  # … correctifs existants (base-openbao.yaml, imageName par condensé du M26-E21…) …
+  - path: base-pg-stat-statements.yaml
+    target:
+      group: postgresql.cnpg.io
+      kind: Cluster
+      name: mediagenda-db
+# Le component « supervision » (inclus dans les trois overlays) porte désormais aussi
+# podmonitor-pooler.yaml ; le component « identifiants-dynamiques » fabrique l'URL de l'API vers
+# mediagenda-db-pooler-rw.

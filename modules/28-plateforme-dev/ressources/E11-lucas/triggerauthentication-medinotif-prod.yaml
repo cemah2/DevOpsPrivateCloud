@@ -1,0 +1,24 @@
+# Proposition de Lucas Martin — NE PAS APPLIQUER (M28-E11)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: medinotif-rabbitmq
+  namespace: medinotif-prod
+type: Opaque
+stringData:
+  utilisateur: medinotif-prod
+  mot_de_passe: "Medinotif-Prod-2026!"
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: medinotif-rabbitmq
+  namespace: medinotif-prod
+spec:
+  secretTargetRef:
+    - parameter: username
+      name: medinotif-rabbitmq
+      key: utilisateur
+    - parameter: password
+      name: medinotif-rabbitmq
+      key: mot_de_passe

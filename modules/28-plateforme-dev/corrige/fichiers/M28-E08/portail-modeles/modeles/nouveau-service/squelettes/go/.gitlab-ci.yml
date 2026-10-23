@@ -1,0 +1,26 @@
+# ${{ values.nom }} — .gitlab-ci.yml (squelette du modèle « nouveau service »)
+# Chaîne standard de MédiSphère par composants (plateforme/ci-templates) : construction (BuildKit),
+# analyse et signature, puis MR de promotion vers l'overlay dev du projet de déploiement.
+# Versions des composants : celles en vigueur au moment où le modèle a été écrit (M28-E08) ;
+# Renovate (M13) propose les montées.
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/construction-image@v2.8.0
+    inputs:
+      image_nom: medisphere/${{ values.nom }}
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/securite@v2.10.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/promotion@v2.8.0
+    inputs:
+      overlay: dev
+      declenchement: on_success
+      projet_deploiement: ${{ values.locataire }}/${{ values.nom }}-deploiement
+      nom_image: registry.par1.medisphere.internal/medisphere/${{ values.nom }}
+
+stages: [lint, test, construction, analyse, publication, signature, promotion]
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/

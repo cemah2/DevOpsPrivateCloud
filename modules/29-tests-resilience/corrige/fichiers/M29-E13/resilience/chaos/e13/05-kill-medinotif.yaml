@@ -1,0 +1,33 @@
+# plateforme/resilience — chaos/e13/05-kill-medinotif.yaml (M29-E13, PLAT-3013)
+#
+# Préalable : MédiNotif est à zéro réplique au repos (KEDA, M28-E13). Fais d'abord publier des
+#   notifications (créations de rendez-vous par k6) et attends qu'au moins un pod consomme :
+#   kubectl -n medinotif-recette get pods -l app.kubernetes.io/name=medinotif
+#   Sans pod, l'expérience ne sélectionne rien (événement « no pod is selected »).
+# Hypothèse : tuer le conteneur pendant qu'il consomme ne perd aucune notification (acquittement après
+#   l'envoi, prefetch 1) ; au plus un message est retraité (livraison « au moins une fois ») ; le
+#   conteneur redémarre (kubelet) en moins de 30 s et la file se vide.
+# Mesure : medinotif_messages_total{resultat}, profondeur de la file notifications (API de gestion de
+#   RabbitMQ ou rabbitmq_queue_messages), redémarrages du conteneur.
+# Critère d'arrêt : la file grossit encore 5 min après la fin de l'expérience.
+# Arrêt d'urgence : kubectl -n chaos-experiences delete podchaos m29-e13-kill-medinotif
+#   (un container-kill est instantané : la pause n'a d'effet que sur les tuer suivants)
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: m29-e13-kill-medinotif
+  namespace: chaos-experiences
+  labels:
+    medisphere.internal/exercice: m29-e13
+  annotations:
+    medisphere.internal/ticket: PLAT-3013
+spec:
+  action: container-kill
+  mode: one
+  selector:
+    namespaces: [medinotif-recette]
+    labelSelectors:
+      app.kubernetes.io/name: medinotif
+  # Nom du conteneur dans le Deployment medinotif (M27-E04) : à vérifier.
+  containerNames: [medinotif]
+  duration: 30s

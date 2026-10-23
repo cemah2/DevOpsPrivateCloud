@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ${{ values.nom }}-dev
+resources:
+  - ../../base
+labels:
+  - pairs:
+      medisphere.internal/environnement: dev
+    includeSelectors: false
+    includeTemplates: true
+# Posé par la MR de promotion de la CI du code (kustomize edit set image, par empreinte).
+images:
+  - name: registry.par1.medisphere.internal/medisphere/${{ values.nom }}
+    newTag: <POSÉ-PAR-LA-PROMOTION>

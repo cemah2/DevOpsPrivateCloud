@@ -1,0 +1,17 @@
+# plateforme/k8s — espaces/capsule-system/00-namespace.yaml (M28-E05, PLAT-2905) — « task espaces ».
+# Contrôleur et webhooks de Capsule (UID 1002, non-root, lecture seule) : conformes à « restricted ».
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: capsule-system
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    medisphere.internal/role: plateforme
+    medisphere.internal/proprietaire: plateforme
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    medisphere.internal/responsable: "karim.benali"
+    medisphere.internal/ticket: "PLAT-2905"

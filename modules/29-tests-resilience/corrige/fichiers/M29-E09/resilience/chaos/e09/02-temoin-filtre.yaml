@@ -1,0 +1,23 @@
+# plateforme/resilience — chaos/e09/02-temoin-filtre.yaml (M29-E09, PLAT-3009)
+# TÉMOIN du filtre d'espaces de Chaos Mesh (enableFilterNamespace). À appliquer deux fois :
+#   1. AVANT d'annoter wb-essais : l'objet est accepté (aucun webhook ne lit les annotations de
+#      l'espace visé) mais Chaos Mesh ne sélectionne AUCUN pod : condition Selected=False et
+#      événement Failed « … no pod is selected » ; le pod témoin continue de tourner ;
+#   2. APRÈS l'annotation (supprime puis réapplique) : le pod témoin est tué, puis recréé par
+#      son Deployment.
+# Pod témoin : Deployment « temoin-chaos » de wb-essais (corrigé, étape B), étiquette app=temoin-chaos.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: e09-temoin-filtre
+  namespace: chaos-experiences
+  labels:
+    medisphere.internal/exercice: M29-E09
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    namespaces:
+      - wb-essais
+    labelSelectors:
+      app: temoin-chaos

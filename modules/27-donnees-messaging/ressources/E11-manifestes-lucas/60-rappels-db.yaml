@@ -1,0 +1,35 @@
+# Base des rappels de la veille — Lucas, DEV-2811
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: rappels-db
+  namespace: mediagenda-recette
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:18
+  enableSuperuserAccess: true
+  storage:
+    size: 1Gi
+  postgresql:
+    parameters:
+      max_connections: "1000"
+      shared_buffers: "2GB"
+  bootstrap:
+    initdb:
+      database: rappels
+      owner: rappels
+      postInitSQL:
+        - CREATE ROLE lucas LOGIN SUPERUSER PASSWORD 'Lucas2026!'
+  monitoring:
+    enablePodMonitor: true
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://cnpg-k8s-par1/mediagenda-recette/mediagenda-db
+      endpointURL: https://s3.par1.medisphere.internal
+      s3Credentials:
+        accessKeyId:
+          name: mediagenda-db-s3
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: mediagenda-db-s3
+          key: ACCESS_SECRET_KEY

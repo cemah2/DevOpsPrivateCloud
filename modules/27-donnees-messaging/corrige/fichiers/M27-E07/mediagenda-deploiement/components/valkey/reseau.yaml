@@ -1,0 +1,20 @@
+# components/valkey/reseau.yaml (M27-E07) — reprise de la politique de « dependances » (M17).
+# Entrée : 6379 depuis l'API seulement (le Job de migration Flyway n'utilise pas Valkey). La collecte de
+# l'exportateur (9121) est ouverte par la plateforme (collecte-prometheus, port ajouté en M27-E07).
+# Sortie : aucune (Egress déclaré sans règle) — Valkey n'appelle personne, pas même le DNS.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: valkey
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mediagenda
+      ports:
+        - {port: 6379, protocol: TCP}

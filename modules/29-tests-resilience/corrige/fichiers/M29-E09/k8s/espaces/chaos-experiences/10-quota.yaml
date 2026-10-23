@@ -1,0 +1,16 @@
+# plateforme/k8s — espaces/chaos-experiences/10-quota.yaml (M29-E09)
+# Une expérience oubliée est un risque : on borne le NOMBRE d'objets de chaos vivants. Un
+# dépassement refuse la création (« exceeded quota ») : il faut d'abord faire le ménage (RB-292).
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: experiences
+  namespace: chaos-experiences
+spec:
+  hard:
+    pods: "0"
+    count/podchaos.chaos-mesh.org: "10"
+    count/networkchaos.chaos-mesh.org: "10"
+    count/stresschaos.chaos-mesh.org: "5"
+    count/schedules.chaos-mesh.org: "3"
+    count/workflows.chaos-mesh.org: "3"

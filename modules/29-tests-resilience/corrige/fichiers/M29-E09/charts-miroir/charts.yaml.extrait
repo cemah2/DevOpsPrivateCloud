@@ -1,0 +1,7 @@
+# plateforme/charts-miroir — charts.yaml, EXTRAIT (M29-E09, PLAT-3009) : entrée à ajouter à « charts: ».
+  - nom: chaos-mesh
+    depot: https://charts.chaos-mesh.org
+    version: 2.8.6
+    # Champ « digest » de l'index du dépôt amont, recontrôlé par helm pull + sha256sum (23/10/2026).
+    empreinte: sha256:1a3947427e1fab911372f869a70badc495a88b4d7a86f19a16b4c957b13859b1
+    usage: "Chaos Mesh 2.8.6 (M29-E09), Application plateforme/gitops plateforme/chaos-mesh.yaml"

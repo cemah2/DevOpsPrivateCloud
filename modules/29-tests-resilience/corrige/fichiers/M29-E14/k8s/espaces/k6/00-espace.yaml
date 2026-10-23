@@ -1,0 +1,15 @@
+# plateforme/k8s — espaces/k6/00-espace.yaml (M29-E14, PLAT-3014)
+# Espace de l'opérateur k6 ET des TestRun (initialiseur, exécuteurs, démarreur). Pod Security
+# « restricted » : le chart et nos TestRun déclarent les contextes de sécurité nécessaires.
+# Pas d'annotation chaos-mesh.org/inject : on ne fait pas de chaos sur l'outil de mesure.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: k6
+  labels:
+    medisphere.internal/proprietaire: plateforme
+    medisphere.internal/composant: k6
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted

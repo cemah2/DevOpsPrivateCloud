@@ -1,0 +1,33 @@
+# mediagenda/deploiement — components/supervision/regle-valkey.yaml (M21-E41, INC-4841 ; M27-E07)
+# Avant M27-E07 : Valkey sans maxmemory, mesuré contre la limite du CONTENEUR (OOMKilled = cache vidé).
+# Depuis : Valkey évince lui-même à maxmemory (allkeys-lru). La règle d'équipe garde la mesure contre
+# la limite du conteneur (fragmentation, tampons des clients : ce qui reste au-delà de maxmemory mène
+# à OOMKilled) ; le cache plein ET inefficace, et Valkey injoignable, sont des alertes de plateforme
+# (redis_* de l'exportateur, M27-E14 : ValkeyCachePlein, ValkeyInjoignable).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mediagenda-valkey
+  labels:
+    app.kubernetes.io/part-of: mediagenda
+    medisphere.internal/equipe: mediagenda
+spec:
+  groups:
+    - name: mediagenda-valkey
+      rules:
+        - alert: MediagendaValkeyMemoireHaute
+          # Mémoire du conteneur proche de sa limite malgré maxmemory : risque d'OOMKilled.
+          expr: |
+            max by (namespace, pod) (
+              container_memory_working_set_bytes{namespace=~"mediagenda-.*", container="valkey"}
+              / on (namespace, pod, container)
+              kube_pod_container_resource_limits{namespace=~"mediagenda-.*", container="valkey", resource="memory"}
+            ) > 0.9
+          for: 10m
+          labels:
+            gravite: avertissement
+            equipe: mediagenda
+          annotations:
+            resume: "Valkey de {{ $labels.namespace }} au-delà de 90 % de la limite de son conteneur"
+            description: "Le pod {{ $labels.pod }} utilise {{ $value | humanizePercentage }} de sa limite : maxmemory trop proche de la limite, ou fragmentation (INFO memory, mem_fragmentation_ratio). Valkey ne protège que maxmemory, pas le conteneur."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/valkey.md

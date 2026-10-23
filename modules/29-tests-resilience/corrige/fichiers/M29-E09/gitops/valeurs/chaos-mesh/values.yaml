@@ -1,0 +1,70 @@
+# plateforme/gitops — valeurs/chaos-mesh/values.yaml (M29-E09, PLAT-3009)
+# Chart chaos-mesh 2.8.6 (Chaos Mesh v2.8.6), recopié et signé dans Harbor charts/ par
+# plateforme/charts-miroir. Clés relues dans le values.yaml de l'archive 2.8.6 (helm show values).
+# Principe : le minimum de Chaos Mesh, et des garde-fous qui ne dépendent pas de la bonne volonté.
+
+# Images par le cache ghcr de Harbor : <registre>/<dépôt>:<étiquette> → …/ghcr/chaos-mesh/chaos-mesh:v2.8.6
+images:
+  registry: registry.par1.medisphere.internal/ghcr
+  tag: v2.8.6
+
+timezone: Europe/Paris
+
+# pprof ouvert sur le contrôleur et les démons : inutile ici, et une surface de plus.
+enableProfiling: false
+
+controllerManager:
+  # Lab : un réplica (3 par défaut). L'élection de chef reste active (redémarrage propre).
+  replicaCount: 1
+  # GARDE-FOU n° 1 : seuls les pods des espaces annotés chaos-mesh.org/inject=enabled peuvent être
+  # visés. La liste des espaces annotés est elle-même verrouillée par la ValidatingAdmissionPolicy
+  # medisphere-chaos-espaces (plateforme/k8s/admission/50-chaos-espaces.yaml).
+  enableFilterNamespace: true
+  # chaosd (machines physiques, PhysicalMachineChaos) : non utilisé. À « true », le chart génère
+  # une CA à CHAQUE rendu (genCA) : Argo CD verrait un Secret différent à chaque comparaison.
+  chaosdSecurityMode: false
+  podChaos:
+    podFailure:
+      # pod-failure remplace l'image des conteneurs visés par une image « pause » le temps de
+      # l'expérience. Par défaut gcr.io/google-containers/pause:latest (Internet, étiquette flottante) :
+      # celle du cluster, par le cache k8s de Harbor (version de « kubeadm config images list »).
+      pauseImage: registry.par1.medisphere.internal/k8s/pause:3.10.1
+  resources:
+    requests:
+      cpu: 25m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+chaosDaemon:
+  # containerd.io 2.3 des nœuds (M14), pas Docker (défaut du chart : docker, /var/run/docker.sock).
+  runtime: containerd
+  socketPath: /run/containerd/containerd.sock
+  # Le démon EST privilégié (il entre dans les espaces de noms des conteneurs visés, règle tc et
+  # iptables, tue des processus) : c'est la raison de l'exception PSA de l'espace chaos-mesh.
+  privileged: true
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+dashboard:
+  # GARDE-FOU n° 2 : pas de tableau de bord (une interface web qui crée des expériences avec les
+  # droits de son compte de service). Les expériences passent par Git et kubectl, sous l'identité
+  # de chacun (OIDC).
+  create: false
+  # Garde le webhook « validate-auth » ACTIF même sans tableau de bord : il vérifie (SubjectAccessReview)
+  # que l'auteur d'une expérience a le droit de CRÉER ce type d'expérience dans chaque espace visé.
+  securityMode: true
+
+# DNSChaos non utilisé : pas de serveur DNS de Chaos Mesh (une charge de moins, un risque de moins).
+dnsServer:
+  create: false
+
+webhook:
+  # Certificats des webhooks par cert-manager (M15) : sans cela, le chart les génère à chaque rendu
+  # (genCA), et Argo CD n'arrête pas de les « corriger ».
+  certManager:
+    enabled: true

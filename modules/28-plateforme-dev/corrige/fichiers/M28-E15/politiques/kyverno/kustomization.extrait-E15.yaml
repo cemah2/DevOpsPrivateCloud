@@ -1,0 +1,4 @@
+# plateforme/politiques — kustomization.yaml : EXTRAIT (M28-E15). Ajouter :
+resources:
+  - kyverno/validation/locataires-placement.yaml
+  - kyverno/validation/locataires-pod-security.yaml

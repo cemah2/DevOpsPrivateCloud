@@ -1,0 +1,107 @@
+# plateforme/k8s — espaces/keda/20-reseau.yaml (M28-E03, PLAT-2903)
+# Politiques Cilium des trois composants de KEDA (étiquettes « app » rendues par le chart 2.21.0).
+# Une CNP qui sélectionne un pod le met en refus par défaut dans le sens qu'elle décrit : chaque
+# composant a donc ses entrées ET ses sorties explicites.
+#   keda-operator                    : sortie API du cluster, DNS, API de gestion de RabbitMQ (15671) ;
+#                                      entrée depuis l'adaptateur (gRPC 9666) et Prometheus (8080).
+#   keda-operator-metrics-apiserver  : entrée depuis l'apiserver (6443, APIService) et Prometheus ;
+#                                      sortie vers l'opérateur (9666), l'API du cluster, DNS.
+#   keda-admission-webhooks          : entrée depuis l'apiserver (9443) et Prometheus ; sortie API, DNS.
+# Le palier 3 (déclencheur prometheus, M28-E13) ajoutera la sortie de l'opérateur vers Thanos Query.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: keda-operator
+  namespace: keda
+spec:
+  endpointSelector:
+    matchLabels:
+      app: keda-operator
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app: keda-operator-metrics-apiserver
+      toPorts:
+        - ports: [{port: "9666", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]
+  egress:
+    - toEntities: [kube-apiserver]
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports: [{port: "53", protocol: ANY}]
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: messagerie
+            app.kubernetes.io/name: rabbitmq
+      toPorts:
+        - ports: [{port: "15671", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: keda-operator-metrics-apiserver
+  namespace: keda
+spec:
+  endpointSelector:
+    matchLabels:
+      app: keda-operator-metrics-apiserver
+  ingress:
+    # L'apiserver (réseau des nœuds de contrôle) agrège external.metrics.k8s.io vers ce Service.
+    - fromEntities: [kube-apiserver, remote-node, host]
+      toPorts:
+        - ports: [{port: "6443", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]
+  egress:
+    - toEntities: [kube-apiserver]
+    - toEndpoints:
+        - matchLabels:
+            app: keda-operator
+      toPorts:
+        - ports: [{port: "9666", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports: [{port: "53", protocol: ANY}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: keda-admission-webhooks
+  namespace: keda
+spec:
+  endpointSelector:
+    matchLabels:
+      app: keda-admission-webhooks
+  ingress:
+    - fromEntities: [kube-apiserver, remote-node, host]
+      toPorts:
+        - ports: [{port: "9443", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]
+  egress:
+    - toEntities: [kube-apiserver]
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports: [{port: "53", protocol: ANY}]

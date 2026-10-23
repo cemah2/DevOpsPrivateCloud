@@ -1,0 +1,38 @@
+# plateforme/politiques — kyverno/validation/locataires-pod-security.yaml (M28-E15, SEC-2915)
+# Second verrou du trou n°1 : un espace de locataire doit porter enforce=restricted. Capsule pose
+# l'étiquette (additionalMetadataList du Tenant) et interdit au propriétaire de la changer ; cette
+# politique refuse en plus toute création ou modification d'espace de locataire qui ne l'a pas — y
+# compris par un compte que Capsule ignore (un administrateur, Argo CD). Exception éventuelle : par
+# PolicyException dans kyverno-exceptions (registre du M26), jamais en retirant la politique.
+# Pour un objet Namespace, namespaceSelector s'évalue sur les étiquettes de l'objet lui-même.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: locataires-pod-security
+  annotations:
+    policies.kyverno.io/title: Espaces des locataires en PSA restricted
+    policies.kyverno.io/severity: high
+    medisphere.internal/ticket: SEC-2915
+spec:
+  validationActions: [Deny]
+  failurePolicy: Ignore
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: capsule.clastix.io/tenant
+          operator: Exists
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [namespaces]
+  validations:
+    - expression: >-
+        has(object.metadata.labels) &&
+        'pod-security.kubernetes.io/enforce' in object.metadata.labels &&
+        object.metadata.labels['pod-security.kubernetes.io/enforce'] == 'restricted'
+      message: "un espace de locataire doit porter pod-security.kubernetes.io/enforce=restricted (SEC-2915)"
+      reason: Forbidden

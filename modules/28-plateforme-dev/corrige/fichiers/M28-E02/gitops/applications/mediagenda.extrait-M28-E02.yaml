@@ -1,0 +1,27 @@
+# plateforme/gitops — applications/mediagenda.yaml : EXTRAIT (M28-E02, DEV-2902).
+# Une entrée de plus dans le bloc « ignoreDifferences » du templatePatch (environnements « progressif »,
+# c'est-à-dire recette et prod), à côté des deux de M20-E12 (poids de l'HTTPRoute, réplicas du
+# Deployment). RespectIgnoreDifferences=true y est déjà : une synchronisation ne remet pas le champ.
+# C'est un FILET : le dépôt ne déclare plus spec.replicas du Rollout (component « autoscaling »),
+# mais un correctif oublié (ex. le « replace » de la prod) le redéclarerait sans erreur.
+  templatePatch: |
+    # … début du templatePatch de M20-E41 inchangé …
+      {{- if .progressif }}
+      ignoreDifferences:
+        - group: gateway.networking.k8s.io
+          kind: HTTPRoute
+          name: mediagenda
+          jqPathExpressions:
+            - .spec.rules[].backendRefs[]?.weight
+        - group: apps
+          kind: Deployment
+          name: mediagenda
+          jsonPointers:
+            - /spec/replicas
+        # M28-E02 : le Rollout appartient à l'HPA « mediagenda » pour son nombre de pods.
+        - group: argoproj.io
+          kind: Rollout
+          name: mediagenda
+          jsonPointers:
+            - /spec/replicas
+      {{- end }}

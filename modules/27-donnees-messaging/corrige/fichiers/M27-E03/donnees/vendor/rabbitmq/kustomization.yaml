@@ -1,0 +1,22 @@
+# plateforme/donnees — vendor/rabbitmq/kustomization.yaml (M27-E03, PLAT-2803)
+# Application Argo CD « rabbitmq-operateurs » (chemin vendor/rabbitmq, espace rabbitmq-system).
+# Les deux opérateurs déclarent CHACUN le Namespace rabbitmq-system : assemblés dans une seule
+# liste « resources », Kustomize refuserait le doublon (« may not add resource with an already
+# registered id »). D'où un kustomization par opérateur, qui retire l'objet, et celui-ci qui les
+# réunit. L'espace lui-même (Pod Security, quota) appartient à plateforme/k8s (espaces/).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cluster-operator
+  - messaging-topology-operator
+# Images par le cache Harbor (projet ghcr). Étiquette ET empreinte : relevées sur le cache
+# (crane digest), à TES valeurs.
+images:
+  - name: ghcr.io/rabbitmq/cluster-operator
+    newName: registry.par1.medisphere.internal/ghcr/rabbitmq/cluster-operator
+    newTag: 2.23.1
+    digest: sha256:<EMPREINTE-CLUSTER-OPERATOR>
+  - name: ghcr.io/rabbitmq/messaging-topology-operator
+    newName: registry.par1.medisphere.internal/ghcr/rabbitmq/messaging-topology-operator
+    newTag: 1.20.4
+    digest: sha256:<EMPREINTE-TOPOLOGY-OPERATOR>

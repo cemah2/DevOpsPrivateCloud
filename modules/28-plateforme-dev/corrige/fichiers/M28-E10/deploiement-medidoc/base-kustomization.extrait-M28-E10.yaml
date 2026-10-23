@@ -1,0 +1,7 @@
+# medidoc/deploiement — base/kustomization.yaml : bloc AJOUTÉ (M28-E10). Même principe que MédiAgenda.
+labels:
+  - pairs:
+      backstage.io/kubernetes-id: medidoc
+    includeSelectors: false
+    includeTemplates: true
+# Et dans le catalog-info.yaml du projet du code : metadata.annotations["backstage.io/kubernetes-id"]: medidoc

@@ -1,0 +1,8 @@
+# mediagenda/api — catalog-info.yaml : annotations AJOUTÉES au Component mediagenda-api (M28-E10).
+metadata:
+  annotations:
+    gitlab.com/project-slug: mediagenda/api
+    # Objets Kubernetes portant l'étiquette backstage.io/kubernetes-id=mediagenda-api (3 espaces).
+    backstage.io/kubernetes-id: mediagenda-api
+    # Site construit par la CI de CE dépôt (mkdocs.yml à la racine), lu dans portail-techdocs.
+    backstage.io/techdocs-ref: dir:.

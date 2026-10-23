@@ -1,0 +1,44 @@
+# plateforme/donnees — rabbitmq/utilisateur-wb-checks.yaml (M27-E03, PLAT-2803)
+# Compte des vérifications du workbook : étiquette « monitoring » (lecture des métadonnées de la
+# grappe, des files, des connexions), AUCUNE permission de lecture de message. Constaté sur 4.3.7 :
+# sans permission sur un vhost, même « monitoring » ne voit PAS ses files (/api/queues/<vhost> → 404) ;
+# la topologie lui donne donc une Permission VIDE (^$) sur chaque vhost (topologie/, E04).
+# Mot de passe : OpenBao kv/plateforme/rabbitmq/wb-checks (clés utilisateur, mot_de_passe), lu par le
+# ClusterSecretStore openbao (messagerie ajouté à ses conditions, chemin ajouté à eso-plateforme).
+# Copie locale pour les checks : ~/.config/workbook/rabbitmq-checks.env (600).
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: rabbitmq-utilisateur-wb-checks
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: rabbitmq-utilisateur-wb-checks
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      metadata:
+        labels:
+          medisphere.internal/source: openbao
+      # Format attendu par la CRD User (importCredentialsSecret) : username, password.
+      data:
+        username: "{{ .utilisateur }}"
+        password: "{{ .mot_de_passe }}"
+  dataFrom:
+    - extract:
+        key: plateforme/rabbitmq/wb-checks
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: User
+metadata:
+  name: wb-checks
+spec:
+  rabbitmqClusterReference:
+    name: rabbitmq
+  tags:
+    - monitoring
+  importCredentialsSecret:
+    name: rabbitmq-utilisateur-wb-checks

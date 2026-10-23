@@ -1,0 +1,9 @@
+# plateforme/donnees — topologie/kustomization.yaml (M27-E04, DEV-2804 ; prod : M27-E08, DEV-2808)
+# Application Argo CD « rabbitmq-topologie » (chemin topologie, espace messagerie).
+# Un dossier par environnement ; chaque objet désigne la grappe messagerie/rabbitmq.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: messagerie
+resources:
+  - medinotif-recette
+  - medinotif-prod

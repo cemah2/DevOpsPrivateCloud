@@ -1,0 +1,14 @@
+# À INTÉGRER dans plateforme/gitops — projets/plateforme.yaml (AppProject), M29-E14.
+spec:
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: k6
+    # le ServiceMonitor de l'opérateur est créé dans supervision (déjà autorisé depuis M21)
+  # CRD et RBAC de portée cluster livrés par le chart.
+  clusterResourceWhitelist:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding

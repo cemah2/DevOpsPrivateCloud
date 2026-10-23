@@ -1,0 +1,4 @@
+# host_vars/dns02/pare_feu_local.yml — EXTRAIT : ligne à AJOUTER à pare_feu_local_regles (M29-E07).
+# (même ligne dans host_vars/nbx01/pare_feu_local.yml)
+  - {source: 10.10.20.19, proto: tcp, ports: 8099,
+     motif: "goss serve : sonde blackbox de mon01 (essai M29-E07)", ref: PLAT-3007}

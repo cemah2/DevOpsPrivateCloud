@@ -1,0 +1,12 @@
+---
+# playbooks/goss-essai.yml — essai de Goss sur deux VMs du socle (M29-E07, PLAT-3007).
+# Deux VMs Debian 13 d'INFRA, sondées par le blackbox de mon01 (même VLAN : pare-feu local).
+#   uv run ansible-playbook playbooks/goss-essai.yml --check --diff
+#   uv run ansible-playbook playbooks/goss-essai.yml
+# Retrait en fin d'essai (si Goss n'est pas retenu) : playbooks/goss-retrait.yml.
+- name: Essai Goss (M29-E07)
+  hosts: dns02:nbx01
+  become: true
+  serial: 1
+  roles:
+    - role: goss

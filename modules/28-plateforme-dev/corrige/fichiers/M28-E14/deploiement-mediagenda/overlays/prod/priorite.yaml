@@ -1,0 +1,12 @@
+# mediagenda/deploiement — overlays/prod/priorite.yaml (M28-E14, PLAT-2914)
+# Le Rollout « mediagenda » (workloadRef) prend le gabarit de pods du Deployment : c'est ce gabarit
+# qu'on corrige. À ajouter aux « patches » de l'overlay prod (target: kind Deployment, name mediagenda).
+# Le PDB du chart (minAvailable 1, M17) reste valable : l'HPA de prod a minReplicas 3.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mediagenda
+spec:
+  template:
+    spec:
+      priorityClassName: medisphere-critique

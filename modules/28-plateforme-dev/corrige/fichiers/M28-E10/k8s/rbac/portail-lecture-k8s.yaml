@@ -1,0 +1,53 @@
+# plateforme/k8s — rbac/portail-lecture-k8s.yaml (M28-E10, DEV-2910)
+# Lecture, pour le plugin Kubernetes du portail, des objets que montre la fiche d'un composant.
+# Liste de la documentation 1.56 (« Role Based Access Control »), RESSERRÉE :
+#   - pas de configmaps (configuration des applications : rien à faire dans un portail ouvert à toute
+#     l'entreprise) ni de pods/log (journaux : Grafana/Loki, avec les droits de chaque équipe) ;
+#   - jamais de Secrets ; aucun verbe d'écriture (pas de suppression de pod depuis le portail).
+# ClusterRole + ClusterRoleBinding : le plugin interroge l'API à l'échelle du cluster, avec un
+# sélecteur d'étiquettes (backstage.io/kubernetes-id) ; une RoleBinding par espace ne suffirait pas.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: portail-lecture-k8s
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+rules:
+  - apiGroups: [""]
+    resources: [pods, services, limitranges, resourcequotas]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets, statefulsets, daemonsets]
+    verbs: [get, list, watch]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [get, list, watch]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, list, watch]
+  # Ressource personnalisée déclarée dans kubernetes.customResources (Rollouts de MédiAgenda).
+  - apiGroups: [argoproj.io]
+    resources: [rollouts]
+    verbs: [get, list, watch]
+  # Consommation des pods (onglet Kubernetes) : metrics-server.
+  - apiGroups: [metrics.k8s.io]
+    resources: [pods]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: portail-lecture-k8s
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: portail-lecture-k8s
+subjects:
+  - kind: ServiceAccount
+    name: portail
+    namespace: portail

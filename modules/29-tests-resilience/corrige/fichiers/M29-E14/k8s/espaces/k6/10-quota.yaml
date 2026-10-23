@@ -1,0 +1,19 @@
+# plateforme/k8s — espaces/k6/10-quota.yaml (M29-E14)
+# Dimensionné pour l'opérateur (100m/50Mi demandés, 100m/100Mi max) + un TestRun de 4 exécuteurs à
+# 500m/256Mi (limites 1 CPU/512Mi) + initialiseur et démarreur, avec une marge pour un second essai court.
+# Au-delà, un exécuteur reste « Pending »… puis le TestRun attend : c'est le symptôme du quota.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota-k6
+  namespace: k6
+spec:
+  hard:
+    requests.cpu: "3"
+    requests.memory: 2Gi
+    limits.cpu: "6"
+    limits.memory: 4Gi
+    pods: "14"
+    persistentvolumeclaims: "0"
+    services.loadbalancers: "0"
+    services.nodeports: "0"

@@ -1,0 +1,34 @@
+# mediagenda/deploiement — components/notifications (M27-E08, DEV-2808)
+# L'API publie les demandes de notification (version de l'API qui contient le correctif d'E08) :
+#   - MEDIAGENDA_AMQP_URL lue dans le Secret mediagenda-amqp (ExternalSecret, kv/mediagenda/<env>/amqp,
+#     clé url : amqps://mediagenda-<env>:…@rabbitmq.messagerie.svc:5671/medinotif-<env>) ;
+#   - sortie AMQPS vers les pods de la grappe (la grappe, elle, accepte mediagenda-<env> : CNP
+#     « rabbitmq » de plateforme/donnees) ;
+#   - le certificat de RabbitMQ est vérifié avec la racine du component racine-medisphere (M27-E07).
+# Recette et prod l'incluent ; dev non (pas de vhost de dev : sans la variable, rien n'est publié).
+# Le chemin OpenBao est posé par l'overlay (patch sur l'étiquette app.kubernetes.io/name=notifications).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - externalsecret.yaml
+  - reseau.yaml
+patches:
+  - target:
+      kind: Deployment
+      name: mediagenda
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: mediagenda
+      spec:
+        template:
+          spec:
+            containers:
+              - name: api
+                env:
+                  - name: MEDIAGENDA_AMQP_URL
+                    valueFrom:
+                      secretKeyRef:
+                        name: mediagenda-amqp
+                        key: url

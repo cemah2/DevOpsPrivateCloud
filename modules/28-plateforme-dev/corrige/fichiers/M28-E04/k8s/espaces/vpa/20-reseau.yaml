@@ -1,0 +1,33 @@
+# plateforme/k8s — espaces/vpa/20-reseau.yaml (M28-E04)
+# Les trois composants ne parlent qu'à l'API du cluster (les métriques arrivent par metrics.k8s.io,
+# donc par l'apiserver) ; l'admission-controller reçoit en plus les appels du webhook (8000) et les
+# Jobs « certgen » du chart n'ont besoin que de l'API.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: vpa
+  namespace: vpa
+spec:
+  endpointSelector: {}
+  egress:
+    - toEntities: [kube-apiserver]
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports: [{port: "53", protocol: ANY}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: vpa-admission-controller
+  namespace: vpa
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: admission-controller
+  ingress:
+    - fromEntities: [kube-apiserver, remote-node, host]
+      toPorts:
+        - ports: [{port: "8000", protocol: TCP}]

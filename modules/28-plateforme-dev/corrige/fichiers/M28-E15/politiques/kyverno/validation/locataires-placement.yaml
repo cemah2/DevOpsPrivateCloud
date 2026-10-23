@@ -1,0 +1,59 @@
+# plateforme/politiques — kyverno/validation/locataires-placement.yaml (M28-E15, SEC-2915)
+# E15 — trou n°3 : un propriétaire de locataire pouvait (a) tolérer la taint des nœuds de contrôle ou
+# de k8s-w03 (bases) et s'y faire planifier, (b) fixer spec.nodeName, ce qui CONTOURNE l'ordonnanceur
+# et donc les taints NoSchedule. Ni Capsule (sans nodeSelector de locataire) ni PSA ne l'empêchent.
+# Portée : pods des espaces de locataire (étiquette capsule.clastix.io/tenant), à la CRÉATION
+# seulement (nodeName est ensuite posé par l'ordonnanceur par le sous-objet binding, et les
+# tolérances ne se retirent pas après coup).
+# Exception : l'opérateur CloudNativePG crée les pods des bases avec la tolérance « dedie » (k8s-w03,
+# M14) — risque résiduel écrit dans essais-isolation.md (un propriétaire peut déclarer un Cluster CNPG).
+# failurePolicy Ignore, comme les autres politiques de la maison : une panne de Kyverno ne doit pas
+# bloquer la création de pods de production (le second rempart est l'alerte de M26-E18).
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: locataires-placement
+  annotations:
+    policies.kyverno.io/title: Pas de placement forcé dans les espaces des locataires
+    policies.kyverno.io/severity: high
+    medisphere.internal/ticket: SEC-2915
+spec:
+  validationActions: [Deny]
+  failurePolicy: Ignore
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: capsule.clastix.io/tenant
+          operator: Exists
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [pods]
+  matchConditions:
+    - name: hors-operateur-cnpg
+      expression: >-
+        !request.userInfo.username.startsWith('system:serviceaccount:cnpg-system:')
+  autogen:
+    podControllers:
+      controllers: [deployments, statefulsets, daemonsets, jobs, cronjobs]
+  variables:
+    - name: tolerancesInterdites
+      expression: >-
+        has(object.spec.tolerations) ?
+          object.spec.tolerations.filter(t,
+            (has(t.key) && t.key in ['node-role.kubernetes.io/control-plane', 'dedie'])
+            || ((!has(t.key) || t.key == '') && has(t.operator) && t.operator == 'Exists')
+          ).map(t, has(t.key) && t.key != '' ? t.key : '*') : []
+  validations:
+    - expression: "!has(object.spec.nodeName) || object.spec.nodeName == ''"
+      message: "spec.nodeName est réservé à l'ordonnanceur dans les espaces des locataires (SEC-2915)"
+      reason: Forbidden
+    - expression: size(variables.tolerancesInterdites) == 0
+      messageExpression: >-
+        'tolérance(s) interdite(s) dans un espace de locataire : ' + variables.tolerancesInterdites.join(', ') +
+        ' (nœuds de contrôle et nœud des bases réservés à la plateforme, SEC-2915)'
+      reason: Forbidden

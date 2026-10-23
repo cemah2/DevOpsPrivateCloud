@@ -1,0 +1,24 @@
+# plateforme/k8s — espaces/portail/50-portail-db.yaml (M28-E06, PLAT-2906 ; archivage en M28-E16)
+# Base du portail : une instance (le portail n'est pas critique pour la production des soins ; la
+# reprise passe par la sauvegarde, M28-E16). Base et propriétaire « portail » : CNPG crée le Secret
+# portail-db-app (username, password, host, port, dbname, uri) et l'autorité portail-db-ca (ca.crt).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: portail-db
+  namespace: portail
+spec:
+  instances: 1
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie@sha256:<DIGEST-POSTGRESQL>
+  bootstrap:
+    initdb:
+      database: portail
+      owner: portail
+  storage:
+    storageClass: ceph-rbd
+    size: 5Gi
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 512Mi}
+  monitoring:
+    enablePodMonitor: true

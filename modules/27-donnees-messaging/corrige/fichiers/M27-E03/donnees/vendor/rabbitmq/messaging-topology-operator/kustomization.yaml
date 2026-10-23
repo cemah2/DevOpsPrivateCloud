@@ -1,0 +1,48 @@
+# plateforme/donnees — vendor/rabbitmq/messaging-topology-operator/kustomization.yaml (M27-E03)
+# Copie épinglée du manifeste de publication v1.20.4, variante « with-certmanager » (certificat du
+# webhook émis par un Issuer auto-signé de cert-manager, déjà installé au M15).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - messaging-topology-operator-with-certmanager-1.20.4.yaml
+configMapGenerator:
+  # Racine MédiSphère (certificat PUBLIC, pas un secret) : la grappe présente un certificat de la
+  # « MédiSphère Services CA » sur son API de gestion TLS (15671) ; l'opérateur (programme Go) lit
+  # toutes les autorités de /etc/ssl/certs. Copie de /usr/local/share/ca-certificates/
+  # medisphere-root-ca.crt d'adm01, rangée à côté de ce fichier (Kustomize ne lit pas plus haut).
+  - name: racine-medisphere
+    namespace: rabbitmq-system
+    files:
+      - medisphere-root-ca.crt
+    options:
+      disableNameSuffixHash: true
+patches:
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: rabbitmq-system
+  # Ajoute la racine au magasin de l'opérateur, sans remplacer le magasin de l'image (subPath).
+  - target:
+      kind: Deployment
+      name: messaging-topology-operator
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: messaging-topology-operator
+      spec:
+        template:
+          spec:
+            containers:
+              - name: manager
+                volumeMounts:
+                  - name: racine-medisphere
+                    mountPath: /etc/ssl/certs/medisphere-root-ca.crt
+                    subPath: medisphere-root-ca.crt
+                    readOnly: true
+            volumes:
+              - name: racine-medisphere
+                configMap:
+                  name: racine-medisphere

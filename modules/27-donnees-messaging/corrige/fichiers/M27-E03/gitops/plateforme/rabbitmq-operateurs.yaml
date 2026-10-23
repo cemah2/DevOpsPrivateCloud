@@ -1,0 +1,33 @@
+# plateforme/gitops — plateforme/rabbitmq-operateurs.yaml (M27-E03, PLAT-2803)
+# Les deux opérateurs RabbitMQ, depuis leurs manifestes de publication recopiés et vérifiés dans
+# plateforme/donnees (vendor/rabbitmq : pas de chart officiel ; chart Bitnami interdit).
+# Vague -1 de l'application racine : les CRD existent avant l'Application « rabbitmq » (vague 0).
+# ServerSideApply : les CRD dépassent la taille de l'annotation last-applied-configuration.
+# Pas de finaliseur resources-finalizer : supprimer l'Application ne supprime ni les CRD ni,
+# par ricochet, toutes les grappes et topologies qui en dépendent.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rabbitmq-operateurs
+  namespace: argocd
+  labels:
+    medisphere.internal/domaine: donnees
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    medisphere.internal/ticket: "PLAT-2803"
+spec:
+  project: plateforme
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: rabbitmq-system
+  source:
+    repoURL: https://git01.par1.medisphere.internal/plateforme/donnees.git
+    targetRevision: main
+    path: vendor/rabbitmq
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

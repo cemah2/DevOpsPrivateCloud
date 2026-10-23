@@ -1,0 +1,41 @@
+# plateforme/resilience — chaos/e09/00-temoin-wb-essais.yaml (M29-E09)
+# Pod témoin jetable de wb-essais, cible de 02-temoin-filtre.yaml. wb-essais est l'espace des essais
+# (exception baseline, M26-E06) : rien d'autre que des objets jetables. À supprimer en fin d'exercice.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temoin-chaos
+  namespace: wb-essais
+  labels:
+    app: temoin-chaos
+    medisphere.internal/exercice: M29-E09
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: temoin-chaos
+  template:
+    metadata:
+      labels:
+        app: temoin-chaos
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: pause
+          image: registry.par1.medisphere.internal/k8s/pause:3.10.1
+          resources:
+            requests:
+              cpu: 5m
+              memory: 8Mi
+            limits:
+              memory: 16Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

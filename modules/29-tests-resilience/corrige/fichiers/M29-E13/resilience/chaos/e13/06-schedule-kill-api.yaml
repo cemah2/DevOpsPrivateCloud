@@ -1,0 +1,39 @@
+# plateforme/resilience — chaos/e13/06-schedule-kill-api.yaml (M29-E13, PLAT-3013)
+#
+# Hypothèse : un conteneur de l'API tué toutes les 15 min (un seul pod à la fois) ne coûte aucune
+#   requête en erreur (le pod sort du Service dès l'échec de disponibilité, l'autre réplique sert) ;
+#   chaque redémarrage prend moins de 20 s.
+# Mesure : 5xx sur la fenêtre, redémarrages (kube_pod_container_status_restarts_total), statut du
+#   Schedule (status.active, status.time) et de ses enfants (étiquette managed-by=m29-e13-kill-api).
+# Borne : trois exécutions puis PAUSE (annotation ci-dessous). Chaos Mesh n'a pas de date de fin pour
+#   un Schedule : la borne est une procédure, écrite ici et dans RB-294.
+#   kubectl -n chaos-experiences annotate schedule m29-e13-kill-api experiment.chaos-mesh.org/pause=true
+# concurrencyPolicy Forbid : si l'exécution précédente tourne encore (enfant dont la durée n'est pas
+#   finie), le tick est sauté au lieu d'empiler les pannes. historyLimit 3 : les enfants terminés au-delà
+#   sont supprimés.
+# Arrêt d'urgence : pause (ci-dessus), puis kubectl delete -f ce fichier (les enfants partent avec lui).
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: m29-e13-kill-api
+  namespace: chaos-experiences
+  labels:
+    medisphere.internal/exercice: m29-e13
+  annotations:
+    medisphere.internal/ticket: PLAT-3013
+spec:
+  schedule: "*/15 * * * *"
+  startingDeadlineSeconds: 120
+  concurrencyPolicy: Forbid
+  historyLimit: 3
+  type: PodChaos
+  podChaos:
+    action: container-kill
+    mode: one
+    selector:
+      namespaces: [mediagenda-recette]
+      labelSelectors:
+        app.kubernetes.io/name: mediagenda
+        app.kubernetes.io/component: api
+    containerNames: [api]
+    duration: 30s

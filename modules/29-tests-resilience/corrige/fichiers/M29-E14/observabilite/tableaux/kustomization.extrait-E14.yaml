@@ -1,0 +1,6 @@
+# plateforme/observabilite — tableaux/kustomization.yaml (EXTRAIT M29-E14) : entrée à AJOUTER.
+configMapGenerator:
+  # --- Plateforme ---
+  - name: tableau-plateforme-charge-k6
+    files: [plateforme/plateforme-charge-k6.json]
+    options: {annotations: {grafana_folder: Plateforme}}

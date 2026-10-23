@@ -1,0 +1,625 @@
+diff --git a/README.md b/README.md
+index 97dd7cd..1b4317d 100644
+--- a/README.md
++++ b/README.md
+@@ -27,7 +27,7 @@ Les journaux ne contiennent jamais le destinataire en clair (`j***@exemple.fr`,
+ 
+ | Variable | Défaut | Rôle |
+ |---|---|---|
+-| `MEDINOTIF_BACKEND` | `rabbitmq` | Source des messages : `rabbitmq`, `stdin` (tests, développement) ; `kafka` est réservé (module 27) et refusé pour l'instant |
++| `MEDINOTIF_BACKEND` | `rabbitmq` | Source des messages : `rabbitmq`, `kafka` (M27-E10), `stdin` (tests, développement) |
+ | `MEDINOTIF_AMQP_URL` | *(obligatoire avec `rabbitmq`)* | ex. `amqp://medinotif:<MOT-DE-PASSE>@rabbitmq.exemple:5672/medinotif` (`amqps://` pour TLS) |
+ | `MEDINOTIF_FILE` | `notifications` | Nom de la file |
+ | `MEDINOTIF_TYPE_FILE` | `quorum` | Type de file déclaré au démarrage : `quorum` (répliquée, recommandée) ou `classic` |
+@@ -37,6 +37,10 @@ Les journaux ne contiennent jamais le destinataire en clair (`j***@exemple.fr`,
+ | `MEDINOTIF_LOG_FORMAT` | `json` | `json` ou `texte` |
+ | `MEDINOTIF_DELAI_ENVOI_MS` | `50` | Latence simulée d'un envoi (utile pour observer l'arrêt propre) |
+ | `MEDINOTIF_VERSION` | `dev` | Version affichée au démarrage |
++| `MEDINOTIF_KAFKA_BOOTSTRAP` | *(obligatoire avec `kafka`)* | Amorce du client Kafka, ex. `kafka-essai-kafka-bootstrap.kafka-essai.svc:9093` |
++| `MEDINOTIF_KAFKA_TOPIC`, `MEDINOTIF_KAFKA_GROUPE`, `MEDINOTIF_KAFKA_TOPIC_REBUT` | `rendez-vous.evenements`, `medinotif`, `notifications.rebut` | *Topic* lu, groupe de consommateurs, *topic* de rebut |
++| `MEDINOTIF_KAFKA_UTILISATEUR`, `MEDINOTIF_KAFKA_MOT_DE_PASSE` | vides | SASL SCRAM-SHA-512 sur TLS si renseignés |
++| `MEDINOTIF_KAFKA_CA` | vide | Fichier de la CA qui a signé le certificat des courtiers (TLS) |
+ 
+ Si la file existe déjà avec un autre type que `MEDINOTIF_TYPE_FILE`, RabbitMQ refuse la déclaration (`PRECONDITION_FAILED`) et le worker boucle sur des reconnexions : aligne le type ou passe `MEDINOTIF_DECLARER_FILE=0`.
+ 
+@@ -71,9 +75,9 @@ admin@adm01:~/src/medinotif-worker$ uv run ruff check . && uv run ruff format --
+ admin@adm01:~/src/medinotif-worker$ MEDINOTIF_TEST_AMQP_URL='amqp://…' uv run pytest -m integration   # vrai RabbitMQ
+ ```
+ 
+-## Ajouter un backend (Kafka, module 27)
++## Backend Kafka (module 27)
+ 
+-Le traitement (`traitement.py`) reçoit des octets et rend un `Resultat` ; il ignore d'où vient le message. Une source respecte l'interface `Source` de `sources/base.py` : `consommer(traiter)` (bloquant) et `arreter()` (appelable depuis un gestionnaire de signal). Pour Kafka : écrire `sources/kafka.py`, valider l'offset après `ENVOYE` ou `INVALIDE` (ou publier l'invalide sur un *topic* de rebut), ne pas le valider après `ECHEC`, puis brancher la classe dans `creer_source` (`sources/__init__.py`).
++`sources/kafka.py` (client `confluent-kafka`, librdkafka) : *commit* manuel de l'offset après `ENVOYE` ; après `INVALIDE`, copie sur le *topic* de rebut (accusé `acks=all` attendu) puis *commit* ; après `ECHEC`, pas de *commit* et retour sur l'offset du message (`seek`), qui bloque sa partition tant qu'il échoue. Le traitement (`traitement.py`) est le même que pour RabbitMQ.
+ 
+ ## Structure
+ 
+@@ -83,6 +87,6 @@ src/medinotif/
+   config.py        variables d'environnement
+   message.py       format et validation des messages
+   traitement.py    analyse + envoi simulé + métriques
+-  sources/         base.py (interface), rabbitmq.py, stdin.py
++  sources/         base.py (interface), rabbitmq.py, kafka.py, stdin.py
+ tests/             pytest
+ ```
+diff --git a/src/medinotif/config.py b/src/medinotif/config.py
+index 9601156..37be32e 100644
+--- a/src/medinotif/config.py
++++ b/src/medinotif/config.py
+@@ -26,6 +26,14 @@ class Settings:
+     log_format: str = "json"
+     delai_envoi_ms: int = 50
+     version: str = "dev"
++    # Backend Kafka (M27-E10) : tout est facultatif sauf l'amorce (bootstrap).
++    kafka_bootstrap: str | None = None
++    kafka_topic: str = "rendez-vous.evenements"
++    kafka_groupe: str = "medinotif"
++    kafka_topic_rebut: str = "notifications.rebut"
++    kafka_utilisateur: str | None = None
++    kafka_mot_de_passe: str | None = None
++    kafka_ca: str | None = None
+ 
+     @classmethod
+     def depuis_env(cls, env: Mapping[str, str] | None = None) -> Settings:
+@@ -38,6 +46,15 @@ class Settings:
+         amqp_url = env.get("MEDINOTIF_AMQP_URL") or None
+         if backend == "rabbitmq" and amqp_url is None:
+             raise ErreurConfiguration("MEDINOTIF_AMQP_URL obligatoire avec le backend rabbitmq")
++        kafka_bootstrap = env.get("MEDINOTIF_KAFKA_BOOTSTRAP") or None
++        if backend == "kafka" and kafka_bootstrap is None:
++            raise ErreurConfiguration("MEDINOTIF_KAFKA_BOOTSTRAP obligatoire avec le backend kafka")
++        kafka_utilisateur = env.get("MEDINOTIF_KAFKA_UTILISATEUR") or None
++        kafka_mot_de_passe = env.get("MEDINOTIF_KAFKA_MOT_DE_PASSE") or None
++        if kafka_utilisateur and not kafka_mot_de_passe:
++            raise ErreurConfiguration(
++                "MEDINOTIF_KAFKA_MOT_DE_PASSE obligatoire avec MEDINOTIF_KAFKA_UTILISATEUR"
++            )
+         type_file = env.get("MEDINOTIF_TYPE_FILE", "quorum").lower()
+         if type_file not in TYPES_FILE:
+             raise ErreurConfiguration(
+@@ -61,6 +78,13 @@ class Settings:
+             log_format=fmt,
+             delai_envoi_ms=_entier(env, "MEDINOTIF_DELAI_ENVOI_MS", 50),
+             version=env.get("MEDINOTIF_VERSION", "dev"),
++            kafka_bootstrap=kafka_bootstrap,
++            kafka_topic=env.get("MEDINOTIF_KAFKA_TOPIC", "rendez-vous.evenements"),
++            kafka_groupe=env.get("MEDINOTIF_KAFKA_GROUPE", "medinotif"),
++            kafka_topic_rebut=env.get("MEDINOTIF_KAFKA_TOPIC_REBUT", "notifications.rebut"),
++            kafka_utilisateur=kafka_utilisateur,
++            kafka_mot_de_passe=kafka_mot_de_passe,
++            kafka_ca=env.get("MEDINOTIF_KAFKA_CA") or None,
+         )
+ 
+ 
+diff --git a/src/medinotif/sources/__init__.py b/src/medinotif/sources/__init__.py
+index 03f683d..35534eb 100644
+--- a/src/medinotif/sources/__init__.py
++++ b/src/medinotif/sources/__init__.py
+@@ -1,6 +1,7 @@
+ """Sources de messages et fabrique.
+ 
+-Ajouter un backend (Kafka au module 27) : écrire une classe qui respecte
++Le backend Kafka (``kafka.py``) est arrivé au module 27 (M27-E10). Pour en ajouter
++un autre : écrire une classe qui respecte
+ l'interface ``Source`` de ``base.py`` (``consommer(traiter)`` et ``arreter()``),
+ traduire ``Resultat`` dans le vocabulaire du courtier (pour Kafka : valider
+ l'offset après ENVOYE ou INVALIDE, ne pas le valider après ECHEC), puis
+@@ -11,10 +12,11 @@ from __future__ import annotations
+ 
+ from ..config import ErreurConfiguration, Settings
+ from .base import Source, Traitement
++from .kafka import SourceKafka, configuration_client
+ from .rabbitmq import SourceRabbitMQ
+ from .stdin import SourceStdin
+ 
+-__all__ = ["Source", "SourceRabbitMQ", "SourceStdin", "Traitement", "creer_source"]
++__all__ = ["Source", "SourceKafka", "SourceRabbitMQ", "SourceStdin", "Traitement", "creer_source"]
+ 
+ 
+ def creer_source(settings: Settings) -> Source:
+@@ -30,5 +32,17 @@ def creer_source(settings: Settings) -> Source:
+             declarer_file=settings.declarer_file,
+         )
+     if settings.backend == "kafka":
+-        raise ErreurConfiguration("backend kafka pas encore disponible (prévu au module 27)")
++        if not settings.kafka_bootstrap:
++            raise ErreurConfiguration("MEDINOTIF_KAFKA_BOOTSTRAP obligatoire avec le backend kafka")
++        return SourceKafka(
++            configuration_client(
++                settings.kafka_bootstrap,
++                settings.kafka_utilisateur,
++                settings.kafka_mot_de_passe,
++                settings.kafka_ca,
++            ),
++            topic=settings.kafka_topic,
++            groupe=settings.kafka_groupe,
++            topic_rebut=settings.kafka_topic_rebut,
++        )
+     raise ErreurConfiguration(f"backend inconnu : {settings.backend}")
+diff --git a/src/medinotif/sources/kafka.py b/src/medinotif/sources/kafka.py
+new file mode 100644
+index 0000000..9b809f6
+--- /dev/null
++++ b/src/medinotif/sources/kafka.py
+@@ -0,0 +1,207 @@
++"""Source Kafka (client confluent-kafka, librdkafka) — module 27, M27-E10.
++
++Garanties, à comparer avec la source RabbitMQ :
++- ``enable.auto.commit=False`` : l'offset n'est validé (*commit*) qu'après le
++  traitement ; un worker tué en plein envoi relira le message (livraison « au
++  moins une fois », comme avec RabbitMQ) ;
++- ENVOYE : commit synchrone de l'offset du message ;
++- INVALIDE : copie du message sur le *topic* de rebut (en-têtes d'origine et
++  raison), attente de l'accusé du courtier, PUIS commit. Kafka n'a pas de
++  *dead letter exchange* : c'est le consommateur qui recopie. Si la copie
++  échoue, pas de commit : le message sera relu ;
++- ECHEC : pas de commit ; courte pause, puis retour (``seek``) sur l'offset du
++  message, qui est relu. Attention : tant qu'il échoue, toute la partition
++  attend derrière lui (Kafka garde l'ordre par partition ; RabbitMQ, lui,
++  remet le message en file et passe aux suivants) ;
++- arrêt : ``close()`` quitte le groupe proprement ; les partitions sont
++  réattribuées aux autres membres sans attendre l'expiration de la session.
++
++Le traitement (``traitement.py``) ne change pas : il reçoit des octets et rend
++un ``Resultat``.
++"""
++
++from __future__ import annotations
++
++import logging
++import threading
++from collections.abc import Callable, Mapping
++from typing import Any
++
++from confluent_kafka import Consumer, Producer, TopicPartition
++
++from ..traitement import Resultat
++from .base import Traitement
++
++journal = logging.getLogger("medinotif.kafka")
++
++# Délai maximal d'attente de l'accusé du courtier pour une copie vers le rebut.
++DELAI_REBUT_S = 10.0
++
++
++def configuration_client(
++    bootstrap: str,
++    utilisateur: str | None = None,
++    mot_de_passe: str | None = None,
++    ca: str | None = None,
++) -> dict[str, Any]:
++    """Options librdkafka communes au consommateur et au producteur.
++
++    - utilisateur et mot de passe : SASL SCRAM-SHA-512 sur TLS (écouteur de
++      Strimzi « tls: true, authentication: scram-sha-512 ») ;
++    - CA seule : TLS sans authentification ;
++    - ni l'un ni l'autre : texte clair (tests locaux uniquement).
++    """
++    conf: dict[str, Any] = {"bootstrap.servers": bootstrap}
++    if utilisateur:
++        conf.update(
++            {
++                "security.protocol": "SASL_SSL",
++                "sasl.mechanism": "SCRAM-SHA-512",
++                "sasl.username": utilisateur,
++                "sasl.password": mot_de_passe or "",
++            }
++        )
++    elif ca:
++        conf["security.protocol"] = "SSL"
++    if ca:
++        conf["ssl.ca.location"] = ca
++    return conf
++
++
++class SourceKafka:
++    def __init__(
++        self,
++        conf_client: Mapping[str, Any],
++        topic: str = "rendez-vous.evenements",
++        groupe: str = "medinotif",
++        topic_rebut: str = "notifications.rebut",
++        pause_echec_s: float = 1.0,
++        fabrique_consommateur: Callable[[dict[str, Any]], Any] | None = None,
++        fabrique_producteur: Callable[[dict[str, Any]], Any] | None = None,
++    ) -> None:
++        self.topic = topic
++        self.topic_rebut = topic_rebut
++        self.pause_echec_s = pause_echec_s
++        self._conf_consommateur = {
++            **conf_client,
++            "group.id": groupe,
++            "enable.auto.commit": False,
++            # Groupe neuf : on part du début du topic (rien n'est perdu au premier démarrage).
++            "auto.offset.reset": "earliest",
++            "client.id": "medinotif",
++        }
++        self._conf_producteur = {
++            **conf_client,
++            "client.id": "medinotif-rebut",
++            # Copie vers le rebut : accusé de toutes les répliques en synchronisation.
++            "acks": "all",
++            "enable.idempotence": True,
++        }
++        # Injectables pour les tests (faux courtier).
++        self._fabrique_consommateur = fabrique_consommateur or _consommateur_confluent
++        self._fabrique_producteur = fabrique_producteur or _producteur_confluent
++        self._arret = threading.Event()
++
++    def arreter(self) -> None:
++        self._arret.set()
++
++    def consommer(self, traiter: Traitement) -> None:
++        consommateur = self._fabrique_consommateur(self._conf_consommateur)
++        producteur = self._fabrique_producteur(self._conf_producteur)
++        try:
++            consommateur.subscribe([self.topic])
++            journal.info("consommation démarrée", extra={"topic": self.topic})
++            while not self._arret.is_set():
++                # poll rend la main chaque seconde sans message, pour vérifier le drapeau d'arrêt.
++                message = consommateur.poll(1.0)
++                if message is None:
++                    continue
++                erreur = message.error()
++                if erreur is not None:
++                    # Erreurs signalées par librdkafka (fin de partition, courtier
++                    # injoignable…) : le client se reconnecte seul.
++                    journal.warning("erreur du consommateur Kafka", extra={"erreur": str(erreur)})
++                    continue
++                self._conclure(consommateur, producteur, message, traiter(message.value()))
++        finally:
++            # Quitte le groupe : rééquilibrage immédiat vers les autres membres.
++            consommateur.close()
++            producteur.flush(DELAI_REBUT_S)
++            journal.info("consommation arrêtée")
++
++    def _conclure(
++        self, consommateur: Any, producteur: Any, message: Any, resultat: Resultat
++    ) -> None:
++        if resultat is Resultat.ENVOYE:
++            self._valider(consommateur, message)
++        elif resultat is Resultat.INVALIDE:
++            if self._vers_rebut(producteur, message):
++                self._valider(consommateur, message)
++            else:
++                self._relire(consommateur, message)
++        else:
++            self._arret.wait(self.pause_echec_s)  # évite de reboucler à pleine vitesse
++            self._relire(consommateur, message)
++
++    def _valider(self, consommateur: Any, message: Any) -> None:
++        try:
++            # Valide l'offset SUIVANT ce message pour sa partition (sémantique de Kafka).
++            consommateur.commit(message=message, asynchronous=False)
++        except Exception as exc:
++            # Rééquilibrage en cours, groupe perdu… : le message sera relu par le
++            # nouveau propriétaire de la partition (au moins une fois).
++            journal.warning(
++                "commit d'offset impossible",
++                extra={
++                    "partition": message.partition(),
++                    "offset": message.offset(),
++                    "erreur": str(exc),
++                },
++            )
++
++    def _relire(self, consommateur: Any, message: Any) -> None:
++        consommateur.seek(TopicPartition(message.topic(), message.partition(), message.offset()))
++
++    def _vers_rebut(self, producteur: Any, message: Any) -> bool:
++        accuse: dict[str, Any] = {}
++
++        def sur_accuse(err: Any, _msg: Any) -> None:
++            accuse["erreur"] = err
++
++        en_tetes = [
++            ("medinotif-topic-origine", message.topic().encode()),
++            ("medinotif-partition-origine", str(message.partition()).encode()),
++            ("medinotif-offset-origine", str(message.offset()).encode()),
++            ("medinotif-raison", b"invalide"),
++        ]
++        try:
++            producteur.produce(
++                self.topic_rebut,
++                value=message.value(),
++                key=message.key(),
++                headers=en_tetes,
++                on_delivery=sur_accuse,
++            )
++            reste = producteur.flush(DELAI_REBUT_S)
++        except Exception as exc:
++            journal.error("copie vers le rebut impossible", extra={"erreur": str(exc)})
++            return False
++        if reste or accuse.get("erreur") is not None or "erreur" not in accuse:
++            journal.error(
++                "copie vers le rebut non confirmée",
++                extra={"erreur": str(accuse.get("erreur")), "en_attente": reste},
++            )
++            return False
++        journal.info(
++            "message invalide copié vers le rebut",
++            extra={"partition": message.partition(), "offset": message.offset()},
++        )
++        return True
++
++
++def _consommateur_confluent(conf: dict[str, Any]) -> Any:
++    return Consumer(conf, logger=journal)
++
++
++def _producteur_confluent(conf: dict[str, Any]) -> Any:
++    return Producer(conf, logger=journal)
+diff --git a/tests/test_kafka.py b/tests/test_kafka.py
+new file mode 100644
+index 0000000..9798b30
+--- /dev/null
++++ b/tests/test_kafka.py
+@@ -0,0 +1,242 @@
++"""Source Kafka testée contre un faux courtier (aucun Kafka réel) — M27-E10.
++
++Le test marqué « integration » vise un vrai Kafka (texte clair, tests locaux) :
++    MEDINOTIF_TEST_KAFKA_BOOTSTRAP=127.0.0.1:9092 uv run pytest -m integration
++"""
++
++from __future__ import annotations
++
++import json
++import os
++import uuid
++
++import pytest
++
++from medinotif.config import Settings
++from medinotif.sources import SourceKafka, configuration_client, creer_source
++from medinotif.traitement import ExpediteurSimule, Resultat, Traiteur
++
++SMS = json.dumps(
++    {"type": "sms", "destinataire": "+33612345678", "modele": "rappel", "rendez_vous_id": 1}
++).encode()
++
++
++class FauxMessage:
++    def __init__(self, valeur, offset, partition=0, topic="rendez-vous.evenements", erreur=None):
++        self._valeur, self._offset, self._partition = valeur, offset, partition
++        self._topic, self._erreur = topic, erreur
++
++    def value(self):
++        return self._valeur
++
++    def key(self):
++        return b"1"
++
++    def offset(self):
++        return self._offset
++
++    def partition(self):
++        return self._partition
++
++    def topic(self):
++        return self._topic
++
++    def error(self):
++        return self._erreur
++
++
++class FauxConsommateur:
++    """Rend les messages dans l'ordre ; un seek revient sur un offset déjà rendu."""
++
++    def __init__(self, messages, source=None):
++        self.messages = list(messages)
++        self.position = 0
++        self.commits, self.seeks, self.abonnements = [], [], []
++        self.ferme = False
++        self.source = source
++        self.conf = None
++
++    def subscribe(self, topics):
++        self.abonnements.append(topics)
++
++    def poll(self, _delai):
++        if self.position >= len(self.messages):
++            if self.source is not None:
++                self.source.arreter()
++            return None
++        message = self.messages[self.position]
++        self.position += 1
++        return message
++
++    def commit(self, message, asynchronous):
++        assert asynchronous is False
++        self.commits.append(message.offset())
++
++    def seek(self, tp):
++        self.seeks.append((tp.topic, tp.partition, tp.offset))
++        for i, m in enumerate(self.messages):
++            if m is not None and m.offset() == tp.offset and m.partition() == tp.partition:
++                self.position = i
++                return
++
++    def close(self):
++        self.ferme = True
++
++
++class FauxProducteur:
++    def __init__(self, echoue=False):
++        self.produits, self.echoue = [], echoue
++        self.conf = None
++
++    def produce(self, topic, value, key, headers, on_delivery):
++        self.produits.append((topic, value, dict(headers)))
++        on_delivery("refusé par le courtier" if self.echoue else None, None)
++
++    def flush(self, _delai):
++        return 0
++
++
++def source_avec(consommateur, producteur):
++    source = SourceKafka(
++        configuration_client("faux:9092"),
++        pause_echec_s=0,
++        fabrique_consommateur=lambda conf: _garde(consommateur, conf),
++        fabrique_producteur=lambda conf: _garde(producteur, conf),
++    )
++    consommateur.source = source
++    return source
++
++
++def _garde(objet, conf):
++    objet.conf = conf
++    return objet
++
++
++def test_commit_apres_envoi_et_apres_rebut():
++    consommateur = FauxConsommateur([FauxMessage(SMS, 10), None, FauxMessage(b"pas du json", 11)])
++    producteur = FauxProducteur()
++    source = source_avec(consommateur, producteur)
++    source.consommer(Traiteur(ExpediteurSimule(0)))
++    assert consommateur.abonnements == [["rendez-vous.evenements"]]
++    assert consommateur.commits == [10, 11]
++    assert consommateur.seeks == []
++    # le message invalide est recopié, avec son origine, AVANT le commit
++    assert producteur.produits[0][0] == "notifications.rebut"
++    assert producteur.produits[0][1] == b"pas du json"
++    assert producteur.produits[0][2]["medinotif-offset-origine"] == b"11"
++    assert consommateur.ferme
++
++
++def test_options_du_client():
++    consommateur, producteur = FauxConsommateur([]), FauxProducteur()
++    source_avec(consommateur, producteur).consommer(lambda _c: Resultat.ENVOYE)
++    assert consommateur.conf["enable.auto.commit"] is False
++    assert consommateur.conf["group.id"] == "medinotif"
++    assert producteur.conf["acks"] == "all"
++
++
++def test_echec_ne_valide_pas_et_relit_le_meme_offset():
++    consommateur = FauxConsommateur([FauxMessage(SMS, 7)])
++    source = source_avec(consommateur, FauxProducteur())
++    resultats = iter([Resultat.ECHEC, Resultat.ENVOYE])
++    source.consommer(lambda _corps: next(resultats))
++    assert consommateur.seeks == [("rendez-vous.evenements", 0, 7)]
++    assert consommateur.commits == [7]  # validé seulement au second passage
++
++
++def test_rebut_refuse_pas_de_commit():
++    consommateur = FauxConsommateur([FauxMessage(b"{}", 3)])
++    source = source_avec(consommateur, FauxProducteur(echoue=True))
++    appels = []
++
++    def traiter(_corps):
++        appels.append(1)
++        if len(appels) > 1:
++            source.arreter()
++        return Resultat.INVALIDE
++
++    source.consommer(traiter)
++    assert consommateur.commits == []
++    assert consommateur.seeks[0] == ("rendez-vous.evenements", 0, 3)
++
++
++def test_erreur_du_courtier_ignoree():
++    consommateur = FauxConsommateur(
++        [FauxMessage(None, -1, erreur="_TRANSPORT"), FauxMessage(SMS, 1)]
++    )
++    source_avec(consommateur, FauxProducteur()).consommer(lambda _c: Resultat.ENVOYE)
++    assert consommateur.commits == [1]
++
++
++def test_configuration_securite():
++    assert "security.protocol" not in configuration_client("k:9092")
++    tls = configuration_client("k:9093", ca="/ca.crt")
++    assert tls["security.protocol"] == "SSL"
++    scram = configuration_client("k:9093", "medinotif", "s3cret", "/ca.crt")
++    assert scram["security.protocol"] == "SASL_SSL"
++    assert scram["sasl.mechanism"] == "SCRAM-SHA-512"
++    assert scram["ssl.ca.location"] == "/ca.crt"
++
++
++def test_fabrique():
++    settings = Settings.depuis_env(
++        {"MEDINOTIF_BACKEND": "kafka", "MEDINOTIF_KAFKA_BOOTSTRAP": "kafka-essai:9093"}
++    )
++    source = creer_source(settings)
++    assert isinstance(source, SourceKafka)
++    assert source.topic == "rendez-vous.evenements"
++
++
++@pytest.mark.integration
++def test_vrai_kafka():
++    bootstrap = os.environ.get("MEDINOTIF_TEST_KAFKA_BOOTSTRAP")
++    if not bootstrap:
++        pytest.skip("MEDINOTIF_TEST_KAFKA_BOOTSTRAP non définie")
++    from confluent_kafka import Consumer, Producer
++    from confluent_kafka.admin import AdminClient, NewTopic
++
++    suffixe = uuid.uuid4().hex[:8]
++    topic, rebut = f"essai-{suffixe}", f"essai-rebut-{suffixe}"
++    admin = AdminClient({"bootstrap.servers": bootstrap})
++    for f in admin.create_topics([NewTopic(topic, 1, 1), NewTopic(rebut, 1, 1)]).values():
++        f.result(10)
++    producteur = Producer({"bootstrap.servers": bootstrap})
++    for corps in (SMS, b"invalide", SMS):
++        producteur.produce(topic, corps)
++    producteur.flush(10)
++
++    source = SourceKafka(
++        configuration_client(bootstrap), topic=topic, groupe=f"g-{suffixe}", topic_rebut=rebut
++    )
++    vus = []
++
++    def traiter(corps):
++        resultat = Traiteur(ExpediteurSimule(0))(corps)
++        vus.append(resultat)
++        if len(vus) == 3:
++            source.arreter()
++        return resultat
++
++    source.consommer(traiter)
++    assert vus == [Resultat.ENVOYE, Resultat.INVALIDE, Resultat.ENVOYE]
++    lecteur = Consumer(
++        {
++            "bootstrap.servers": bootstrap,
++            "group.id": f"l-{suffixe}",
++            "auto.offset.reset": "earliest",
++        }
++    )
++    lecteur.subscribe([rebut])
++    message = None
++    for _ in range(20):
++        message = lecteur.poll(1.0)
++        if message is not None and message.error() is None:
++            break
++    assert message is not None and message.value() == b"invalide"
++    # offsets validés du groupe : 3 (après le dernier message)
++    from confluent_kafka import TopicPartition
++
++    validation = Consumer({"bootstrap.servers": bootstrap, "group.id": f"g-{suffixe}"})
++    assert validation.committed([TopicPartition(topic, 0)], timeout=10)[0].offset == 3
++    lecteur.close()
++    validation.close()
+diff --git a/tests/test_worker.py b/tests/test_worker.py
+index 0067e3f..0613045 100644
+--- a/tests/test_worker.py
++++ b/tests/test_worker.py
+@@ -80,9 +80,19 @@ def test_configuration():
+         Settings.depuis_env({"MEDINOTIF_BACKEND": "pigeon"})
+ 
+ 
+-def test_kafka_annonce_mais_pas_encore_disponible():
+-    with pytest.raises(ErreurConfiguration, match="module 27"):
++def test_kafka_exige_son_amorce():
++    with pytest.raises(ErreurConfiguration, match="MEDINOTIF_KAFKA_BOOTSTRAP"):
++        Settings.depuis_env({"MEDINOTIF_BACKEND": "kafka"})
++    with pytest.raises(ErreurConfiguration, match="MEDINOTIF_KAFKA_BOOTSTRAP"):
+         creer_source(Settings(backend="kafka"))
++    with pytest.raises(ErreurConfiguration, match="MEDINOTIF_KAFKA_MOT_DE_PASSE"):
++        Settings.depuis_env(
++            {
++                "MEDINOTIF_BACKEND": "kafka",
++                "MEDINOTIF_KAFKA_BOOTSTRAP": "k:9093",
++                "MEDINOTIF_KAFKA_UTILISATEUR": "medinotif",
++            }
++        )
+ 
+ 
+ def test_processus_complet_en_mode_stdin():

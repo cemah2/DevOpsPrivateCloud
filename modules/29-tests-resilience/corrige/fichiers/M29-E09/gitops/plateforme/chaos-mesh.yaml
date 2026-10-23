@@ -1,0 +1,57 @@
+# plateforme/gitops — plateforme/chaos-mesh.yaml (M29-E09, PLAT-3009)
+# Application « chaos-mesh », projet « plateforme ». Sources :
+#   1. le chart chaos-mesh 2.8.6 recopié et signé dans Harbor charts/ (plateforme/charts-miroir) ;
+#   2. ce dépôt (référence « values ») : valeurs/chaos-mesh/values.yaml.
+# L'espace chaos-mesh (Pod Security privileged, exception écrite) vient de plateforme/k8s
+# (espaces/chaos-mesh.yaml), appliqué AVANT la première synchronisation : CreateNamespace=false.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: chaos-mesh
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    medisphere.internal/ticket: "PLAT-3009"
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: chaos-mesh
+      targetRevision: 2.8.6
+      helm:
+        releaseName: chaos-mesh
+        valueFiles:
+          - $values/valeurs/chaos-mesh/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: chaos-mesh
+  # Le chart pose sur les gabarits de pods du contrôleur et du démon une annotation
+  # « rollme: {{ randAlphaNum 5 }} » (templates/*-deployment.yaml, *-daemonset.yaml), DIFFÉRENTE à
+  # chaque rendu : sans cette exception, chaque régénération des manifestes par Argo CD (nouveau
+  # commit, rafraîchissement forcé) redémarrerait le contrôleur et le démon de CHAQUE nœud.
+  # RespectIgnoreDifferences : la synchronisation garde aussi la valeur en place.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: chaos-controller-manager
+      jqPathExpressions:
+        - .spec.template.metadata.annotations.rollme
+    - group: apps
+      kind: DaemonSet
+      name: chaos-daemon
+      jqPathExpressions:
+        - .spec.template.metadata.annotations.rollme
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # Les CRD de Chaos Mesh dépassent la limite de l'annotation last-applied (262 144 octets)
+      # d'un « kubectl apply » côté client : application côté serveur obligatoire.
+      - ServerSideApply=true
+      - CreateNamespace=false
+      - RespectIgnoreDifferences=true

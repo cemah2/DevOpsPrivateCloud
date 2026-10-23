@@ -1,0 +1,24 @@
+# medinotif/deploiement — base/reseau.yaml (M27-E04)
+# L'espace est en refus par défaut (Kyverno, networkpolicy-par-defaut) avec la sortie DNS. On ouvre
+# la seule sortie utile : AMQPS vers les pods de la grappe RabbitMQ. (Avec le remplacement de
+# kube-proxy, la politique voit le POD de destination, après traduction du Service rabbitmq.)
+# L'entrée de Prometheus (9100) est ouverte par la plateforme (collecte-prometheus).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: medinotif-vers-rabbitmq
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: medinotif
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: messagerie
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: rabbitmq
+      ports:
+        - {protocol: TCP, port: 5671}

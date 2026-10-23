@@ -1,0 +1,34 @@
+# Essai de préemption (M28-E14, étape 5) — dans wb-essais SEULEMENT, puis supprimé.
+#   kubectl apply -f preemption.yaml                       # remplissage « lot » sur k8s-w01
+#   kubectl -n wb-essais get pods -o wide -w                # attendre que tout tienne (ou pas)
+#   kubectl apply -f preemption-standard.yaml               # le pod « standard » qui ne tient pas
+#   kubectl -n wb-essais get events --field-selector reason=Preempted
+#   kubectl delete -f preemption-standard.yaml -f preemption.yaml
+# Taille : 6 × 1 Gi de requests sur un nœud d'environ 9 Gi d'allouable, en plus de ce qui y tourne déjà :
+# ajuste « replicas » pour que le nœud soit plein (kubectl describe node k8s-w01 | grep -A8 Allocated).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: remplissage-lot
+  namespace: wb-essais
+  labels: {app.kubernetes.io/name: remplissage-lot, medisphere.internal/equipe: plateforme}
+spec:
+  replicas: 6
+  selector:
+    matchLabels: {app.kubernetes.io/name: remplissage-lot}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: remplissage-lot, medisphere.internal/equipe: plateforme}
+    spec:
+      priorityClassName: medisphere-lot
+      nodeSelector: {kubernetes.io/hostname: k8s-w01}
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: dort
+          image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+          command: ["sleep", "86400"]
+          resources:
+            requests: {cpu: 10m, memory: 1Gi}
+            limits: {memory: 1Gi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}

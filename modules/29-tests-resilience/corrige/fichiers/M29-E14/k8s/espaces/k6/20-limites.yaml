@@ -1,0 +1,14 @@
+# plateforme/k8s — espaces/k6/20-limites.yaml (M29-E14)
+# Valeurs par défaut pour les pods créés par l'opérateur sans ressources (démarreur, initialiseur s'il
+# n'hérite pas de celles du runner) : sans elles, le quota (requests/limits obligatoires) les refuse.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limites-k6
+  namespace: k6
+spec:
+  limits:
+    - type: Container
+      default: {cpu: 200m, memory: 128Mi}
+      defaultRequest: {cpu: 50m, memory: 64Mi}
+      max: {cpu: "1", memory: 1Gi}

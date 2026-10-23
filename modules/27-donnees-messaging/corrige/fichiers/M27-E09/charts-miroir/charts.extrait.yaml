@@ -1,0 +1,14 @@
+# À INTÉGRER dans plateforme/charts-miroir — charts.yaml (format de M20-E13), M27-E09 (PLAT-2809).
+# Empreinte : sha256 de l'archive, relevée dans l'index du dépôt amont
+#   curl -s https://strimzi.io/charts/index.yaml \
+#     | yq '.entries.strimzi-kafka-operator[] | select(.version == "1.3.0") | .digest'
+# puis recalculée sur l'archive téléchargée (sha256sum strimzi-kafka-operator-helm-3-chart-1.3.0.tgz) :
+# les deux doivent être égales. Valeur ci-dessous recalculée le 23/10/2026 sur l'archive 1.3.0.
+# ESSAI : entrée retirée en fin de M27-E10 (le chart reste dans Harbor jusqu'à la purge habituelle).
+charts:
+  # … entrées existantes …
+  - nom: strimzi-kafka-operator
+    depot: https://strimzi.io/charts/
+    version: 1.3.0
+    empreinte: sha256:42677cec73d2122f4a395d9891bbccfae18ec16b3582174d49ca04695f351192
+    usage: "Essai Kafka M27-E09/E10 (Application kafka-essai), À RETIRER en fin d'E10"

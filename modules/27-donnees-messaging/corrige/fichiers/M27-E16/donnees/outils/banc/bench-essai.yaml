@@ -1,0 +1,59 @@
+# plateforme/donnees — outils/banc/bench-essai.yaml (M27-E16, PLAT-2816)
+# Banc PostgreSQL JETABLE dans wb-essais : une instance aux ressources d'une instance de mediagenda-db,
+# et son pooler en mode transaction aux réglages de mediagenda-db-pooler-rw (M27-E02 : 10 / 200 / 40,
+# PgBouncer 1.26.1 épinglé) : on mesure ce qui tourne, pas un réglage de laboratoire. Supprimé après la
+# mesure : kubectl -n wb-essais delete -f outils/banc/bench-essai.yaml (les PVC partent avec le Cluster).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: bench-essai
+  namespace: wb-essais
+spec:
+  instances: 1
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
+  bootstrap:
+    initdb:
+      database: banc
+      owner: banc
+  storage:
+    storageClass: ceph-rbd
+    size: 5Gi
+  postgresql:
+    parameters:
+      shared_buffers: 128MB
+      max_connections: "100"
+  resources:
+    requests: {cpu: 100m, memory: 512Mi}
+    limits: {cpu: "1", memory: 1Gi}
+  enableSuperuserAccess: false
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: bench-essai-pooler-rw
+  namespace: wb-essais
+spec:
+  cluster:
+    name: bench-essai
+  instances: 1
+  type: rw
+  pgbouncer:
+    poolMode: transaction
+    parameters:
+      default_pool_size: "10"
+      max_client_conn: "200"
+      max_db_connections: "40"
+      # PgBouncer ≥ 1.21 : requêtes préparées côté serveur en mode transaction (0 = désactivé).
+      max_prepared_statements: "100"
+    # Même image que mediagenda-db-pooler-rw (M27-E02), par le cache Harbor.
+    image: registry.par1.medisphere.internal/ghcr/cloudnative-pg/pgbouncer:1.26.1@sha256:<EMPREINTE-PGBOUNCER>
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bench-essai-pooler
+    spec:
+      containers:
+        - name: pgbouncer
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: "1", memory: 128Mi}

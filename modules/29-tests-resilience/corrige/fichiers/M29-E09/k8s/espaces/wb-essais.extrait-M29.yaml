@@ -1,0 +1,7 @@
+# À INTÉGRER dans plateforme/k8s — espaces/wb-essais.yaml (M29-E09, PLAT-3009).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wb-essais
+  annotations:
+    chaos-mesh.org/inject: "enabled"

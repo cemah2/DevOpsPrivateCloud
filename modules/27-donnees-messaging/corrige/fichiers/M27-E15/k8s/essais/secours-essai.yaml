@@ -1,0 +1,42 @@
+# plateforme/k8s — essais/secours-essai.yaml (M27-E15, étape 3) : RÉPÉTITION de promotion dans wb-essais.
+# ⚠️ Copie de la base de PRODUCTION (données de santé) : une instance, supprimée (volume compris) dès la
+# mesure faite ; personne d'autre que la plateforme n'a accès à wb-essais (M14).
+# Prérequis dans wb-essais : ObjectStore « cnpg-s3-lecture » (copie de 60-cnpg-s3.yaml, même identité en
+# lecture) et Secrets cnpg-s3 / medisphere-ca (ESO, SecretStore de wb-essais du M25-E12).
+#   1. kubectl apply -f essais/secours-essai.yaml ; attendre « Cluster in healthy state »
+#   2. mesurer (corrigé, étape 3), puis promouvoir :
+#        kubectl -n wb-essais patch cluster secours-essai --type merge -p '{"spec":{"replica":{"enabled":false}}}'
+#   3. kubectl -n wb-essais delete cluster secours-essai   (les PVC partent avec le Cluster)
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: secours-essai
+  namespace: wb-essais
+spec:
+  instances: 1
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
+  bootstrap:
+    recovery:
+      source: mediagenda-db-prod
+      database: mediagenda
+      owner: mediagenda
+  replica:
+    enabled: true
+    source: mediagenda-db-prod
+  externalClusters:
+    - name: mediagenda-db-prod
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: cnpg-s3-lecture
+          serverName: mediagenda-db-prod
+  storage:
+    storageClass: ceph-rbd
+    size: 5Gi
+  postgresql:
+    parameters:
+      max_connections: "100"
+  resources:
+    requests: {cpu: 50m, memory: 384Mi}
+    limits: {memory: 768Mi}
+  enableSuperuserAccess: false

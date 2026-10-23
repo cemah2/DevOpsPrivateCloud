@@ -1,0 +1,80 @@
+# plateforme/k8s — espaces/mediagenda-recette/56-mediagenda-db-pooler.yaml (M27-E02, PLAT-2802)
+# Réserve de connexions PgBouncer devant le PRIMAIRE (type rw) de mediagenda-db.
+#   - Service « mediagenda-db-pooler-rw » (même nom que l'objet), port 5432 : c'est l'adresse de
+#     l'API désormais (component identifiants-dynamiques de mediagenda/deploiement).
+#   - Mode transaction : une connexion serveur n'est prêtée que le temps d'une transaction.
+#     L'API (psycopg 3.3, libpq 18) garde ses instructions préparées : PgBouncer ≥ 1.22 les suit
+#     au niveau du protocole (max_prepared_statements, 200 par défaut depuis 1.24 : vérifié sur
+#     1.25.1 par SHOW CONFIG). Les MIGRATIONS (verrou consultatif de session de Flyway, DDL) ne
+#     passent JAMAIS par ici : Job mediagenda-migrations → mediagenda-db-rw.
+#   - Authentification : auth_query par le rôle cnpg_pooler_pgbouncer que l'opérateur crée et
+#     gère (certificat client) : les comptes DYNAMIQUES d'OpenBao passent sans configuration.
+#   - spec.cluster est IMMUABLE : pour pointer ailleurs, on crée un autre Pooler.
+# Les pods portent cnpg.io/cluster=mediagenda-db (en plus de cnpg.io/poolerName) : ils héritent
+# des politiques réseau de la base (40-reseau-postgresql.yaml : sortie vers l'API Kubernetes et
+# les instances ; overlays/recette/acces-donnees.yaml : entrée depuis l'API). Seule manque la
+# collecte de Prometheus sur 9127 : composants/reseau/politiques/collecte-prometheus.yaml.
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: mediagenda-db-pooler-rw
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  cluster:
+    name: mediagenda-db
+  instances: 2
+  type: rw
+  pgbouncer:
+    poolMode: transaction
+    # Épinglée (étape 7) : la version embarquée par défaut dans l'opérateur 1.30.1 était plus
+    # ancienne que la dernière corrective. Empreinte relevée sur le cache Harbor : à TA valeur.
+    image: registry.par1.medisphere.internal/ghcr/cloudnative-pg/pgbouncer:1.26.1@sha256:<EMPREINTE-PGBOUNCER>
+    parameters:
+      # Clients acceptés par PgBouncer (pods de l'API × leur réserve psycopg, Rollout compris).
+      max_client_conn: "200"
+      # Connexions SERVEUR par couple (base, utilisateur). Les comptes dynamiques changent toutes
+      # les 30 min : pendant un recouvrement, deux utilisateurs → deux réserves.
+      default_pool_size: "10"
+      # Plafond de connexions serveur vers la base, tous utilisateurs confondus (max_connections
+      # de PostgreSQL : 100 ; on laisse de la place aux migrations, à la supervision, à OpenBao).
+      max_db_connections: "40"
+      # Une transaction ouverte et oubliée par un client garde une connexion serveur : on coupe.
+      idle_transaction_timeout: "60"
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: mediagenda
+    spec:
+      priorityClassName: medisphere-standard
+      # Deux instances, jamais sur le même nœud : la perte d'un nœud laisse un PgBouncer.
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  cnpg.io/poolerName: mediagenda-db-pooler-rw
+      containers:
+        # Le nom « pgbouncer » est obligatoire pour que l'opérateur fusionne ce conteneur avec le sien.
+        - name: pgbouncer
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+---
+# Le PodDisruptionBudget n'est pas posé par l'opérateur pour un Pooler : un drainage pourrait
+# évincer les deux pods en même temps.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mediagenda-db-pooler-rw
+  namespace: mediagenda-recette
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      cnpg.io/poolerName: mediagenda-db-pooler-rw

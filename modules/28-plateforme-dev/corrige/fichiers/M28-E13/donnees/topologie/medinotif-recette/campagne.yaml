@@ -1,0 +1,57 @@
+# plateforme/donnees — topologie/medinotif-recette/campagne.yaml (M28-E13, PLAT-2913)
+# Compte d'ESSAI de recette pour ressources/E13-campagne/campagne.sh : publie par l'API HTTP de gestion
+# (étiquette « management ») dans le seul échange « notifications » du vhost de recette. Même
+# construction que keda.yaml (M28-E03) ; pas d'espace écrit (l'Application rabbitmq-topologie les pose
+# dans « messagerie »). N'existe PAS en production. À retirer quand les essais de charge passeront par
+# k6 (M29). Mot de passe : bao kv put kv/medinotif/recette/campagne utilisateur=campagne-recette \
+#   mot_de_passe="$(openssl rand -hex 24)"
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: rabbitmq-utilisateur-campagne-recette
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: rabbitmq-utilisateur-campagne-recette
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      data:
+        username: "{{ .utilisateur }}"
+        password: "{{ .mot_de_passe }}"
+  data:
+    - secretKey: utilisateur
+      remoteRef: {key: medinotif/recette/campagne, property: utilisateur}
+    - secretKey: mot_de_passe
+      remoteRef: {key: medinotif/recette/campagne, property: mot_de_passe}
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: User
+metadata:
+  name: campagne-recette
+spec:
+  rabbitmqClusterReference:
+    name: rabbitmq
+  tags:
+    - management
+  importCredentialsSecret:
+    name: rabbitmq-utilisateur-campagne-recette
+---
+# Publication sur l'échange notifications seulement : ni lecture (aucune consommation), ni configuration.
+apiVersion: rabbitmq.com/v1beta1
+kind: Permission
+metadata:
+  name: campagne-recette
+spec:
+  vhost: medinotif-recette
+  userReference:
+    name: campagne-recette
+  permissions:
+    configure: "^$"
+    write: "^notifications$"
+    read: "^$"
+  rabbitmqClusterReference:
+    name: rabbitmq

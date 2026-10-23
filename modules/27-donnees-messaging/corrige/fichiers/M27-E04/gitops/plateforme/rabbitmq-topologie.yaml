@@ -1,0 +1,32 @@
+# plateforme/gitops — plateforme/rabbitmq-topologie.yaml (M27-E04, DEV-2804)
+# Topologie déclarative de RabbitMQ (vhosts, échanges, files, liaisons, politiques, utilisateurs,
+# permissions) appliquée par le Messaging Topology Operator. Vague 1 : après la grappe (vague 0).
+# prune: true → un objet retiré de Git est supprimé DANS KUBERNETES ; ce qu'il devient dans
+# RabbitMQ dépend de son deletionPolicy (retain pour les vhosts et les files : rien n'est perdu).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rabbitmq-topologie
+  namespace: argocd
+  labels:
+    medisphere.internal/domaine: donnees
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    medisphere.internal/ticket: "DEV-2804"
+spec:
+  project: plateforme
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: messagerie
+  source:
+    repoURL: https://git01.par1.medisphere.internal/plateforme/donnees.git
+    targetRevision: main
+    path: topologie
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false
+      - SkipDryRunOnMissingResource=true

@@ -1,0 +1,46 @@
+# plateforme/donnees — kafka-essai/kafka.yaml (M27-E09, PLAT-2809) — ESSAI, retiré en fin de M27-E10.
+# API kafka.strimzi.io/v1 (seule servie par Strimzi 1.x) : KRaft et pools de nœuds sont la seule
+# façon de décrire une grappe (plus de spec.kafka.replicas, plus de ZooKeeper).
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: kafka-essai
+  annotations:
+    medisphere.internal/ticket: "PLAT-2809"
+    medisphere.internal/retrait-prevu: "fin de M27-E10"
+spec:
+  kafka:
+    version: 4.3.1
+    # Version des métadonnées KRaft (≈ « niveau de fonctionnalités » de la grappe). Montée explicite,
+    # après la montée des binaires : un retour arrière n'est possible que tant qu'on ne l'a pas changée.
+    metadataVersion: 4.3-IV0
+    listeners:
+      # Interne au cluster seulement ; TLS (certificat signé par la CA de grappe de Strimzi) +
+      # SCRAM-SHA-512 (KafkaUser). Pas d'écouteur en clair.
+      - name: tls
+        port: 9093
+        type: internal
+        tls: true
+        authentication:
+          type: scram-sha-512
+    authorization:
+      type: simple
+    config:
+      # Trois nœuds : facteur 3 partout, écriture acceptée tant que 2 répliques sont à jour.
+      default.replication.factor: 3
+      min.insync.replicas: 2
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      # Les topics se déclarent (KafkaTopic), ils ne naissent pas d'une faute de frappe d'un client.
+      auto.create.topics.enable: false
+  entityOperator:
+    # Sans eux, ni KafkaTopic ni KafkaUser ne sont réconciliés.
+    topicOperator:
+      resources:
+        requests: {cpu: 50m, memory: 256Mi}
+        limits: {memory: 256Mi}
+    userOperator:
+      resources:
+        requests: {cpu: 50m, memory: 256Mi}
+        limits: {memory: 256Mi}

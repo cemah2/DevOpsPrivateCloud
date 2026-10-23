@@ -1,0 +1,22 @@
+# components/notifications/reseau.yaml (M27-E08) — sortie AMQPS de l'API vers la grappe RabbitMQ.
+# S'ajoute (Cilium : les autorisations s'additionnent) à la politique du chart (DNS, PostgreSQL, Valkey).
+# Avec le remplacement de kube-proxy, la politique voit le POD de destination (après le Service).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mediagenda-vers-rabbitmq
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: messagerie
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: rabbitmq
+      ports:
+        - {protocol: TCP, port: 5671}

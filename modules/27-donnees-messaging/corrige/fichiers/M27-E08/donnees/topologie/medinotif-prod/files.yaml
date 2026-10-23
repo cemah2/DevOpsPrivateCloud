@@ -1,0 +1,32 @@
+# Files QUORUM (Raft, 3 répliques sur les 3 nœuds) : une publication confirmée est sur disque sur
+# une majorité de nœuds. Le type et les arguments d'une file sont FIGÉS à sa création : RabbitMQ
+# refuse (PRECONDITION_FAILED) toute redéclaration différente ; le webhook de l'opérateur refuse la
+# modification de ces champs (à constater en E04, étape 2). Ce qui doit pouvoir changer (rebut, limite de livraison) va dans une POLITIQUE.
+# deletionPolicy: retain → supprimer l'objet ne supprime pas la file ni ses messages.
+apiVersion: rabbitmq.com/v1beta1
+kind: Queue
+metadata:
+  name: medinotif-prod-notifications
+spec:
+  name: notifications
+  vhost: medinotif-prod
+  type: quorum
+  durable: true
+  autoDelete: false
+  deletionPolicy: retain
+  rabbitmqClusterReference:
+    name: rabbitmq
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Queue
+metadata:
+  name: medinotif-prod-notifications-rebut
+spec:
+  name: notifications.rebut
+  vhost: medinotif-prod
+  type: quorum
+  durable: true
+  autoDelete: false
+  deletionPolicy: retain
+  rabbitmqClusterReference:
+    name: rabbitmq

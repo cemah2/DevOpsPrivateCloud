@@ -1,0 +1,33 @@
+# plateforme/k8s — espaces/mediagenda-secours/60-cnpg-s3.yaml (M27-E15)
+# ObjectStore du plugin Barman Cloud 0.15 pour LIRE l'archive de la production. Un ObjectStore est un
+# objet de l'espace : celui de mediagenda-prod n'est pas visible d'ici.
+#   - même destinationPath que la prod (s3://cnpg-k8s-par1/) ; le serverName se règle côté Cluster
+#     (paramètre du plugin), JAMAIS ici (il doit rester vide, documentation du plugin) ;
+#   - PAS de retentionPolicy : la rétention est appliquée par le sidecar des clusters qui utilisent cet
+#     ObjectStore ; une rétention posée ici pourrait effacer des sauvegardes de la PRODUCTION (avec une
+#     identité en écriture). L'identité en lecture seule est la seconde ceinture.
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: cnpg-s3
+  namespace: mediagenda-secours
+spec:
+  configuration:
+    destinationPath: s3://cnpg-k8s-par1/
+    endpointURL: https://s3-01.par1.medisphere.internal:8333
+    endpointCA:
+      name: medisphere-ca
+      key: ca.crt
+    s3Credentials:
+      accessKeyId:
+        name: cnpg-s3
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: cnpg-s3
+        key: ACCESS_SECRET_KEY
+    wal:
+      maxParallel: 4
+  instanceSidecarConfiguration:
+    resources:
+      requests: {cpu: 50m, memory: 64Mi}
+      limits: {cpu: 500m, memory: 256Mi}

@@ -1,0 +1,15 @@
+# plateforme/donnees — rabbitmq/sauvegarde-definitions/ (M27-E15) : inclus par rabbitmq/kustomization.yaml
+# (« resources: [sauvegarde-definitions] »), donc appliqué par l'Application « rabbitmq ».
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: messagerie
+resources:
+  - utilisateur.yaml
+  - externalsecrets.yaml
+  - cronjob.yaml
+  - reseau.yaml
+configMapGenerator:
+  - name: export-definitions
+    files: [export_definitions.py]
+generatorOptions:
+  disableNameSuffixHash: true

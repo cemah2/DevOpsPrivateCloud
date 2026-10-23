@@ -1,0 +1,10 @@
+---
+# plateforme/identite — annuaire/comptes-systeme.yml : entrée AJOUTÉE (M28-E07, PLAT-2907).
+# Compte système de LECTURE pour le module LDAP du portail (organisation : personnes et groupes).
+# Les ACI de lecture par défaut de FreeIPA suffisent (comme svc-keycloak et wb-checks, M24-E03).
+# Mot de passe : même valeur que kv/plateforme/portail (clé ldap_mot_de_passe) ; posé à la création.
+annuaire_comptes_systeme:
+  # … svc-keycloak, wb-checks …
+  - nom: svc-portail
+    description: Portail Backstage (k8s-par1, espace portail) — lecture LDAPS des personnes et des groupes (M28-E07)
+    mot_de_passe: "{{ vault_annuaire_svc_portail_mot_de_passe }}"

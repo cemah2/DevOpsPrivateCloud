@@ -1,0 +1,26 @@
+# plateforme/politiques — rego/donnees/plages-vmid.yaml (M29-E03, PLAT-3003)
+# Plages de VMID par état de plateforme/infra (PLAN §4.6). Clé = dossier de la configuration,
+# tel que le job de plan le connaît ($DOSSIER). Bornes incluses.
+# Les dossiers envs/mNN n'ont pas besoin d'entrée : la règle 2000 + NN*10 … +9 s'applique (vmid.rego).
+# Une entrée ici L'EMPORTE sur la règle générale (modules à plus de 10 VMs, ou plage décalée).
+# ⚠️ Aligne les noms sur les dossiers de TON dépôt (ls envs/) : un état absent est refusé.
+plages_vmid:
+  socle:
+    - [1000, 1099]
+  # Cluster k8s-par1 (M14) : 2141-2147.
+  envs/k8s:
+    - [2140, 2149]
+  # Environnements nommés des blocs A et B (PLAN §4.8, §4.9).
+  envs/m07-maquette:
+    - [2070, 2079]
+  envs/ceph:
+    - [2080, 2089]
+  envs/hv:
+    - [2090, 2099]
+  envs/openstack:
+    - [2100, 2109]
+  envs/provisioning:
+    - [2110, 2119]
+  # Module 20 : lyo-k3s01 (2201) et flux01 (2202).
+  envs/m20:
+    - [2200, 2209]

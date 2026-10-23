@@ -1,0 +1,25 @@
+apiVersion: rabbitmq.com/v1beta1
+kind: Binding
+metadata:
+  name: medinotif-recette-notifications
+spec:
+  vhost: medinotif-recette
+  source: notifications
+  destination: notifications
+  destinationType: queue
+  routingKey: notifications
+  rabbitmqClusterReference:
+    name: rabbitmq
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Binding
+metadata:
+  name: medinotif-recette-notifications-rebut
+spec:
+  vhost: medinotif-recette
+  source: notifications.rebut
+  destination: notifications.rebut
+  destinationType: queue
+  routingKey: ""
+  rabbitmqClusterReference:
+    name: rabbitmq

@@ -1,0 +1,55 @@
+# wb-essais — experiences-e24.yaml (M29-E24) : les trois expériences de l'exercice, à appliquer UNE à la
+# fois depuis adm01 (dans chaos-experiences, cibles dans wb-essais), puis à supprimer.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: latence-e24
+  namespace: chaos-experiences
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces: [wb-essais]
+    labelSelectors: {app: client-e24}
+  direction: to
+  target:
+    mode: all
+    selector:
+      namespaces: [wb-essais]
+      labelSelectors: {app: cible-e24}
+  delay: {latency: 100ms}
+  duration: 10m
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: partition-e24
+  namespace: chaos-experiences
+spec:
+  action: partition
+  mode: all
+  selector:
+    namespaces: [wb-essais]
+    labelSelectors: {app: client-e24}
+  direction: both
+  target:
+    mode: all
+    selector:
+      namespaces: [wb-essais]
+      labelSelectors: {app: cible-e24}
+  duration: 5m
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: stress-e24
+  namespace: chaos-experiences
+spec:
+  mode: all
+  selector:
+    namespaces: [wb-essais]
+    labelSelectors: {app: cible-e24}
+  containerNames: [cible]
+  stressors:
+    cpu: {workers: 1, load: 50}
+  duration: 5m

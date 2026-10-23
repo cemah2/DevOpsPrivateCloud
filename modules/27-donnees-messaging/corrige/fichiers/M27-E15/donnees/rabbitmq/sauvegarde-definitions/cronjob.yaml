@@ -1,0 +1,99 @@
+# plateforme/donnees — rabbitmq/sauvegarde-definitions/cronjob.yaml (M27-E15, PLAT-2815)
+# Chaque nuit à 02:17 : export des définitions (sans empreintes de mots de passe) puis dépôt dans
+# s3://messagerie-definitions/<AAAA>/<MM>/ sur s3-01. Rétention 30 jours : règle de cycle de vie du
+# compartiment (SeaweedFS : « s3.bucket … lifecycle » ou TTL du filer, posé par le rôle Ansible de s3-01),
+# pas ce Job : il n'a que le droit d'écrire.
+# Lancement à la main : kubectl -n messagerie create job --from=cronjob/export-definitions export-manuel-$(date +%s)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: export-definitions
+  namespace: messagerie
+  labels:
+    app.kubernetes.io/name: export-definitions
+    app.kubernetes.io/part-of: rabbitmq
+spec:
+  schedule: "17 2 * * *"
+  timeZone: Europe/Paris
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: export-definitions
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10050
+            runAsGroup: 10050
+            seccompProfile: {type: RuntimeDefault}
+          initContainers:
+            - name: export
+              # Image de référence du workbook (M12), par le cache Harbor ; épingler par empreinte.
+              image: registry.par1.medisphere.internal/dockerhub/library/python:3.13-slim-trixie
+              command: ["python", "/script/export_definitions.py"]
+              env:
+                - {name: RABBITMQ_URL, value: "https://rabbitmq.messagerie.svc:15671"}
+                - {name: CA, value: /etc/racine/ca.crt}
+                - name: RABBITMQ_UTILISATEUR
+                  valueFrom: {secretKeyRef: {name: sauvegarde-definitions-identifiants, key: username}}
+                - name: RABBITMQ_MOT_DE_PASSE
+                  valueFrom: {secretKeyRef: {name: sauvegarde-definitions-identifiants, key: password}}
+              resources:
+                requests: {cpu: 20m, memory: 64Mi}
+                limits: {memory: 128Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: ["ALL"]}
+              volumeMounts:
+                - {name: script, mountPath: /script, readOnly: true}
+                - {name: racine, mountPath: /etc/racine, readOnly: true}
+                - {name: travail, mountPath: /travail}
+          containers:
+            - name: depot
+              image: registry.par1.medisphere.internal/dockerhub/amazon/aws-cli:2.38.5
+              command: ["/bin/sh", "-c"]
+              args:
+                - >-
+                  set -eu;
+                  f=$(ls /travail/definitions-*.json);
+                  aws --endpoint-url "$S3_URL" s3 cp "$f" "s3://messagerie-definitions/$(date -u +%Y/%m)/$(basename "$f")" --only-show-errors;
+                  echo "déposé : $(basename "$f")"
+              env:
+                - {name: S3_URL, value: "https://s3-01.par1.medisphere.internal:8333"}
+                - {name: AWS_CA_BUNDLE, value: /etc/racine/ca.crt}
+                - {name: AWS_DEFAULT_REGION, value: us-east-1}
+                # aws-cli ≥ 2.23 calcule des sommes de contrôle CRC par défaut, que les S3 compatibles
+                # (SeaweedFS) ne gèrent pas toujours : seulement quand l'API l'exige.
+                - {name: AWS_REQUEST_CHECKSUM_CALCULATION, value: when_required}
+                - {name: AWS_RESPONSE_CHECKSUM_VALIDATION, value: when_required}
+                - {name: HOME, value: /travail}
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom: {secretKeyRef: {name: messagerie-definitions-s3, key: ACCESS_KEY_ID}}
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom: {secretKeyRef: {name: messagerie-definitions-s3, key: ACCESS_SECRET_KEY}}
+              resources:
+                requests: {cpu: 20m, memory: 96Mi}
+                limits: {memory: 256Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: ["ALL"]}
+              volumeMounts:
+                - {name: racine, mountPath: /etc/racine, readOnly: true}
+                - {name: travail, mountPath: /travail}
+          volumes:
+            - name: script
+              configMap: {name: export-definitions}
+            - name: racine
+              secret: {secretName: medisphere-ca}
+            - name: travail
+              emptyDir: {sizeLimit: 64Mi}

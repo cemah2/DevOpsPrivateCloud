@@ -1,0 +1,23 @@
+# Variables de lab/lab.env propres aux paliers 1 et 2 du module 27 (rédacteur A : M27-E01 à M27-E12).
+# À fusionner dans lab/lab.env.example à l'harmonisation (avec .lab-env-B.txt). Toutes facultatives :
+# les défauts conviennent au lab de référence. Aucune n'est un secret.
+
+# --- Communes au module (checks des paliers 1 et 2, et des suivants) ---
+# Brouillons et mesures des exercices (sans secret) ; check-E08 y cherche ton dossier e08/.
+#WB_M27_TRAVAIL="$HOME/m27"
+# Suffixes d'environnement : espaces mediagenda-<env>, medinotif-<env>, vhosts medinotif-<env>.
+#WB_M27_ENV_RECETTE=recette
+#WB_M27_ENV_PROD=prod
+# Dossier de la documentation du module dans plateforme/medisphere.
+#WB_M27_DOC_DONNEES="docs/donnees"
+# Mineure de RabbitMQ attendue (vide : 4.3 ou 4.4 acceptées ; « 4.4 » après la montée de M27-E15).
+#WB_M27_VERSION_RABBITMQ="4.3"
+# Mineure de Valkey attendue (E07).
+#WB_M27_VALKEY_VERSION="9.1"
+# Projets GitLab (chemins complets).
+#WB_M27_PROJET_DONNEES="plateforme/donnees"
+#WB_M27_PROJET_MEDINOTIF_DEPLOIEMENT="medinotif/deploiement"
+#WB_M27_PROJET_API="mediagenda/api"
+
+# (Les vérifications de RabbitMQ utilisent rabbitmq_api : WB_RABBITMQ_URL et WB_RABBITMQ_CHECKS_FILE,
+# communes au bloc G ; les requêtes Prometheus, WB_PROM_URL.)

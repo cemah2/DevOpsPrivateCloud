@@ -1,0 +1,5 @@
+# À AJOUTER à tableaux/kustomization.yaml de plateforme/observabilite (M27-E14).
+configMapGenerator:
+  - name: tableau-plateforme-donnees
+    files: [plateforme/donnees-messagerie.json]
+    options: {annotations: {grafana_folder: Plateforme}}

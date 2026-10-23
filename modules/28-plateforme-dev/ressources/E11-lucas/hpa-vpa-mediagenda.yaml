@@ -1,0 +1,33 @@
+# Proposition de Lucas Martin — NE PAS APPLIQUER (M28-E11)
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: mediagenda
+  namespace: mediagenda-prod
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: mediagenda
+  minReplicas: 1
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 30
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: mediagenda
+  namespace: mediagenda-prod
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: mediagenda
+  updatePolicy:
+    updateMode: "Auto"

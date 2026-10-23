@@ -1,0 +1,23 @@
+# mediagenda/deploiement — components/supervision/podmonitor-pooler.yaml (M27-E02, PLAT-2802)
+# Pods PgBouncer du Pooler mediagenda-db-pooler-rw : exportateur sur le port nommé « metrics »
+# (9127), métriques cnpg_pgbouncer_* (SHOW POOLS, SHOW STATS, SHOW LISTS).
+# Écrit à la main : spec.monitoring.enablePodMonitor du Pooler est DÉPRÉCIÉ (CloudNativePG 1.30 :
+# « will be removed in an upcoming release ») — même choix que pour la base au M21-E07.
+# Dans le component « supervision » (dev, recette, prod) : en dev, il n'y a pas de pooler, le
+# PodMonitor ne sélectionne rien (sans erreur). Ajoute « - podmonitor-pooler.yaml » aux resources
+# du component.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: mediagenda-db-pooler-rw
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  jobLabel: cnpg.io/poolerName
+  selector:
+    matchLabels:
+      cnpg.io/poolerName: mediagenda-db-pooler-rw
+      cnpg.io/podRole: pooler
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 30s

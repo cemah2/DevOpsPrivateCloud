@@ -1,0 +1,7 @@
+# plateforme/portail — Dockerfile : EXTRAIT (M28-E16). Étape finale de l'image (M28-E06), après la copie
+# des app-config : copie du fichier d'instrumentation (tutoriel « Setup OpenTelemetry », section
+# Production Setup). Dans .dockerignore, ajouter la ligne :  !packages/backend/src/instrumentation.js
+COPY --chown=node:node packages/backend/src/instrumentation.js ./
+CMD ["node", "--require", "./instrumentation.js", "packages/backend", "--config", "app-config.yaml", "--config", "app-config.production.yaml"]
+# ⚠️ Le chart backstage remplace le CMD par backstage.command (M28-E06 : ["node", "packages/backend"]) :
+# l'option --require doit AUSSI être dans backstage.command (valeurs du portail, M28-E16).

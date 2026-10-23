@@ -1,0 +1,23 @@
+# Proposition de Lucas Martin — NE PAS APPLIQUER (M28-E11)
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: medinotif
+  namespace: medinotif-prod
+spec:
+  scaleTargetRef:
+    name: medinotif
+  minReplicaCount: 0
+  maxReplicaCount: 50
+  pollingInterval: 1
+  cooldownPeriod: 30
+  triggers:
+    - type: rabbitmq
+      metadata:
+        protocol: amqp
+        host: amqp://rabbitmq.messagerie.svc.cluster.local:5672/medinotif-prod
+        queueName: notifications
+        mode: QueueLength
+        value: "1"
+      authenticationRef:
+        name: medinotif-rabbitmq

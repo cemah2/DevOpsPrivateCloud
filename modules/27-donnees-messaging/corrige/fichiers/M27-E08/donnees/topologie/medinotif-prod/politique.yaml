@@ -1,0 +1,30 @@
+# Politique de rebut de la file « notifications » (et d'elle seule : motif ancré).
+#   dead-letter-exchange   un message rejeté sans remise en file part vers notifications.rebut ;
+#   delivery-limit 5       un message dont la livraison a ÉCHOUÉ 5 fois part AUSSI au rebut au lieu
+#                          de boucler. RabbitMQ 4.3 compte les échecs réels (basic.reject, worker
+#                          ou canal qui meurt avant l'accusé) ; un basic.nack avec remise en file est
+#                          un « retour » qui ne compte PAS (docs, files quorum) — voir M27-E20 ;
+#   dead-letter-strategy   at-least-once : le message n'est retiré de la file qu'une fois confirmé
+#   at-least-once          par la file de rebut (défaut : at-most-once, une perte est possible si le
+#                          rebut est indisponible) ; EXIGE overflow: reject-publish ;
+#   overflow               reject-publish : si une limite de longueur est atteinte, les nouvelles
+#   reject-publish         publications sont refusées (l'éditeur le voit par ses confirmations) au
+#                          lieu d'éliminer les plus anciens messages.
+# Vérifié sur RabbitMQ 4.3.7 : politique acceptée, définition effective sur la file quorum.
+apiVersion: rabbitmq.com/v1beta1
+kind: Policy
+metadata:
+  name: medinotif-prod-notifications-rebut
+spec:
+  name: notifications-rebut
+  vhost: medinotif-prod
+  pattern: "^notifications$"
+  applyTo: quorum_queues
+  priority: 10
+  definition:
+    dead-letter-exchange: notifications.rebut
+    delivery-limit: 5
+    dead-letter-strategy: at-least-once
+    overflow: reject-publish
+  rabbitmqClusterReference:
+    name: rabbitmq

@@ -1,0 +1,38 @@
+# plateforme/k8s — rbac/wb-checks-services-m28.yaml (M28-E03, PLAT-2903)
+# Extension, pour le module 28, des droits de LECTURE du compte des vérifications (wb-checks, M14-E06).
+# Fichier distinct de rbac/wb-checks-services.yaml (M27) : même famille, agrégée de la même façon
+# (étiquette workbook.medisphere.internal/checks: "true" → ClusterRole agrégée wb-checks).
+# Jamais les Secrets. Les objets standard (HPA, Deployments, Namespaces, ResourceQuotas…) sont déjà
+# lisibles par wb-checks-base.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wb-checks-services-m28
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    workbook.medisphere.internal/checks: "true"
+rules:
+  # KEDA (E03, E13) : ScaledObject, ScaledJob, TriggerAuthentication (références de Secrets, pas
+  # leurs valeurs), ClusterTriggerAuthentication, CloudEventSource.
+  - apiGroups: ["keda.sh", "eventing.keda.sh"]
+    resources: ["*"]
+    verbs: [get, list, watch]
+  # Valeurs servies par l'adaptateur de KEDA (lecture de la métrique d'un ScaledObject).
+  - apiGroups: ["external.metrics.k8s.io"]
+    resources: ["*"]
+    verbs: [get, list]
+  # VPA (E04, E14) : VerticalPodAutoscaler et leurs points de reprise.
+  - apiGroups: ["autoscaling.k8s.io"]
+    resources: [verticalpodautoscalers, verticalpodautoscalercheckpoints]
+    verbs: [get, list, watch]
+  # Capsule (E05, E15, E21, E23) : Tenant, CapsuleConfiguration, GlobalResourceQuota, RuleStatus,
+  # TenantOwner, ResourcePool… (objets de cluster et d'espace, sans données sensibles).
+  - apiGroups: ["capsule.clastix.io"]
+    resources: ["*"]
+    verbs: [get, list, watch]
+  # Questions d'autorisation (« ce groupe peut-il… ? ») : SubjectAccessReview ne modifie rien,
+  # l'apiserver répond et oublie. Permet de vérifier les droits des équipes sans se faire passer
+  # pour elles (l'emprunt d'identité, lui, n'est pas accordé).
+  - apiGroups: ["authorization.k8s.io"]
+    resources: [subjectaccessreviews]
+    verbs: [create]

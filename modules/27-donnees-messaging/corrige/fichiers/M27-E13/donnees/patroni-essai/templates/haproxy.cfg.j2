@@ -1,0 +1,28 @@
+# /etc/haproxy/haproxy.cfg — {{ inventory_hostname }} (géré par Ansible, M27-E13).
+# 5000 → le primaire seulement : HAProxy interroge l'API REST de Patroni (GET /primary : 200 sur le
+# primaire, 503 ailleurs). 7000 : page de statistiques (essai). Un seul HAProxy = un point unique de
+# défaillance : en production, il en faudrait deux avec keepalived (M07) ou vip-manager.
+global
+    maxconn 200
+
+defaults
+    mode tcp
+    timeout connect 4s
+    timeout client 30m
+    timeout server 30m
+    timeout check 3s
+
+listen stats
+    mode http
+    bind *:7000
+    stats enable
+    stats uri /
+
+listen primaire
+    bind *:5000
+    option httpchk GET /primary
+    http-check expect status 200
+    default-server inter 2s fall 2 rise 2 on-marked-down shutdown-sessions
+{% for h in groups['pg_essai'] %}
+    server {{ h }} {{ hostvars[h].ansible_host }}:5432 check port 8008
+{% endfor %}

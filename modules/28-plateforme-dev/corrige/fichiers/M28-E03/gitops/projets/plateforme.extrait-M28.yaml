@@ -1,0 +1,20 @@
+# À INTÉGRER dans plateforme/gitops — projets/plateforme.yaml (AppProject du M20-E07), M28.
+# Destinations ajoutées par le module 28 (le projet « plateforme » permet déjà tout objet de cluster :
+# CRD, APIService, webhooks, ClusterRoles de KEDA, du VPA, de Capsule).
+#   E03 keda · E04 vpa · E05 capsule-system (et les Tenant, objets de cluster, par l'Application
+#   « locataires ») · E06 portail · E09 medidoc-vc-essai (TEMPORAIRE : retirée à la fin d'E09).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: plateforme
+  namespace: argocd
+spec:
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: keda
+    - server: https://kubernetes.default.svc
+      namespace: vpa
+    - server: https://kubernetes.default.svc
+      namespace: capsule-system
+    - server: https://kubernetes.default.svc
+      namespace: portail

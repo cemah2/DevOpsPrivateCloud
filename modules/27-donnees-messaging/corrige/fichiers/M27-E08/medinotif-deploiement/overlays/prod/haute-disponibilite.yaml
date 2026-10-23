@@ -1,0 +1,20 @@
+# medinotif/deploiement — overlays/prod/haute-disponibilite.yaml (M27-E08)
+# Deux consommateurs de la file notifications, jamais sur le même nœud : un nœud drainé ou perdu
+# laisse un consommateur (la file quorum garde les messages ; l'autre worker les prend).
+# Les messages non acquittés d'un worker arrêté reviennent dans la file (au moins une fois) :
+# MédiNotif doit rester idempotent sur rendez_vous_id + modele (E17-E18).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medinotif
+spec:
+  replicas: 2
+  template:
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: medinotif

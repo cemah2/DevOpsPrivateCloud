@@ -1,0 +1,51 @@
+# Essai de restauration de portail-db dans wb-essais (M28-E16, étape 3) — supprimé après l'essai :
+#   kubectl apply -f portail-db-restauration.yaml
+#   kubectl -n wb-essais get cluster portail-db-essai -w        # « Cluster in healthy state »
+#   kubectl -n wb-essais exec -it portail-db-essai-1 -- psql -U postgres -l        # bases des plugins
+#   kubectl -n wb-essais delete -f portail-db-restauration.yaml
+# L'ObjectStore est local à l'espace : on en déclare un dans wb-essais qui LIT le même compartiment
+# (mêmes identifiants, Secret cnpg-s3 à livrer dans wb-essais par son SecretStore, M25-E12).
+# Aucune archive n'est écrite par le cluster d'essai (pas de .spec.plugins) : il ne pollue pas
+# s3://cnpg-k8s-par1/portail-db/.
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: cnpg-s3
+  namespace: wb-essais
+spec:
+  configuration:
+    destinationPath: s3://cnpg-k8s-par1/
+    endpointURL: https://s3-01.par1.medisphere.internal:8333
+    endpointCA: {name: medisphere-ca, key: ca.crt}
+    s3Credentials:
+      accessKeyId: {name: cnpg-s3, key: ACCESS_KEY_ID}
+      secretAccessKey: {name: cnpg-s3, key: ACCESS_SECRET_KEY}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: portail-db-essai
+  namespace: wb-essais
+  labels: {medisphere.internal/essai: m28-e16}
+spec:
+  instances: 1
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
+  storage:
+    storageClass: ceph-rbd
+    size: 2Gi
+  resources:
+    requests: {cpu: 50m, memory: 256Mi}
+    limits: {memory: 512Mi}
+  bootstrap:
+    recovery:
+      source: portail-db
+      # Base et propriétaire de portail-db (E06) : sinon le Secret « -app » vise une base vide.
+      database: portail
+      owner: portail
+  externalClusters:
+    - name: portail-db
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: cnpg-s3
+          serverName: portail-db

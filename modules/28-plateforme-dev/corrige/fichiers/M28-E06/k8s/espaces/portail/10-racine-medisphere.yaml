@@ -1,0 +1,13 @@
+# plateforme/k8s — espaces/portail/10-racine-medisphere.yaml (M28-E06)
+# Racine publique de la PKI MédiSphère (même ConfigMap que dans traces, M23) : montée dans le pod sur
+# /etc/medisphere et donnée à Node.js par NODE_EXTRA_CA_CERTS (Keycloak, GitLab, ipa01, s3-01).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: racine-medisphere
+  namespace: portail
+data:
+  medisphere-root-ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    <CONTENU-DE-LA-RACINE-MEDISPHERE>
+    -----END CERTIFICATE-----

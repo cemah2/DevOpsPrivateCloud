@@ -1,0 +1,19 @@
+# Refus par défaut dans les deux sens, puis : DNS en sortie, sondes du kubelet (entité « host »).
+# Une exposition (HTTPRoute sur gw-par1) ou un appel à un autre service s'ajoute par MR.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: ${{ values.nom }}
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/instance: ${{ values.nom }}
+  ingress:
+    - fromEntities: [host]
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports: [{port: "53", protocol: ANY}]

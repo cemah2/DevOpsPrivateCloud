@@ -1,0 +1,42 @@
+# plateforme/gitops — plateforme/kafka-essai.yaml (M27-E09, PLAT-2809) — ESSAI, supprimé en fin d'E10.
+# Une Application, trois sources : le chart recopié (opérateur + CRD), ses valeurs, et la grappe
+# déclarée dans plateforme/donnees/kafka-essai/. SkipDryRunOnMissingResource : les CRD de Strimzi
+# arrivent dans la MÊME synchronisation que les objets Kafka (le chart les livre depuis crds/).
+# Les CRD portent-elles une annotation qui empêche leur suppression ? (helm.sh/resource-policy) :
+# à vérifier au retrait (E10).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kafka-essai
+  namespace: argocd
+  labels:
+    medisphere.internal/domaine: donnees
+  annotations:
+    medisphere.internal/ticket: "PLAT-2809"
+spec:
+  project: plateforme
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kafka-essai
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: strimzi-kafka-operator
+      targetRevision: 1.3.0
+      helm:
+        releaseName: strimzi
+        valueFiles:
+          - $values/valeurs/strimzi/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/donnees.git
+      targetRevision: main
+      path: kafka-essai
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false
+      - SkipDryRunOnMissingResource=true

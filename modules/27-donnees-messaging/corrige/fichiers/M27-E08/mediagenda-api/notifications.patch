@@ -1,0 +1,554 @@
+diff --git a/src/mediagenda/app.py b/src/mediagenda/app.py
+index 897985c..42c271b 100644
+--- a/src/mediagenda/app.py
++++ b/src/mediagenda/app.py
+@@ -27,6 +27,7 @@ from .depot import ConflitCreneau, Depot, DepotPostgres
+ from .documents import ClientMediDoc, ErreurMediDoc
+ from .journal import FiltreRequete, request_id_courant
+ from .modeles import Creneaux, RendezVous, RendezVousCreation
++from .notifications import Publieur, creer_publieur, demande_confirmation
+ from .telemetrie import URLS_EXCLUES
+ 
+ journal = logging.getLogger("mediagenda")
+@@ -73,8 +74,10 @@ def create_app(
+     depot: Depot | None = None,
+     cache: Cache | None = None,
+     medidoc: ClientMediDoc | None = None,
++    publieur: Publieur | None = None,
+ ) -> FastAPI:
+-    """Fabrique l'application. ``depot``, ``cache`` et ``medidoc`` sont injectables (tests)."""
++    """Fabrique l'application. ``depot``, ``cache``, ``medidoc`` et ``publieur`` sont
++    injectables (tests)."""
+ 
+     @asynccontextmanager
+     async def cycle_de_vie(app: FastAPI) -> AsyncIterator[None]:
+@@ -86,6 +89,9 @@ def create_app(
+             app.state.medidoc = (
+                 ClientMediDoc(settings.medidoc_url) if settings.medidoc_url else None
+             )
++        # Notifications (M27-E08) : aucune connexion au démarrage (ouverte à la première
++        # publication) : un RabbitMQ absent n'empêche ni le démarrage ni /pret.
++        app.state.publieur = publieur if publieur is not None else creer_publieur(settings.amqp_url)
+         journal.info("démarrage", extra={"version": settings.version})
+         yield
+         # Exécuté à l'arrêt : uvicorn a reçu SIGTERM, a cessé d'accepter des
+@@ -93,6 +99,7 @@ def create_app(
+         journal.info("arrêt : fermeture des connexions")
+         app.state.depot.fermer()
+         app.state.cache.fermer()
++        app.state.publieur.fermer()
+         if app.state.medidoc is not None:
+             await app.state.medidoc.fermer()
+ 
+@@ -215,6 +222,12 @@ def create_app(
+         if cree is None:
+             raise HTTPException(409, "créneau déjà pris pour ce praticien")
+         journal.info("rendez-vous créé", extra={"rdv_id": cree.id, "praticien": cree.praticien})
++        # APRÈS la validation de la transaction (depot.creer a rendu la main) : on ne notifie
++        # jamais un rendez-vous qui n'existe pas. Un échec de publication est journalisé et
++        # compté par le publieur, mais ne change pas la réponse (201).
++        demande = demande_confirmation(cree)
++        if demande is not None:
++            request.app.state.publieur.publier(demande)
+         return cree
+ 
+     @app.get("/api/v1/rendez-vous/{rdv_id}")
+diff --git a/src/mediagenda/config.py b/src/mediagenda/config.py
+index 2c71aa7..aeef4d0 100644
+--- a/src/mediagenda/config.py
++++ b/src/mediagenda/config.py
+@@ -32,6 +32,8 @@ class Settings:
+     delai_arret: int = 20
+     # MédiDoc (M23-E06) : adresse du service de documents ; vide = pièces jointes indisponibles (503).
+     medidoc_url: str = ""
++    # RabbitMQ (M27-E08) : URL AMQP de publication des notifications ; vide = rien n'est publié.
++    amqp_url: str = ""
+ 
+     @classmethod
+     def depuis_env(cls, env: Mapping[str, str] | None = None) -> Settings:
+@@ -58,6 +60,11 @@ class Settings:
+                 f"MEDIAGENDA_MEDIDOC_URL doit commencer par http:// ou https:// : {medidoc_url!r}"
+             )
+ 
++        amqp_url = env.get("MEDIAGENDA_AMQP_URL", "")
++        if amqp_url and not amqp_url.startswith(("amqp://", "amqps://")):
++            # Message sans l'URL : elle contient un mot de passe.
++            raise ErreurConfiguration("MEDIAGENDA_AMQP_URL doit commencer par amqp:// ou amqps://")
++
+         return cls(
+             db_url=env["MEDIAGENDA_DB_URL"],
+             valkey_url=env["MEDIAGENDA_VALKEY_URL"],
+@@ -69,6 +76,7 @@ class Settings:
+             cache_ttl=_entier(env, "MEDIAGENDA_CACHE_TTL", 60),
+             delai_arret=_entier(env, "MEDIAGENDA_DELAI_ARRET", 20),
+             medidoc_url=medidoc_url,
++            amqp_url=amqp_url,
+         )
+ 
+ 
+diff --git a/src/mediagenda/notifications.py b/src/mediagenda/notifications.py
+new file mode 100644
+index 0000000..95f58d0
+--- /dev/null
++++ b/src/mediagenda/notifications.py
+@@ -0,0 +1,193 @@
++"""Publication des demandes de notification vers RabbitMQ (M27-E08, DEV-2808).
++
++MédiAgenda publie, APRÈS la validation de la transaction qui crée un rendez-vous,
++une demande de notification sur l'échange ``notifications`` du vhost de son
++environnement ; MédiNotif la consomme (file quorum ``notifications``).
++
++Règles :
++- facultatif : sans ``MEDIAGENDA_AMQP_URL``, rien n'est publié (développement,
++  tests) et l'API fonctionne comme avant ;
++- confirmations de publication (*publisher confirms*) et ``mandatory`` : une
++  publication n'est « publiée » que si le courtier l'a acceptée ET routée vers
++  une file ; sinon c'est un échec ;
++- une publication ratée ne fait JAMAIS échouer la requête : le rendez-vous est
++  pris (la transaction est validée), on journalise et on compte
++  (``mediagenda_notifications_total{resultat="echec"}``). Le trou entre la base
++  et le courtier est assumé ici ; l'*outbox* transactionnelle le fermerait
++  (discutée en M27-E17/E18) ;
++- au plus une connexion par processus, protégée par un verrou : le client pika
++  « bloquant » n'est pas sûr entre fils d'exécution, et FastAPI exécute les
++  routes synchrones dans un groupe de fils ;
++- aucune donnée personnelle dans les journaux ni dans les traces (le contact
++  n'est que dans le corps du message, chiffré en transit par AMQPS).
++"""
++
++from __future__ import annotations
++
++import json
++import logging
++import threading
++import uuid
++from collections.abc import Callable
++from typing import Any, Protocol
++
++import pika
++import pika.exceptions
++from opentelemetry import propagate, trace
++from opentelemetry.trace import StatusCode
++from prometheus_client import Counter
++
++journal = logging.getLogger("mediagenda.notifications")
++traceur = trace.get_tracer("mediagenda")
++
++NOTIFICATIONS = Counter(
++    "mediagenda_notifications_total",
++    "Demandes de notification à publier vers RabbitMQ",
++    ["resultat"],  # publiee, echec, desactivee
++)
++# Séries créées à zéro : une alerte sur rate(...{resultat="echec"}) fonctionne dès le démarrage.
++for _resultat in ("publiee", "echec", "desactivee"):
++    NOTIFICATIONS.labels(_resultat)
++
++ECHANGE = "notifications"
++CLE_ROUTAGE = "notifications"
++# Délais courts : une publication ne doit pas allonger une prise de rendez-vous de plus de
++# quelques secondes, même courtier injoignable ou en alarme mémoire.
++DELAI_CONNEXION_S = 2.0
++DELAI_BLOCAGE_S = 5.0
++
++ERREURS_AMQP = (pika.exceptions.AMQPError, OSError)
++
++
++class Publieur(Protocol):
++    def publier(self, demande: dict[str, Any]) -> bool: ...
++    def fermer(self) -> None: ...
++
++
++class PublieurInactif:
++    """Sans MEDIAGENDA_AMQP_URL : ne publie rien, le dit une fois, compte « desactivee »."""
++
++    def __init__(self) -> None:
++        journal.info("publication des notifications désactivée (MEDIAGENDA_AMQP_URL absente)")
++
++    def publier(self, demande: dict[str, Any]) -> bool:
++        NOTIFICATIONS.labels("desactivee").inc()
++        return False
++
++    def fermer(self) -> None:
++        pass
++
++
++class PublieurAMQP:
++    def __init__(
++        self,
++        url: str,
++        echange: str = ECHANGE,
++        cle_routage: str = CLE_ROUTAGE,
++        connecter: Callable[[pika.URLParameters], Any] | None = None,
++    ) -> None:
++        self._parametres = pika.URLParameters(url)
++        self._parametres.socket_timeout = DELAI_CONNEXION_S
++        self._parametres.connection_attempts = 1
++        # Courtier en alarme (mémoire, disque) : il bloque les éditeurs ; on abandonne la
++        # connexion au lieu d'attendre indéfiniment.
++        self._parametres.blocked_connection_timeout = DELAI_BLOCAGE_S
++        self._echange = echange
++        self._cle = cle_routage
++        self._connecter = connecter or pika.BlockingConnection
++        self._verrou = threading.Lock()
++        self._connexion: Any = None
++        self._canal: Any = None
++
++    def _ouvrir(self) -> None:
++        self._connexion = self._connecter(self._parametres)
++        self._canal = self._connexion.channel()
++        self._canal.confirm_delivery()
++
++    def _fermer_sans_erreur(self) -> None:
++        try:
++            if self._connexion is not None and self._connexion.is_open:
++                self._connexion.close()
++        except ERREURS_AMQP:
++            pass
++        self._connexion = self._canal = None
++
++    def _envoyer(self, corps: bytes, entetes: dict[str, str]) -> None:
++        if self._canal is None or not self._canal.is_open:
++            self._fermer_sans_erreur()
++            self._ouvrir()
++        self._canal.basic_publish(
++            exchange=self._echange,
++            routing_key=self._cle,
++            body=corps,
++            properties=pika.BasicProperties(
++                content_type="application/json",
++                delivery_mode=pika.DeliveryMode.Persistent,
++                message_id=uuid.uuid4().hex,
++                app_id="mediagenda",
++                headers=entetes,
++            ),
++            mandatory=True,
++        )
++
++    def publier(self, demande: dict[str, Any]) -> bool:
++        corps = json.dumps(demande, ensure_ascii=False).encode()
++        with traceur.start_as_current_span(
++            "mediagenda.notification.publier", kind=trace.SpanKind.PRODUCER
++        ) as span:
++            span.set_attribute("messaging.system", "rabbitmq")
++            span.set_attribute("messaging.destination.name", self._echange)
++            span.set_attribute("mediagenda.rendez_vous.id", demande.get("rendez_vous_id", 0))
++            # Contexte W3C dans les en-têtes AMQP : MédiNotif pourra rattacher son traitement.
++            entetes: dict[str, str] = {}
++            propagate.inject(entetes)
++            with self._verrou:
++                try:
++                    try:
++                        self._envoyer(corps, entetes)
++                    except (pika.exceptions.UnroutableError, pika.exceptions.NackError):
++                        raise
++                    except ERREURS_AMQP:
++                        # Connexion perdue depuis la dernière publication (courtier redémarré,
++                        # pulsations manquées pendant une période calme) : une seule nouvelle
++                        # tentative, sur une connexion neuve.
++                        self._fermer_sans_erreur()
++                        self._envoyer(corps, entetes)
++                except ERREURS_AMQP as exc:
++                    self._fermer_sans_erreur()
++                    span.set_status(StatusCode.ERROR, type(exc).__name__)
++                    NOTIFICATIONS.labels("echec").inc()
++                    journal.error(
++                        "publication de la notification impossible",
++                        extra={
++                            "rdv_id": demande.get("rendez_vous_id"),
++                            "erreur": type(exc).__name__,
++                        },
++                    )
++                    return False
++            NOTIFICATIONS.labels("publiee").inc()
++            journal.info(
++                "notification publiée",
++                extra={"rdv_id": demande.get("rendez_vous_id"), "type": demande.get("type")},
++            )
++            return True
++
++    def fermer(self) -> None:
++        with self._verrou:
++            self._fermer_sans_erreur()
++
++
++def creer_publieur(url: str | None) -> Publieur:
++    return PublieurAMQP(url) if url else PublieurInactif()
++
++
++def demande_confirmation(rdv: Any) -> dict[str, Any] | None:
++    """Demande de notification « confirmation » au format de MédiNotif, ou None sans rappel."""
++    if rdv.rappel.canal == "aucun":
++        return None
++    return {
++        "type": rdv.rappel.canal,
++        "destinataire": rdv.rappel.contact,
++        "modele": "confirmation",
++        "rendez_vous_id": rdv.id,
++    }
+diff --git a/tests/test_notifications.py b/tests/test_notifications.py
+new file mode 100644
+index 0000000..8190526
+--- /dev/null
++++ b/tests/test_notifications.py
+@@ -0,0 +1,261 @@
++"""Publication des notifications (M27-E08, DEV-2808), contre un faux courtier.
++
++Le test marqué « integration » vise un vrai RabbitMQ (échange « notifications » lié à une file) :
++    MEDIAGENDA_TEST_AMQP_URL='amqp://mediagenda-recette:<MOT-DE-PASSE>@127.0.0.1:5672/medinotif-recette' \\
++        uv run pytest -m integration -k notifications
++"""
++
++from __future__ import annotations
++
++import json
++import logging
++import os
++
++import pika.exceptions
++import pytest
++from fastapi.testclient import TestClient
++from prometheus_client import REGISTRY
++
++from mediagenda.app import create_app
++from mediagenda.config import ErreurConfiguration, Settings
++from mediagenda.notifications import (
++    PublieurAMQP,
++    PublieurInactif,
++    creer_publieur,
++    demande_confirmation,
++)
++
++RDV = {
++    "patient": "Jeanne Dupont",
++    "praticien": "dr-morel",
++    "debut": "2026-11-02T09:00:00+01:00",
++    "rappel": {"canal": "sms", "contact": "+33612345678"},
++}
++
++
++def compteur(resultat: str) -> float:
++    return (
++        REGISTRY.get_sample_value("mediagenda_notifications_total", {"resultat": resultat}) or 0.0
++    )
++
++
++class FauxCanal:
++    def __init__(self, erreurs=None):
++        self.publies = []
++        self.erreurs = list(erreurs or [])
++        self.is_open = True
++        self.confirme = False
++
++    def confirm_delivery(self):
++        self.confirme = True
++
++    def basic_publish(self, exchange, routing_key, body, properties, mandatory):
++        if self.erreurs:
++            erreur = self.erreurs.pop(0)
++            if erreur is not None:
++                raise erreur
++        self.publies.append((exchange, routing_key, json.loads(body), properties, mandatory))
++
++
++class FausseConnexion:
++    def __init__(self, canal):
++        self.canal = canal
++        self.is_open = True
++
++    def channel(self):
++        return self.canal
++
++    def close(self):
++        self.is_open = False
++
++
++class FauxCourtier:
++    """Fabrique de connexions : chaque connexion rend le canal suivant de la liste."""
++
++    def __init__(self, *canaux, refuse=False):
++        self.canaux = list(canaux)
++        self.connexions = 0
++        self.refuse = refuse
++
++    def __call__(self, _parametres):
++        self.connexions += 1
++        if self.refuse:
++            raise pika.exceptions.AMQPConnectionError("courtier injoignable")
++        return FausseConnexion(self.canaux.pop(0))
++
++
++def publieur_avec(courtier):
++    return PublieurAMQP("amqp://u:p@courtier.test:5672/medinotif-recette", connecter=courtier)
++
++
++def test_publication_confirmee_et_routee():
++    canal = FauxCanal()
++    publieur = publieur_avec(FauxCourtier(canal))
++    avant = compteur("publiee")
++    assert publieur.publier(
++        {
++            "type": "sms",
++            "destinataire": "+33612345678",
++            "modele": "confirmation",
++            "rendez_vous_id": 7,
++        }
++    )
++    echange, cle, corps, proprietes, mandatory = canal.publies[0]
++    assert (echange, cle, mandatory) == ("notifications", "notifications", True)
++    assert canal.confirme  # confirmations de publication activées
++    assert corps["rendez_vous_id"] == 7
++    assert proprietes.delivery_mode == 2 and proprietes.content_type == "application/json"
++    assert proprietes.message_id  # permet à MédiNotif de reconnaître un doublon
++    assert compteur("publiee") == avant + 1
++
++
++def test_connexion_reutilisee():
++    canal = FauxCanal()
++    courtier = FauxCourtier(canal)
++    publieur = publieur_avec(courtier)
++    for i in range(3):
++        publieur.publier(
++            {"type": "sms", "destinataire": "+33612345678", "modele": "m", "rendez_vous_id": i + 1}
++        )
++    assert courtier.connexions == 1 and len(canal.publies) == 3
++
++
++def test_reprise_apres_connexion_perdue():
++    perdu = FauxCanal(erreurs=[pika.exceptions.StreamLostError("perdu")])
++    neuf = FauxCanal()
++    courtier = FauxCourtier(perdu, neuf)
++    assert publieur_avec(courtier).publier({"rendez_vous_id": 1})
++    assert courtier.connexions == 2 and len(neuf.publies) == 1
++
++
++@pytest.mark.parametrize(
++    "erreur",
++    [pika.exceptions.UnroutableError([]), pika.exceptions.NackError([])],
++)
++def test_non_routee_ou_refusee_echec_sans_nouvelle_tentative(erreur, caplog):
++    canal = FauxCanal(erreurs=[erreur])
++    courtier = FauxCourtier(canal)
++    avant = compteur("echec")
++    assert not publieur_avec(courtier).publier(
++        {"rendez_vous_id": 9, "destinataire": "+33612345678"}
++    )
++    assert courtier.connexions == 1  # pas de doublon : le courtier a répondu
++    assert compteur("echec") == avant + 1
++    assert "33612345678" not in caplog.text
++
++
++def test_courtier_injoignable_echec():
++    avant = compteur("echec")
++    assert not publieur_avec(FauxCourtier(refuse=True)).publier({"rendez_vous_id": 2})
++    assert compteur("echec") == avant + 1
++
++
++def test_desactivee_sans_url():
++    assert isinstance(creer_publieur(""), PublieurInactif)
++    avant = compteur("desactivee")
++    assert not PublieurInactif().publier({"rendez_vous_id": 1})
++    assert compteur("desactivee") == avant + 1
++
++
++def test_configuration():
++    base = {"MEDIAGENDA_DB_URL": "postgresql://x", "MEDIAGENDA_VALKEY_URL": "redis://x"}
++    assert Settings.depuis_env(base).amqp_url == ""
++    url = "amqps://mediagenda-prod:s3cret@rabbitmq.messagerie.svc:5671/medinotif-prod"
++    assert Settings.depuis_env({**base, "MEDIAGENDA_AMQP_URL": url}).amqp_url == url
++    with pytest.raises(ErreurConfiguration) as exc:
++        Settings.depuis_env({**base, "MEDIAGENDA_AMQP_URL": "http://u:s3cret@x"})
++    assert "s3cret" not in str(exc.value)
++
++
++class PublieurMemoire:
++    def __init__(self, reussit=True):
++        self.demandes, self.reussit, self.ferme = [], reussit, False
++
++    def publier(self, demande):
++        self.demandes.append(demande)
++        return self.reussit
++
++    def fermer(self):
++        self.ferme = True
++
++
++def test_api_publie_apres_creation(settings, depot, cache):
++    publieur = PublieurMemoire()
++    with TestClient(create_app(settings, depot=depot, cache=cache, publieur=publieur)) as c:
++        cree = c.post("/api/v1/rendez-vous", json=RDV)
++        assert cree.status_code == 201
++        assert publieur.demandes == [
++            {
++                "type": "sms",
++                "destinataire": "+33612345678",
++                "modele": "confirmation",
++                "rendez_vous_id": cree.json()["id"],
++            }
++        ]
++    assert publieur.ferme
++
++
++def test_api_ne_publie_ni_sans_rappel_ni_sur_conflit(settings, depot, cache):
++    publieur = PublieurMemoire()
++    with TestClient(create_app(settings, depot=depot, cache=cache, publieur=publieur)) as c:
++        sans = {k: v for k, v in RDV.items() if k != "rappel"}
++        assert c.post("/api/v1/rendez-vous", json=sans).status_code == 201
++        assert publieur.demandes == []
++        assert (
++            c.post(
++                "/api/v1/rendez-vous", json={**RDV, "debut": "2026-11-02T10:00:00+01:00"}
++            ).status_code
++            == 201
++        )
++        assert (
++            c.post(
++                "/api/v1/rendez-vous", json={**RDV, "debut": "2026-11-02T10:00:00+01:00"}
++            ).status_code
++            == 409
++        )
++        assert len(publieur.demandes) == 1
++
++
++def test_echec_de_publication_ne_fait_pas_echouer_la_requete(settings, depot, cache):
++    publieur = PublieurAMQP("amqp://u:p@courtier.test/v", connecter=FauxCourtier(refuse=True))
++    with TestClient(create_app(settings, depot=depot, cache=cache, publieur=publieur)) as c:
++        assert c.post("/api/v1/rendez-vous", json=RDV).status_code == 201
++        assert c.get("/pret").status_code == 200  # RabbitMQ n'entre pas dans la disponibilité
++
++
++def test_demande_au_format_de_medinotif():
++    class R:
++        id = 5
++        rappel = type("Rappel", (), {"canal": "mail", "contact": "j@exemple.fr"})
++
++    assert demande_confirmation(R) == {
++        "type": "mail",
++        "destinataire": "j@exemple.fr",
++        "modele": "confirmation",
++        "rendez_vous_id": 5,
++    }
++
++
++@pytest.mark.integration
++def test_vrai_rabbitmq(caplog):
++    url = os.environ.get("MEDIAGENDA_TEST_AMQP_URL")
++    if not url:
++        pytest.skip("MEDIAGENDA_TEST_AMQP_URL non définie")
++    caplog.set_level(logging.INFO)
++    publieur = creer_publieur(url)
++    assert publieur.publier(
++        {
++            "type": "sms",
++            "destinataire": "+33612345678",
++            "modele": "confirmation",
++            "rendez_vous_id": 1,
++        }
++    )
++    # Échange inexistant : refus du courtier (canal fermé), compté en échec, pas d'exception.
++    absent = PublieurAMQP(url, echange="echange-absent")
++    assert not absent.publier({"rendez_vous_id": 2})
++    # Clé de routage qui ne mène à aucune file : rendu par le courtier (mandatory) = échec.
++    non_route = PublieurAMQP(url, cle_routage="cle-sans-file")
++    assert not non_route.publier({"rendez_vous_id": 3})
++    for p in (publieur, absent, non_route):
++        p.fermer()

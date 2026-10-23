@@ -1,0 +1,47 @@
+# mediagenda/api — .gitlab-ci.yml : EXTRAIT (M27-E06, DEV-2806). À AJOUTER au pipeline (après
+# migrations:verifier d'E05, même étape « test »).
+#
+# migrations:compatibilite — les migrations DE LA BRANCHE contre le code de la version EN PRODUCTION
+# (N−1). L'image du job EST l'image publiée de cette version : son paquet « mediagenda » est le code
+# N−1 ; le dépôt cloné ($CI_PROJECT_DIR) apporte les migrations et l'essai de fumée de la branche.
+#   1. python -m mediagenda.migrate (outil N−1, présent dans toutes les images jusqu'ici) applique
+#      migrations/V*.sql de la branche sur un PostgreSQL 18 jetable. Même SQL que Flyway ; c'est
+#      migrations:verifier qui éprouve Flyway lui-même.
+#   2. ci/fumee_n_moins_1.py crée, relit, liste et supprime un rendez-vous avec le code N−1.
+# Rouge si une migration casse la version qui tourne encore (contract livré trop tôt, colonne lue
+# renommée, NOT NULL sans défaut…).
+#
+# VERSION_N_MOINS_1 : la version de l'API en PRODUCTION (overlays/prod de mediagenda/deploiement).
+# À mettre à jour dans la MR qui suit chaque promotion en prod (revue : « la prod est-elle bien en
+# vX.Y.Z ? »). Vide ou absente : le job échoue au lieu de passer pour rien.
+variables:
+  VERSION_N_MOINS_1: "<VERSION-EN-PRODUCTION>"
+
+migrations:compatibilite:
+  stage: test
+  tags: [k8s]
+  image:
+    name: registry.par1.medisphere.internal/medisphere/mediagenda-api:${VERSION_N_MOINS_1}
+    entrypoint: [""]
+  services:
+    - name: registry.par1.medisphere.internal/dockerhub/library/postgres:18@sha256:<EMPREINTE-POSTGRES>
+      alias: db
+  variables:
+    POSTGRES_DB: mediagenda
+    POSTGRES_USER: mediagenda
+    # Base jetable, détruite avec le pod du job : un mot de passe fixe n'a aucune valeur.
+    POSTGRES_PASSWORD: essai-ci
+    MEDIAGENDA_DB_URL: postgresql://mediagenda:essai-ci@db:5432/mediagenda
+    MEDIAGENDA_LOG_FORMAT: texte
+  script:
+    - '[ -n "$VERSION_N_MOINS_1" ] && [ "$VERSION_N_MOINS_1" != "<VERSION-EN-PRODUCTION>" ] || { echo "VERSION_N_MOINS_1 non renseignée"; exit 1; }'
+    # Hors du dépôt : le paquet importé doit être celui de l'IMAGE (N−1), pas src/ de la branche.
+    - cd /tmp
+    - python -c 'import importlib.metadata as m, mediagenda; print("code N−1 :", m.version("mediagenda"), mediagenda.__file__)'
+    - for i in $(seq 1 30); do python -c 'import os, psycopg; psycopg.connect(os.environ["MEDIAGENDA_DB_URL"]).close()' 2>/dev/null && break; sleep 2; done
+    - python -m mediagenda.migrate --repertoire "$CI_PROJECT_DIR/migrations"
+    - python "$CI_PROJECT_DIR/ci/fumee_n_moins_1.py"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: [migrations/**/*, ci/fumee_n_moins_1.py]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

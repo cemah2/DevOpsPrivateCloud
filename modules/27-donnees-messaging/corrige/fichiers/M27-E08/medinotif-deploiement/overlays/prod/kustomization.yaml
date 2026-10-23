@@ -1,0 +1,33 @@
+# medinotif/deploiement — overlays/prod/kustomization.yaml (M27-E08, DEV-2808)
+# Application medinotif-prod (ApplicationSet « medinotif »), synchronisée À LA MAIN après MR approuvée.
+# Différences avec la recette : deux réplicas sur deux nœuds, PodDisruptionBudget, secret de prod.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: medinotif-prod
+resources:
+  - ../../base
+  - amqp.yaml
+  - pdb.yaml
+labels:
+  - pairs:
+      medisphere.internal/environnement: prod
+    includeSelectors: false
+configMapGenerator:
+  # Racine MédiSphère (certificat PUBLIC), comme en recette.
+  - name: racine-medisphere
+    files:
+      - medisphere-root-ca.crt
+patches:
+  - target:
+      kind: Deployment
+      name: medinotif
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: {name: MEDINOTIF_VERSION, value: "<VERSION-MEDINOTIF>"}
+  - path: haute-disponibilite.yaml
+# Image signée PAR EMPREINTE (Kyverno l'exige en prod) : la MÊME que celle qui a tourné en recette.
+images:
+  - name: registry.par1.medisphere.internal/medisphere/medinotif-worker
+    newTag: <VERSION-MEDINOTIF>
+    digest: sha256:<EMPREINTE-MEDINOTIF>

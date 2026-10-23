@@ -1,0 +1,28 @@
+# ~/m27/e06/schema-essai.yaml — grappe JETABLE pour la file d'attente des verrous (M27-E06, section A).
+# wb-essais : kubectl apply permis. Supprimée à la fin : kubectl -n wb-essais delete cluster schema-essai
+# Schéma : V1 et V2 de mediagenda/api, appliqués par psql DANS le pod (entrée standard, sans TTY) :
+#   kubectl -n wb-essais exec -i schema-essai-1 -c postgres -- psql -v ON_ERROR_STOP=1 -d app \
+#     < ~/src/mediagenda-api/migrations/V1__init.sql        (puis V2__index.sql)
+# Quelques milliers de lignes :
+#   kubectl -n wb-essais exec -i schema-essai-1 -c postgres -- psql -d app -c "INSERT INTO rendez_vous
+#     (patient, praticien, debut) SELECT 'Patient ' || g, 'dr-' || (g % 20), now() + g * interval '15 min'
+#     FROM generate_series(1, 20000) g"
+# Sessions de l'essai : kubectl cnpg psql schema-essai -n wb-essais -- -d app (une par terminal).
+# (Base « app » : défaut de CloudNativePG pour une grappe sans bootstrap ; psql dans le pod = postgres.)
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: schema-essai
+  namespace: wb-essais
+spec:
+  instances: 1
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
+  storage:
+    storageClass: ceph-rbd
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 512Mi

@@ -1,0 +1,7 @@
+# plateforme/k8s — .gitlab/agents/k8s-par1/config.yaml (EXTRAIT M29-E14) : projet à AJOUTER à ci_access.
+# Le contexte du job sera « plateforme/k8s:k8s-par1 » ; l'espace par défaut évite d'oublier « -n k6 ».
+ci_access:
+  projects:
+    # … projets existants (formation/ci-labo, M19-E18) …
+    - id: plateforme/resilience
+      default_namespace: k6

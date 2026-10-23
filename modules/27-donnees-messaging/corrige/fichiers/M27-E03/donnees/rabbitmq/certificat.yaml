@@ -1,0 +1,34 @@
+# plateforme/donnees — rabbitmq/certificat.yaml (M27-E03, PLAT-2803)
+# Certificat serveur de la grappe, émis par la PKI de services d'OpenBao (ClusterIssuer
+# openbao-services, M25-E16). Le rôle pki-services/services-k8s n'accepte que des noms sous « svc »
+# ou « svc.cluster.local » (sous-domaines, jokers compris), ni IP ni localhost, et 72 h au plus.
+#   rabbitmq.messagerie.svc[.cluster.local]           Service client (AMQPS 5671, gestion TLS 15671) ;
+#                                                      c'est aussi l'hôte qu'utilise le Topology Operator
+#   *.rabbitmq-nodes.messagerie.svc[.cluster.local]   chaque nœud (Service sans tête rabbitmq-nodes)
+# cert-manager renouvelle 24 h avant l'échéance ; RabbitMQ (Erlang) relit les fichiers PEM quand son
+# cache expire (quelques minutes) : à constater en E03 (date du certificat présenté sur 5671 après un
+# renouvellement forcé : « cmctl renew rabbitmq-tls -n messagerie »).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rabbitmq-tls
+spec:
+  secretName: rabbitmq-tls
+  duration: 72h
+  renewBefore: 24h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+    - digital signature
+  dnsNames:
+    - rabbitmq.messagerie.svc
+    - rabbitmq.messagerie.svc.cluster.local
+    - "*.rabbitmq-nodes.messagerie.svc"
+    - "*.rabbitmq-nodes.messagerie.svc.cluster.local"
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: openbao-services

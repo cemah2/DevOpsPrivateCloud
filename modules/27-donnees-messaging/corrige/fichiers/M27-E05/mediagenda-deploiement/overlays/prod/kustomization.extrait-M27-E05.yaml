@@ -1,0 +1,11 @@
+# mediagenda/deploiement — overlays/prod/kustomization.yaml : EXTRAIT (M27-E05, DEV-2805)
+# En prod, TOUTE image par condensé (Kyverno exiger-digest, M26-E16) : celle du Job aussi. Les deux
+# empreintes (API, migrations) sont relevées et promues ENSEMBLE par outils/promouvoir.sh.
+images:
+  - name: registry.par1.medisphere.internal/medisphere/mediagenda-api
+    newTag: <VERSION-PROMUE>
+    digest: sha256:<DIGEST-API>
+  - name: registry.par1.medisphere.internal/medisphere/mediagenda-migrations
+    newTag: <VERSION-PROMUE>
+    digest: sha256:<DIGEST-MIGRATIONS>
+  # … Valkey et PostgreSQL inchangés (M26-E21) …

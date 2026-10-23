@@ -1,0 +1,12 @@
+# À INTÉGRER dans plateforme/charts-miroir — charts.yaml (format de M20-E13), M28-E06 (PLAT-2906).
+# Chart publié en OCI par le projet Backstage (pas d'index HTTP) : l'empreinte est celle de l'archive
+# tirée par « helm pull oci://ghcr.io/backstage/charts/backstage --version 2.10.2 » (sha256sum),
+# relevée à la rédaction le 23/10/2026 (le « Digest » affiché par helm pull est celui du MANIFESTE
+# OCI, sha256:e95965…, pas celui de l'archive : ne pas les confondre).
+charts:
+  # … entrées existantes …
+  - nom: backstage
+    depot: oci://ghcr.io/backstage/charts/backstage
+    version: 2.10.2
+    empreinte: sha256:ca5b5ff9f0a078189f0365275ebf5b845f05fb69d446a9e626edbcd96dca2b17
+    usage: "Portail développeurs (M28-E06), Application plateforme/gitops plateforme/portail.yaml"

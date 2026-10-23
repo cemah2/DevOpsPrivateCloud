@@ -1,0 +1,10 @@
+# plateforme/portail — .dockerignore (M28-E06) : celui de la construction multi-étapes de la
+# documentation (les sources sont nécessaires, pas les sorties ni les dépendances de l'hôte).
+dist-types
+node_modules
+packages/*/dist
+packages/*/node_modules
+plugins/*/dist
+plugins/*/node_modules
+*.local.yaml
+.git

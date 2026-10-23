@@ -1,0 +1,83 @@
+# medinotif/deploiement — overlays/recette/keda/scaledobject.yaml (M28-E03, refait en M28-E13 : PLAT-2913)
+# Remplace le fichier de M28-E03. Champs vérifiés dans « ScaledObject specification » et les pages des
+# scalers RabbitMQ Queue, Cron et Prometheus de KEDA 2.21 (et contre la CRD de la v2.21.0).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: medinotif
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: medinotif
+  # Interrogation des sources quand MédiNotif est à 0 (c'est KEDA qui active) : 15 s = au pire 15 s
+  # avant la décision, pour 4 requêtes/min sur l'API de gestion. Entre 1 et N, l'HPA (15 s,
+  # kube-controller-manager) interroge l'adaptateur de KEDA.
+  pollingInterval: 15
+  # Retour à 0 après 10 min sans activité : évite d'éteindre entre deux vagues d'une même campagne.
+  cooldownPeriod: 600
+  # Pas de mise à zéro dans les 2 min qui suivent la création du ScaledObject (redéploiement).
+  initialCooldownPeriod: 120
+  # Recette : on dort quand la file est vide. idleReplicaCount n'est pas utile ici : il ne sert que
+  # pour repartir DIRECTEMENT à un minReplicaCount > 1 (seule valeur admise : 0, inférieure au min).
+  minReplicaCount: 0
+  maxReplicaCount: 5
+  # Repli : après 3 échecs consécutifs d'un déclencheur, KEDA sert à l'HPA une valeur qui donne
+  # 2 réplicas… ou garde l'effectif courant s'il est plus élevé (on ne réduit pas en pleine campagne).
+  # N'agit que lorsque l'HPA calcule (1 ↔ N) : à 0 réplica, une source en erreur n'active rien.
+  fallback:
+    failureThreshold: 3
+    replicas: 2
+    behavior: currentReplicasIfHigher
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        # Montée : immédiate, +100 % ou +2 pods toutes les 15 s, la plus forte des deux.
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          selectPolicy: Max
+          policies:
+            - {type: Percent, value: 100, periodSeconds: 15}
+            - {type: Pods, value: 2, periodSeconds: 15}
+        # Descente (M28-E03) : la recommandation la plus haute des 5 dernières min, un pod par minute.
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          selectPolicy: Min
+          policies:
+            - {type: Pods, value: 1, periodSeconds: 60}
+  triggers:
+    # File (M28-E03) : ≈ 20 messages/s par pod ; 100 messages d'avance par pod = ≈ 5 s de retard.
+    # Activation : dès qu'il y a plus de 0 message (prêt ou non acquitté).
+    - type: rabbitmq
+      name: file-notifications
+      metadata:
+        protocol: http
+        vhostName: medinotif-recette
+        queueName: notifications
+        mode: QueueLength
+        value: "100"
+        activationValue: "0"
+        excludeUnacknowledged: "false"
+      authenticationRef:
+        name: medinotif-rabbitmq
+    # Mini-campagne de recette : 14 h 00 (Paris), jours ouvrés. Monte AVANT la campagne.
+    - type: cron
+      name: campagne
+      metadata:
+        timezone: Europe/Paris
+        start: "50 13 * * 1-5"
+        end: "30 14 * * 1-5"
+        desiredReplicas: "2"
+    # Anticipation : débit de publication de MédiAgenda (avant que la file ne grossisse).
+    # Thanos Query : vue dédupliquée des deux Prometheus (une requête sur kps-prometheus tombe sur l'un
+    # ou l'autre réplica, aux valeurs légèrement différentes : décisions qui oscillent).
+    - type: prometheus
+      name: publication-mediagenda
+      metadata:
+        serverAddress: http://thanos-query.supervision.svc.cluster.local:9090
+        query: sum(rate(mediagenda_notifications_total{namespace="mediagenda-recette"}[2m]))
+        threshold: "20"
+        activationThreshold: "1"
+        # Aucune publication = série vide : lue comme 0 (comportement par défaut, rendu explicite).
+        ignoreNullValues: "true"
+        timeout: "3s"

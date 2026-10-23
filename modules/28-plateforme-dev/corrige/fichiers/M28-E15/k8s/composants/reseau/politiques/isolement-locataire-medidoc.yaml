@@ -1,0 +1,36 @@
+# composants/reseau/politiques/isolement-locataire-medidoc.yaml — M28-E15 (SEC-2915)
+# E15 — trou n°2 : les cloisons isolement-<espace> du M15 sont posées espace par espace ; un espace créé
+# en libre-service n'en a pas. Cette cloison suit l'ÉTIQUETTE DU LOCATAIRE que Capsule pose sur chaque
+# espace (capsule.clastix.io/tenant) : tout espace présent ou futur du locataire est couvert, sans
+# fichier à ajouter. Ce sont des REFUS (ils l'emportent sur toute autorisation) ; enableDefaultDeny à
+# false : elle ne fait passer personne en refus par défaut (c'est le rôle de refus-par-defaut).
+# Exception écrite (M23-E06) : l'API MédiAgenda (app.kubernetes.io/name: mediagenda) appelle MédiDoc
+# en 8080 ; la règle (b) refuse tout le locataire mediagenda SAUF ce pod (autorisé ensuite, ou non,
+# par les politiques de l'espace, medidoc-entree-mediagenda).
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: isolement-locataire-medidoc
+spec:
+  description: "Cloison du locataire medidoc : aucun échange avec les autres locataires sauf l'API MédiAgenda → MédiDoc (SEC-2915)"
+  endpointSelector:
+    matchLabels:
+      io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant: medidoc
+  enableDefaultDeny:
+    ingress: false
+    egress: false
+  ingressDeny:
+    - fromEndpoints:
+        # (a) tout autre locataire que medidoc et mediagenda
+        - matchExpressions:
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: Exists}
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: NotIn, values: [medidoc, mediagenda]}
+        # (b) le locataire mediagenda, sauf l'API
+        - matchExpressions:
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: In, values: [mediagenda]}
+            - {key: app.kubernetes.io/name, operator: NotIn, values: [mediagenda]}
+  egressDeny:
+    - toEndpoints:
+        - matchExpressions:
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: Exists}
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: NotIn, values: [medidoc]}

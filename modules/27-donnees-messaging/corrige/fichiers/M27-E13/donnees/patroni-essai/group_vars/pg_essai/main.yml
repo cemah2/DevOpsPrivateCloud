@@ -1,0 +1,10 @@
+# group_vars/pg_essai/main.yml — réglages non secrets de l'essai Patroni (M27-E13).
+patroni_version: "4.1.5"
+patroni_scope: pg-essai
+patroni_venv: /opt/patroni
+postgresql_majeure: 18
+postgresql_data_dir: "/var/lib/postgresql/{{ postgresql_majeure }}/{{ patroni_scope }}"
+postgresql_bin_dir: "/usr/lib/postgresql/{{ postgresql_majeure }}/bin"
+etcd_jeton_grappe: pg-essai-m27
+reseau_essai: 10.10.99.0/24
+# HAProxy de démonstration sur pg-patroni01 (fixé dans le playbook).

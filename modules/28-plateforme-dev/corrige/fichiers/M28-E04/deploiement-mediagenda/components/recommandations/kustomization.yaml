@@ -1,0 +1,6 @@
+# mediagenda/deploiement — components/recommandations/kustomization.yaml (M28-E04, PLAT-2904)
+# Recommandations de ressources du VPA (mode « Off ») pour les environnements à Rollout (recette, prod).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - vpa.yaml

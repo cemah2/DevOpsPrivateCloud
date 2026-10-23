@@ -1,0 +1,26 @@
+# plateforme/k8s — espaces/medinotif-prod/00-namespace.yaml (M27-E08, DEV-2808)
+# Espace de MédiNotif en production (copie de medinotif-recette, M27-E04). Étiquettes :
+#   medisphere.internal/equipe: mediagenda   MédiNotif appartient à l'équipe de Julien Petit (pas de
+#                                            groupe dédié) ; déclenche la GeneratingPolicy Kyverno
+#                                            networkpolicy-par-defaut (M26-E16 : refus-par-defaut +
+#                                            sortie-dns), les règles exiger-limites et
+#                                            interdire-identifiants-url, la collecte de Prometheus
+#                                            (collecte-prometheus, M21-E07, port 9100 ajouté) ;
+#   medisphere.internal/environnement        prod : signatures ET condensés exigés par Kyverno (M26).
+#   PAS d'exposition : MédiNotif ne reçoit aucun trafic entrant (worker).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: medinotif-prod
+  labels:
+    medisphere.internal/equipe: mediagenda
+    medisphere.internal/environnement: prod
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+  annotations:
+    medisphere.internal/responsable: "julien.petit"
+    medisphere.internal/ticket: "DEV-2804"

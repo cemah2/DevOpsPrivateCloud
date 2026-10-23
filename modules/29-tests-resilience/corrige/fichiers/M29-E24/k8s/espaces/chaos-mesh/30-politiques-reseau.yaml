@@ -1,0 +1,31 @@
+# plateforme/k8s — espaces/chaos-mesh/30-politiques-reseau.yaml (M29-E24, PLAT-3024)
+# À ranger à côté de la définition de l'espace chaos-mesh (M29-E09).
+# Le chaos-daemon tourne PRIVILÉGIÉ, en hostPID, avec le socket de containerd : son API gRPC (31767) sait
+# entrer dans n'importe quel conteneur du nœud et y exécuter tc, iptables, stress-ng… Le TLS mutuel du
+# chart (chaosDaemon.mtls.enabled: true par défaut) authentifie le contrôleur ; on ajoute une barrière
+# réseau : seul le contrôleur de Chaos Mesh joint 31767 ; Prometheus joint 31766 (métriques, HTTP).
+# Ce que cela n'empêche pas : un attaquant root sur un nœud (il a déjà tout) ; un contrôleur compromis.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: chaos-daemon-entree
+  namespace: chaos-mesh
+spec:
+  description: "chaos-daemon : gRPC réservé au contrôleur de Chaos Mesh, métriques à Prometheus"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: chaos-daemon
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: chaos-mesh
+            app.kubernetes.io/component: controller-manager
+      toPorts:
+        - ports: [{port: "31767", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports: [{port: "31766", protocol: TCP}]
+    - fromEntities: [host]

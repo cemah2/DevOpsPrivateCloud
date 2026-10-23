@@ -1,0 +1,136 @@
+# plateforme/k8s — espaces/mediagenda-recette/50-mediagenda-db.yaml (M16-E18, E19 ; M25-E14 ; M27-E02, PLAT-2802)
+# M27-E02 modifie le Cluster sur quatre points, marqués « M27-E02 » (le reste est INCHANGÉ depuis
+# M25-E14 : garde TON fichier et reporte seulement ces blocs) :
+#   imageName                   reconstruction la plus récente de 18.6, PAR EMPREINTE (étape 13)
+#   postgresql.parameters       pg_stat_statements.* : l'opérateur ajoute la bibliothèque à
+#                               shared_preload_libraries et crée l'extension dans chaque base
+#   managed.roles               mediagenda_lecture (groupe, sans connexion) et lucas_lecture
+#                               (connexion, expire seule à J+7)
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  description: "Base de recette de MédiAgenda (DEV-1718)"
+  instances: 3
+  # M27-E02 : la mineure ne change pas (18.6 est la dernière publiée), l'image si : CloudNativePG
+  # reconstruit régulièrement ses images (paquets Debian). Étiquette horodatée ET empreinte : une
+  # étiquette mobile (« 18.6-minimal-trixie ») changerait d'image sans que Git le voie.
+  # Empreinte relevée sur le cache Harbor : à TA valeur.
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-202610190957-minimal-trixie@sha256:<EMPREINTE-POSTGRESQL>
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+
+  bootstrap:
+    initdb:
+      database: mediagenda
+      owner: mediagenda
+      encoding: UTF8
+
+  storage:
+    storageClass: ceph-rbd
+    size: 5Gi
+
+  postgresql:
+    parameters:
+      shared_buffers: 128MB
+      max_connections: "100"
+      timezone: Europe/Paris
+      # --- M27-E02 : pg_stat_statements --------------------------------------------------------
+      # Un paramètre « pg_stat_statements.* » suffit : l'opérateur ajoute la bibliothèque à
+      # shared_preload_libraries (redémarrage des trois instances, réplicas d'abord puis bascule)
+      # et exécute CREATE EXTENSION IF NOT EXISTS dans chaque base qui accepte les connexions.
+      pg_stat_statements.max: "5000"
+      pg_stat_statements.track: top
+    synchronous:
+      method: any
+      number: 1
+      dataDurability: required
+
+  affinity:
+    enablePodAntiAffinity: true
+    podAntiAffinityType: required
+    topologyKey: kubernetes.io/hostname
+    tolerations:
+      - key: dedie
+        operator: Equal
+        value: bdd
+        effect: NoSchedule
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+  enableSuperuserAccess: false
+
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: cnpg-s3
+
+  managed:
+    roles:
+      # --- M25-E14 (inchangés ; le passwordSecret d'openbao a été retiré après rotate-root) -----
+      - name: mediagenda_api
+        ensure: present
+        comment: "Droits de l'API MédiAgenda (comptes dynamiques d'OpenBao) — M25-E14"
+        login: false
+        inherit: true
+      - name: openbao
+        ensure: present
+        comment: "OpenBao, moteur db-mediagenda (identifiants dynamiques) — M25-E14"
+        login: true
+        createrole: true
+        superuser: false
+        createdb: false
+        inherit: false
+        connectionLimit: 10
+        inRoles:
+          - mediagenda
+          - mediagenda_api
+      # --- M27-E02 -----------------------------------------------------------------------------
+      # Groupe en LECTURE : porte les SELECT (posés par sql/preparer-lecture.sql, que CloudNativePG
+      # ne sait pas déclarer). Aucune connexion : on n'utilise jamais un rôle de groupe directement.
+      - name: mediagenda_lecture
+        ensure: present
+        comment: "Lecture seule des données de MédiAgenda (analyse, support) — M27-E02"
+        login: false
+        inherit: true
+      # Accès temporaire de Lucas (PLAT-2802) : connexion, deux sessions au plus, expiration
+      # AUTOMATIQUE par PostgreSQL (VALID UNTIL) à la date ci-dessous. À l'échéance, la MR suivante
+      # passe ensure: absent (le rôle n'existe plus du tout), puis retire le bloc.
+      #   inRoles   : CloudNativePG retire toute appartenance absente de cette liste.
+      #   inherit   : le compte HÉRITE des droits de mediagenda_lecture (sinon il faudrait SET ROLE).
+      - name: lucas_lecture
+        ensure: present
+        comment: "Accès temporaire de Lucas Martin, analyse des requêtes — PLAT-2802, expire seul"
+        login: true
+        inherit: true
+        superuser: false
+        createdb: false
+        createrole: false
+        connectionLimit: 2
+        validUntil: "2026-10-30T18:00:00Z"
+        inRoles:
+          - mediagenda_lecture
+        passwordSecret:
+          name: lecture-lucas
+    services:
+      additional:
+        - selectorType: rw
+          serviceTemplate:
+            metadata:
+              name: mediagenda-db-openbao
+              annotations:
+                lbipam.cilium.io/ips: 10.10.41.64
+            spec:
+              type: LoadBalancer
+              externalTrafficPolicy: Local

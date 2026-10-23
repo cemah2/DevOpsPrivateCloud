@@ -1,0 +1,58 @@
+# plateforme/gitops — applications/medinotif.yaml (M27-E04, DEV-2804 ; prod en E08)
+# UN générateur pour les environnements de MédiNotif, sur le modèle de « mediagenda » (M20-E10 à
+# E41) : liste explicite, applicationsSync create-update (jamais de suppression d'Application par le
+# contrôleur), preserveResourcesOnDeletion, prod synchronisée À LA MAIN (templatePatch).
+# M27-E08 ajoute l'élément « prod ». M28-E03 ajoute ignoreDifferences sur /spec/replicas (KEDA).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: medinotif
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - env: recette
+            auto: true
+  syncPolicy:
+    applicationsSync: create-update
+    preserveResourcesOnDeletion: true
+  template:
+    metadata:
+      name: "medinotif-{{ .env }}"
+      labels:
+        medisphere.internal/equipe: mediagenda
+        medisphere.internal/application: medinotif
+        medisphere.internal/environnement: "{{ .env }}"
+      annotations:
+        argocd.argoproj.io/compare-options: ServerSideDiff=true
+    spec:
+      project: medinotif
+      source:
+        repoURL: https://git01.par1.medisphere.internal/medinotif/deploiement.git
+        targetRevision: main
+        path: "overlays/{{ .env }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "medinotif-{{ .env }}"
+  templatePatch: |
+    spec:
+      syncPolicy:
+        {{- if .auto }}
+        automated:
+          prune: true
+          selfHeal: true
+        {{- end }}
+        syncOptions:
+          - ServerSideApply=true
+          - CreateNamespace=false
+          - PruneLast=true
+          - FailOnSharedResource=true
+        retry:
+          limit: 3
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m

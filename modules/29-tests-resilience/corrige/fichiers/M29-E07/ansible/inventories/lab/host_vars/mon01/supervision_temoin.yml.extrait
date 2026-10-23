@@ -1,0 +1,8 @@
+# host_vars/mon01/supervision_temoin.yml — EXTRAIT : groupe à AJOUTER à supervision_temoin_sondes
+# (M29-E07, PLAT-3007). Le module goss_sante est ajouté à blackbox.yml.j2 (extrait voisin).
+  - nom: goss
+    module: goss_sante
+    etiquettes: {equipe: plateforme}
+    cibles:
+      - http://dns02.par1.medisphere.internal:8099/healthz
+      - http://nbx01.par1.medisphere.internal:8099/healthz

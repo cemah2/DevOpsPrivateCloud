@@ -1,0 +1,17 @@
+{
+  "description": "Référence de performance de MédiAgenda en recette (TestRun mediagenda-recette-distribue, 4 exécuteurs, 40 itérations/s, palier 5 min). Mesurée côté serveur (histogramme de MédiAgenda) et côté client (k6).",
+  "mesuree_le": "2026-10-23T02:10:00Z",
+  "testid": "nuit-<ID-DU-PIPELINE-DE-REFERENCE>",
+  "version_mediagenda": "<VERSION-DE-L-IMAGE-EN-RECETTE>",
+  "p95_s": 0.112,
+  "p99_s": 0.205,
+  "taux_erreurs": 0.0,
+  "debit_rps": 158.4,
+  "tolerances": {
+    "p95_relative": 0.20,
+    "p99_relative": 0.30,
+    "taux_erreurs_absolu": 0.005,
+    "debit_relatif_min": -0.10
+  },
+  "regle_de_mise_a_jour": "Par MR relue par Julien Petit (équipe MédiAgenda) ET la plateforme, avec le lien du pipeline de mesure et la raison (changement voulu de performance, de charge ou de dimensionnement). Jamais pour « faire passer » une régression. RB-295."
+}

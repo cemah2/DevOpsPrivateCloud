@@ -1,0 +1,20 @@
+# plateforme/donnees — rabbitmq/kustomization.yaml (M27-E03, PLAT-2803)
+# Application Argo CD « rabbitmq » (chemin rabbitmq, espace messagerie).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: messagerie
+resources:
+  - certificat.yaml
+  - rabbitmqcluster.yaml
+  - pdb.yaml
+  - reseau.yaml
+  - httproute.yaml
+  - utilisateur-wb-checks.yaml
+configMapGenerator:
+  # Racine MédiSphère (certificat PUBLIC) : RabbitMQ vérifie le certificat de Keycloak
+  # (auth_oauth2.https.cacertfile) quand il télécharge les clés de signature des jetons.
+  - name: racine-medisphere
+    files:
+      - medisphere-root-ca.crt
+    options:
+      disableNameSuffixHash: true

@@ -1,0 +1,67 @@
+# plateforme/k8s — espaces/portail/60-portail-db-sauvegarde.yaml (M28-E16, PLAT-2916)
+# Sauvegarde de portail-db sur le modèle de mediagenda-db (M16-E19, M25) : plugin Barman Cloud 0.15
+# vers s3://cnpg-k8s-par1/portail-db/ (s3-01). Identifiants par ESO : « portail » est un espace de
+# plateforme, il a droit au ClusterSecretStore openbao (kv/plateforme/cnpg-s3, M25 — aligne la clé
+# et les propriétés sur ton inventaire des secrets). endpointCA exige un SECRET (clé ca.crt) : le
+# ConfigMap racine-medisphere de E06 ne suffit pas ; crée le Secret medisphere-ca comme dans
+# mediagenda-recette (M16-E19, puis M25) — la racine est publique, seule la forme change.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: cnpg-s3
+  namespace: portail
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: cnpg-s3
+    creationPolicy: Owner
+  data:
+    - secretKey: ACCESS_KEY_ID
+      remoteRef: {key: plateforme/cnpg-s3, property: ACCESS_KEY_ID}
+    - secretKey: ACCESS_SECRET_KEY
+      remoteRef: {key: plateforme/cnpg-s3, property: ACCESS_SECRET_KEY}
+---
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: cnpg-s3
+  namespace: portail
+spec:
+  # 14 jours de restauration possibles (sauvegardes de base + WAL) : le catalogue se reconstruit
+  # depuis GitLab ; ce qu'on protège, ce sont les tâches du scaffolder et l'historique.
+  retentionPolicy: "14d"
+  configuration:
+    destinationPath: s3://cnpg-k8s-par1/
+    endpointURL: https://s3-01.par1.medisphere.internal:8333
+    endpointCA:
+      name: medisphere-ca
+      key: ca.crt
+    s3Credentials:
+      accessKeyId:
+        name: cnpg-s3
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: cnpg-s3
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: gzip
+    data:
+      compression: gzip
+---
+# Sauvegarde nocturne (cron CNPG à SIX champs, secondes en tête) : 02:30:00 UTC.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: portail-db-nuit
+  namespace: portail
+spec:
+  schedule: "0 30 2 * * *"
+  backupOwnerReference: self
+  cluster:
+    name: portail-db
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

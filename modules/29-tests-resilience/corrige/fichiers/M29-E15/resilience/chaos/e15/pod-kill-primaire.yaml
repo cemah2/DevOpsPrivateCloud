@@ -1,0 +1,34 @@
+# plateforme/resilience — chaos/e15/pod-kill-primaire.yaml (M29-E15, PLAT-3015)
+#
+# Hypothèse : le primaire de mediagenda-db tué sous charge (20 itérations/s), CloudNativePG promeut la
+#   réplique synchrone en moins de 30 s ; aucune transaction validée n'est perdue (réplication
+#   synchrone) ; l'API renvoie des 5xx pendant moins de 30 s, puis le p95 revient sous 250 ms en
+#   moins de 2 min ; le pooler reconnecte seul (il vise le Service mediagenda-db-rw).
+# Mesure : 5xx par seconde (sum by (code) (rate(mediagenda_http_requests_total{namespace="mediagenda-recette"}[15s]))),
+#   p95, k6 http_req_failed ; status.currentPrimary / currentPrimaryTimestamp du Cluster ; événements ;
+#   journaux du pooler (kubectl -n mediagenda-recette logs -l cnpg.io/poolerName=mediagenda-db-pooler-rw).
+# Critère d'arrêt : pas de nouveau primaire au bout de 2 min → kubectl cnpg status, RB du M16.
+# Arrêt d'urgence : un pod-kill est instantané ; « mode: one » et une durée courte : l'expérience ne tue
+#   qu'UN pod (celui qui est primaire au moment de l'injection). Supprime l'objet après.
+#
+# Pourquoi gracePeriod: 0 : on veut une panne SUBIE (nœud qui meurt, processus tué), pas un arrêt propre
+# (avec délai de grâce, l'instance arrêterait PostgreSQL proprement : c'est presque un switchover).
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: m29-e15-pod-kill-primaire
+  namespace: chaos-experiences
+  labels:
+    medisphere.internal/exercice: m29-e15
+  annotations:
+    medisphere.internal/ticket: PLAT-3015
+spec:
+  action: pod-kill
+  mode: one
+  gracePeriod: 0
+  selector:
+    namespaces: [mediagenda-recette]
+    labelSelectors:
+      cnpg.io/cluster: mediagenda-db
+      cnpg.io/instanceRole: primary
+  duration: 30s

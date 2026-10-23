@@ -1,0 +1,58 @@
+# plateforme/tofu-modules — .gitlab-ci.yml : job AJOUTÉ en M29-E08 (PLAT-3008).
+# Terratest crée une vraie VM : MANUEL, jamais automatique (coût, durée, quota de VMID), sur
+# runner01 (exécuteur shell, Go 1.26 et tofu installés par le rôle gitlab_runner), un seul à la
+# fois dans toute l'instance (resource_group). Proposé dans les MR qui touchent vm-debian et sur
+# main ; la MR n'est pas bloquée par lui (allow_failure: true : un job manuel non lancé ne doit
+# pas empêcher la fusion) — la règle d'équipe est de le LANCER avant toute fusion qui change
+# la création de la VM (relu par Karim).
+#
+# Variables du projet, PROTÉGÉES et MASQUÉES (branches protégées seulement, comme plateforme/infra) :
+#   PROXMOX_VE_ENDPOINT          https://pve01.par1.medisphere.internal:8006/   (ou <IP-PVE01>)
+#   PROXMOX_VE_API_TOKEN         wb-terratest@pve!terratest=<SECRET>  (jamais celui de wb-tofu)
+#   TF_VAR_netbox_api_token      jeton du compte d'automatisation NetBox (netbox-tofu.env)
+terratest:vm-debian:
+  stage: test
+  tags: [shell]
+  resource_group: terratest
+  # Délais emboîtés : attentes du test < échéance de go test − 8 min (margeDestruction, dans le test)
+  # < go test -timeout 35m < timeout du job 40m. go test qui expire PANIQUE sans t.Cleanup : seule
+  # l'échéance interne du test laisse le temps de détruire la VM.
+  timeout: 40m
+  interruptible: false
+  variables:
+    GOFLAGS: -mod=readonly
+    TT_LANCEMENT: $CI_PIPELINE_URL
+  script:
+    - cd vm-debian/test
+    - go version
+    - tofu version
+    - test -n "$PROXMOX_VE_API_TOKEN" || { echo "Variables protégées absentes (branche non protégée ?)"; exit 1; }
+    - go test -tags integration -run TestVmDebian -timeout 35m -count=1 -v ./... 2>&1 | tee terratest.log
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - vm-debian/test/terratest.log
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - vm-debian/**/*
+      when: manual
+      allow_failure: true
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      allow_failure: true
+
+# Compilation et analyse statique du test à CHAQUE MR (rapide, ne crée rien).
+terratest:compiler:
+  stage: test
+  tags: [shell]
+  script:
+    - cd vm-debian/test
+    - test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+    - go vet -tags integration ./...
+    - go test -tags integration -count=1 -run '^$' ./...
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - vm-debian/test/**/*

@@ -1,0 +1,42 @@
+# plateforme/k8s — espaces/mediagenda-recette/52-lecture-lucas.yaml (M27-E02, PLAT-2802)
+# Mot de passe du rôle géré « lucas_lecture », lu dans OpenBao par le SecretStore « openbao » de
+# l'espace (rôle eso-mediagenda-recette : kv/mediagenda/recette/* seulement, M25-E13).
+# CloudNativePG exige un Secret de type kubernetes.io/basic-auth avec les clés « username » (égale
+# au nom du rôle) et « password » ; il stocke le mot de passe en SCRAM-SHA-256 dans PostgreSQL et
+# réapplique le mot de passe à chaque changement du Secret (suivi de sa version).
+# Écrire la valeur, sans qu'elle passe par l'historique du shell :
+#   admin@adm01:~$ openssl rand -base64 24 | tr -d '/+=' | head -c 24 > /dev/shm/mdp && \
+#       bao kv put -mount=kv mediagenda/recette/lecture-lucas username=lucas_lecture password=@/dev/shm/mdp && \
+#       shred -u /dev/shm/mdp
+# Le mot de passe est ensuite transmis à Lucas par le canal habituel (bao kv get par son propre
+# accès OIDC si une politique le permet, sinon remise en main propre), jamais par ticket.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: lecture-lucas
+  namespace: mediagenda-recette
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: openbao
+  target:
+    name: lecture-lucas
+    creationPolicy: Owner
+    template:
+      type: kubernetes.io/basic-auth
+      metadata:
+        labels:
+          # Documentation de CNPG 1.30 : un changement de mot de passe dans un Secret ÉTIQUETÉ
+          # est appliqué aussitôt ; sans l'étiquette, seulement à une réconciliation ultérieure.
+          cnpg.io/reload: "true"
+          medisphere.internal/source: openbao
+  data:
+    - secretKey: username
+      remoteRef:
+        key: mediagenda/recette/lecture-lucas
+        property: username
+    - secretKey: password
+      remoteRef:
+        key: mediagenda/recette/lecture-lucas
+        property: password

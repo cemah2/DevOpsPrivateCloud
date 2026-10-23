@@ -1,0 +1,9 @@
+# mediagenda/deploiement — components/dependances/kustomization.yaml (M27-E07) : Valkey en SORT.
+# valkey.yaml est supprimé du dépôt, et la NetworkPolicy « valkey » de politiques.yaml aussi : les deux
+# vivent désormais dans components/valkey (mêmes noms : Argo CD met à jour les objets, il n'en crée
+# pas d'autres). Ne garder Valkey aux deux endroits ferait échouer le rendu (identifiants en double).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - postgresql.yaml
+  - politiques.yaml        # sans le bloc « name: valkey »

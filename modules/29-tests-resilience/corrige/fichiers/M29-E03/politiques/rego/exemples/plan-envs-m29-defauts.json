@@ -1,0 +1,215 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.13.0",
+  "resource_changes": [
+    {
+      "address": "module.essai[\"m29-essai\"].proxmox_virtual_environment_vm.vm",
+      "mode": "managed",
+      "type": "proxmox_virtual_environment_vm",
+      "name": "vm",
+      "provider_name": "registry.opentofu.org/bpg/proxmox",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "acpi": true,
+          "agent": [
+            {
+              "enabled": true,
+              "timeout": "15m",
+              "trim": false,
+              "type": "virtio",
+              "wait_for_ip": []
+            }
+          ],
+          "amd_sev": [],
+          "audio_device": [],
+          "bios": "seabios",
+          "cdrom": [],
+          "clone": [],
+          "cpu": [
+            {
+              "affinity": null,
+              "architecture": null,
+              "cores": 1,
+              "flags": null,
+              "hotplugged": 0,
+              "limit": 0,
+              "numa": false,
+              "sockets": 1,
+              "type": "qemu64"
+            }
+          ],
+          "delete_unreferenced_disks_on_destroy": true,
+          "description": null,
+          "disk": [],
+          "efi_disk": [],
+          "hook_script_file_id": null,
+          "hostpci": [],
+          "initialization": [],
+          "keyboard_layout": "en-us",
+          "kvm_arguments": null,
+          "machine": null,
+          "memory": [
+            {
+              "dedicated": 1024,
+              "floating": 0,
+              "hugepages": null,
+              "keep_hugepages": false,
+              "shared": 0
+            }
+          ],
+          "migrate": false,
+          "name": "m29-essai",
+          "network_device": [
+            {
+              "bridge": "vsandbox",
+              "disconnected": null,
+              "enabled": true,
+              "firewall": false,
+              "model": "virtio",
+              "mtu": 0,
+              "queues": 0,
+              "rate_limit": 0,
+              "trunks": null,
+              "vlan_id": 0
+            }
+          ],
+          "node_name": "pve01",
+          "numa": [],
+          "on_boot": true,
+          "operating_system": [],
+          "pool_id": null,
+          "protection": false,
+          "purge_on_destroy": true,
+          "reboot": false,
+          "reboot_after_update": true,
+          "rng": [],
+          "scsi_hardware": "virtio-scsi-pci",
+          "serial_device": [],
+          "smbios": [],
+          "started": true,
+          "startup": [],
+          "stop_on_destroy": false,
+          "tablet_device": true,
+          "tags": [
+            "env-m28"
+          ],
+          "template": false,
+          "timeout_clone": 1800,
+          "timeout_create": 1800,
+          "timeout_migrate": 1800,
+          "timeout_move_disk": 1800,
+          "timeout_reboot": 1800,
+          "timeout_shutdown_vm": 1800,
+          "timeout_start_vm": 1800,
+          "timeout_stop_vm": 300,
+          "tpm_state": [],
+          "usb": [],
+          "virtiofs": [],
+          "vm_id": 5001,
+          "watchdog": []
+        },
+        "after_unknown": {
+          "agent": [
+            {
+              "wait_for_ip": []
+            }
+          ],
+          "amd_sev": [],
+          "audio_device": [],
+          "boot_order": true,
+          "cdrom": [],
+          "clone": [],
+          "cpu": [
+            {
+              "units": true
+            }
+          ],
+          "disk": [],
+          "efi_disk": [],
+          "hostpci": [],
+          "hotplug": true,
+          "id": true,
+          "initialization": [],
+          "ipv4_addresses": true,
+          "ipv6_addresses": true,
+          "mac_addresses": true,
+          "memory": [
+            {}
+          ],
+          "network_device": [
+            {
+              "mac_address": true
+            }
+          ],
+          "network_interface_names": true,
+          "numa": [],
+          "operating_system": [],
+          "rng": [],
+          "serial_device": [],
+          "smbios": [],
+          "startup": [],
+          "tags": [
+            false,
+            false
+          ],
+          "tpm_state": [],
+          "usb": [],
+          "vga": true,
+          "virtiofs": [],
+          "watchdog": []
+        },
+        "before_sensitive": false,
+        "after_sensitive": {
+          "agent": [
+            {
+              "wait_for_ip": []
+            }
+          ],
+          "amd_sev": [],
+          "audio_device": [],
+          "boot_order": [],
+          "cdrom": [],
+          "clone": [],
+          "cpu": [
+            {}
+          ],
+          "disk": [],
+          "efi_disk": [],
+          "hostpci": [],
+          "initialization": [],
+          "ipv4_addresses": [],
+          "ipv6_addresses": [],
+          "mac_addresses": [],
+          "memory": [
+            {}
+          ],
+          "network_device": [
+            {}
+          ],
+          "network_interface_names": [],
+          "numa": [],
+          "operating_system": [],
+          "rng": [],
+          "serial_device": [],
+          "smbios": [],
+          "startup": [],
+          "tags": [
+            false,
+            false
+          ],
+          "tpm_state": [],
+          "usb": [],
+          "vga": [],
+          "virtiofs": [],
+          "watchdog": []
+        }
+      },
+      "module_address": "module.essai[\"m29-essai\"]",
+      "index": null
+    }
+  ]
+}

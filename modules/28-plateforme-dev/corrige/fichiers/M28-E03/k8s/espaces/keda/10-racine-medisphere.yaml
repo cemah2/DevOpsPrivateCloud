@@ -1,0 +1,16 @@
+# plateforme/k8s — espaces/keda/10-racine-medisphere.yaml (M28-E03)
+# Racine « MédiSphère Root CA » montée dans keda-operator sur /custom/ca (--ca-dir) : l'opérateur
+# vérifie ainsi le certificat de l'API de gestion de RabbitMQ (émis par « MédiSphère Services CA »,
+# ClusterIssuer openbao-services, M25), sans « unsafeSsl ». Même ConfigMap que dans traces (M23).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: racine-medisphere
+  namespace: keda
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+data:
+  medisphere-root-ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    <CONTENU DE /usr/local/share/ca-certificates/medisphere-root-ca.crt>
+    -----END CERTIFICATE-----

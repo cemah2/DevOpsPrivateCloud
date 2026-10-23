@@ -1,0 +1,6 @@
+# mediagenda/deploiement — overlays/recette/kustomization.yaml ET overlays/prod/kustomization.yaml :
+# EXTRAIT (M28-E04). Le component « recommandations » s'ajoute après « canary » (il vise le Rollout).
+components:
+  # … components existants (dependances, [haute-disponibilite], migrations, canary, autoscaling) …
+  - ../../components/recommandations
+  # … livraison et suivants …

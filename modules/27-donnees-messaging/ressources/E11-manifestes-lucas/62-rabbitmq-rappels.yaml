@@ -1,0 +1,24 @@
+# Messagerie des rappels — Lucas, DEV-2811
+# Une grappe à nous, comme ça on ne touche pas à la vôtre.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rappels-rabbitmq-admin
+  namespace: mediagenda-recette
+type: Opaque
+stringData:
+  username: lucas
+  password: Lucas2026!
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: RabbitmqCluster
+metadata:
+  name: rabbitmq-rappels
+  namespace: mediagenda-recette
+spec:
+  replicas: 1
+  image: bitnami/rabbitmq:4.1
+  service:
+    type: LoadBalancer
+  persistence:
+    storage: 1Gi

@@ -1,0 +1,11 @@
+# mediagenda/deploiement — overlays/recette/kustomization.yaml : EXTRAIT (M28-E02, DEV-2902).
+# Seule la liste des components change : « autoscaling » APRÈS « canary » (il retire /spec/replicas
+# du Rollout que « canary » apporte), avant « livraison ». Garde le reste de TON fichier (ressources,
+# configMapGenerator, correctifs des M20 à M27).
+components:
+  - ../../components/dependances
+  - ../../components/migrations
+  - ../../components/canary
+  - ../../components/autoscaling
+  - ../../components/livraison
+  # … et les components ajoutés depuis (identifiants-dynamiques du M25, etc.), inchangés …

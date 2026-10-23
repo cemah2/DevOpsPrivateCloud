@@ -1,0 +1,22 @@
+# plateforme/k8s — espaces/keda/30-reseau-thanos.yaml (M28-E13, PLAT-2913)
+# Sortie de l'opérateur KEDA vers Thanos Query (déclencheurs « prometheus »). Le Service écoute en
+# 9090 mais la politique s'applique APRÈS la traduction du Service : c'est le port du conteneur
+# (http, 10902) qu'il faut ouvrir. L'entrée correspondante est dans plateforme/observabilite
+# (thanos/politiques.yaml, règle « keda »). À reporter dans docs/kubernetes/reseau/matrice-flux-cluster.md.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: keda-sortie-thanos
+  namespace: keda
+spec:
+  description: "KEDA (opérateur) → Thanos Query 10902 : déclencheurs prometheus (PLAT-2913)"
+  endpointSelector:
+    matchLabels:
+      app: keda-operator
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: thanos-query
+      toPorts:
+        - ports: [{port: "10902", protocol: TCP}]

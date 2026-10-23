@@ -1,0 +1,8 @@
+# mediagenda/api — mkdocs.yml (M28-E10, DEV-2910) : documentation TechDocs, construite par la CI.
+site_name: API MédiAgenda
+site_description: Prise de rendez-vous en ligne — documentation de l'équipe MédiAgenda
+docs_dir: docs
+nav:
+  - Présentation: index.md
+plugins:
+  - techdocs-core

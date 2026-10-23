@@ -1,0 +1,19 @@
+# medinotif/deploiement — overlays/recette/keda/triggerauthentication.yaml (M28-E03, PLAT-2903)
+# Paramètres d'authentification du scaler « rabbitmq » : uniquement des RÉFÉRENCES à un Secret.
+# Le mot de passe ne doit contenir aucun caractère spécial à encoder dans une URL (limite documentée
+# du scaler) : la politique de mot de passe d'OpenBao qui le génère le garantit (RB de rotation).
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: medinotif-rabbitmq
+spec:
+  secretTargetRef:
+    - parameter: host
+      name: medinotif-rabbitmq
+      key: hote
+    - parameter: username
+      name: medinotif-rabbitmq
+      key: utilisateur
+    - parameter: password
+      name: medinotif-rabbitmq
+      key: mot_de_passe

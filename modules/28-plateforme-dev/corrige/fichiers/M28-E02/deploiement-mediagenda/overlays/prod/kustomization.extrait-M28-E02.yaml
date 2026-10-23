@@ -1,0 +1,41 @@
+# mediagenda/deploiement — overlays/prod/kustomization.yaml : EXTRAIT (M28-E02, DEV-2902).
+# 1. « autoscaling » ajouté APRÈS « canary ».
+# 2. Le correctif du Rollout de M20-E16 PERD son opération « replace /spec/replicas » (le chemin
+#    n'existe plus après le component, et kustomize 5.8 le RECRÉERAIT sans erreur : Git déclarerait
+#    de nouveau replicas: 3, et Argo CD le remettrait contre l'HPA) ; il garde la marche finale
+#    sans durée (promotion humaine en prod).
+# 3. Bornes de production de l'HPA : 3 → 6 (quota de mediagenda-prod : 6 pods de l'API au plus
+#    avec maxSurge 25 % du canary — vérifie TON quota dans plateforme/k8s/espaces/mediagenda-prod/).
+# Note : le component « haute-disponibilite » garde son transformateur « replicas: mediagenda 3 »,
+# qui vise le DEPLOYMENT (gabarit des pods, réduit à 0 par le Rollout depuis M20-E16) : sans effet
+# sur le Rollout, on le laisse.
+components:
+  - ../../components/dependances
+  - ../../components/haute-disponibilite
+  - ../../components/migrations
+  - ../../components/canary
+  - ../../components/autoscaling
+  - ../../components/livraison
+  # … components ajoutés depuis, inchangés …
+patches:
+  - target:
+      group: argoproj.io
+      kind: Rollout
+      name: mediagenda
+    patch: |-
+      - op: add
+        path: /spec/strategy/canary/steps/-
+        value:
+          pause: {}
+  - target:
+      group: autoscaling
+      kind: HorizontalPodAutoscaler
+      name: mediagenda
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 6
+  # … autres correctifs de TON overlay (imageName de CNPG du M26-E21, etc.), inchangés …

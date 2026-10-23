@@ -1,0 +1,163 @@
+---
+# patroni-essai/patroni-essai.yml — grappe Patroni de comparaison (M27-E13, PLAT-2813).
+#
+#   admin@adm01:~/src/donnees/patroni-essai$ ansible-playbook -i inventaire.yml patroni-essai.yml --vault-id lab@…
+#
+# Ordre : dépôts et paquets partout → etcd partout (le premier démarrage attend ses pairs, d'où le
+# démarrage simultané) → Patroni nœud par nœud (le premier initialise la grappe, les autres la clonent).
+# Essai JETABLE : pas de TLS sur etcd ni sur l'API REST (à dire dans le comparatif : en production,
+# il le faudrait, avec des certificats step-ca).
+
+- name: Paquets (PGDG, etcd, environnement Python de Patroni)
+  hosts: pg_essai
+  become: true
+  tasks:
+    - name: Pas de grappe « main » créée par le paquet PostgreSQL (Patroni initialise lui-même)
+      ansible.builtin.copy:
+        dest: /etc/postgresql-common/createcluster.d/00-patroni.conf
+        content: "create_main_cluster = false\n"
+        mode: "0644"
+
+    - name: Dépôt PGDG (deb822, clé du projet PostgreSQL)
+      ansible.builtin.deb822_repository:
+        name: pgdg
+        types: deb
+        uris: https://apt.postgresql.org/pub/repos/apt
+        suites: "{{ ansible_facts['distribution_release'] }}-pgdg"
+        components: main
+        signed_by: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+
+    - name: PostgreSQL 18, etcd (Debian 13) et de quoi créer l'environnement Python
+      ansible.builtin.apt:
+        name:
+          - "postgresql-{{ postgresql_majeure }}"
+          - etcd-server
+          - etcd-client
+          - python3-venv
+        update_cache: true
+        state: present
+
+    - name: Patroni {{ patroni_version }} dans un environnement virtuel (version exacte, PyPI)
+      ansible.builtin.pip:
+        name: "patroni[etcd3,psycopg3]=={{ patroni_version }}"
+        virtualenv: "{{ patroni_venv }}"
+        virtualenv_command: python3 -m venv
+
+- name: etcd (trois membres, API v3)
+  hosts: pg_essai
+  become: true
+  tasks:
+    - name: Configuration d'etcd (/etc/default/etcd, lue par l'unité du paquet)
+      ansible.builtin.template:
+        src: templates/etcd.env.j2
+        dest: /etc/default/etcd
+        mode: "0644"
+      register: conf_etcd
+
+    - name: Données de l'instance démarrée par le paquet effacées (membre isolé, avant la grappe)
+      ansible.builtin.shell: |
+        set -e
+        if [ ! -f /var/lib/etcd/.grappe-pg-essai ]; then
+          systemctl stop etcd
+          rm -rf /var/lib/etcd/default /var/lib/etcd/member
+          touch /var/lib/etcd/.grappe-pg-essai
+          chown etcd:etcd /var/lib/etcd/.grappe-pg-essai
+          echo efface
+        fi
+      register: etcd_reinit
+      changed_when: "'efface' in etcd_reinit.stdout"
+
+    - name: "etcd démarré (les trois en même temps : chacun attend ses pairs)"
+      ansible.builtin.systemd_service:
+        name: etcd
+        state: restarted
+        enabled: true
+      when: conf_etcd.changed or etcd_reinit.changed
+
+    - name: La grappe etcd a trois membres sains
+      ansible.builtin.command: etcdctl --endpoints=http://127.0.0.1:2379 endpoint health --cluster
+      register: sante_etcd
+      retries: 10
+      delay: 6
+      until: sante_etcd.rc == 0
+      changed_when: false
+
+- name: Patroni (un nœud à la fois)
+  hosts: pg_essai
+  become: true
+  serial: 1
+  tasks:
+    - name: Répertoire de configuration
+      ansible.builtin.file:
+        path: /etc/patroni
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: "0750"
+
+    - name: "Configuration de Patroni (contient des mots de passe : lisible par postgres seulement)"
+      ansible.builtin.template:
+        src: templates/patroni.yml.j2
+        dest: /etc/patroni/patroni.yml
+        owner: postgres
+        group: postgres
+        mode: "0600"
+      register: conf_patroni
+
+    # --validate-config contrôle aussi que les ports d'écoute sont LIBRES : sur un nœud qui tourne
+    # déjà, « Port … is already in use » est attendu et seul tout autre message fait échouer.
+    - name: Contrôle de la configuration par Patroni lui-même
+      ansible.builtin.command: "{{ patroni_venv }}/bin/patroni --validate-config /etc/patroni/patroni.yml"
+      become_user: postgres
+      register: validation_patroni
+      changed_when: false
+      failed_when: >-
+        validation_patroni.rc != 0 or
+        (validation_patroni.stdout_lines + validation_patroni.stderr_lines)
+        | reject('search', 'already in use') | select('search', 'validation') | list | length > 0
+
+    - name: Unité systemd
+      ansible.builtin.template:
+        src: templates/patroni.service.j2
+        dest: /etc/systemd/system/patroni.service
+        mode: "0644"
+      register: unite_patroni
+
+    - name: Patroni démarré
+      ansible.builtin.systemd_service:
+        name: patroni
+        state: "{{ 'restarted' if (conf_patroni.changed or unite_patroni.changed) else 'started' }}"
+        enabled: true
+        daemon_reload: true
+
+    - name: Le membre a rejoint la grappe (API REST, /health = PostgreSQL démarré)
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}:8008/health"
+        status_code: 200
+      register: sante_patroni
+      retries: 20
+      delay: 6
+      until: sante_patroni.status == 200
+
+- name: Point d'accès de démonstration (HAProxy → primaire, d'après l'API REST)
+  hosts: pg-patroni01   # haproxy_hote : les variables de groupe ne sont pas lues pour « hosts »
+  become: true
+  tasks:
+    - name: "HAProxy (paquet Debian 13 : suffisant pour un essai)"
+      ansible.builtin.apt:
+        name: haproxy
+        state: present
+
+    - name: Configuration
+      ansible.builtin.template:
+        src: templates/haproxy.cfg.j2
+        dest: /etc/haproxy/haproxy.cfg
+        mode: "0644"
+        validate: haproxy -c -f %s
+      notify: Recharger HAProxy
+
+  handlers:
+    - name: Recharger HAProxy
+      ansible.builtin.systemd_service:
+        name: haproxy
+        state: reloaded

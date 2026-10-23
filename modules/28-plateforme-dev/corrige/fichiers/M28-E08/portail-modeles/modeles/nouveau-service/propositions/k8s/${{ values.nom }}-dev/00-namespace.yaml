@@ -1,0 +1,19 @@
+# plateforme/k8s — espaces/${{ values.nom }}-dev/00-namespace.yaml (proposé par le portail, modèle nouveau-service)
+# Environnement dev du service ${{ values.nom }} : rattaché au locataire ${{ values.locataire }} ; « task espaces »
+# puis outils/rattacher-locataires.sh (ajoute l'espace à la liste du script).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${{ values.nom }}-dev
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    medisphere.internal/equipe: ${{ values.equipe }}
+    medisphere.internal/proprietaire: ${{ values.equipe }}
+    medisphere.internal/environnement: dev
+    capsule.clastix.io/tenant: ${{ values.locataire }}
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    medisphere.internal/origine: "portail, modèle nouveau-service"

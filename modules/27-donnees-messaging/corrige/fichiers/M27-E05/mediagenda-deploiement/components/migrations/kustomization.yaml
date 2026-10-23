@@ -1,0 +1,79 @@
+# Component « migrations » (M20-E11 ; Flyway : M27-E05, DEV-2805). INCHANGÉ hormis le Job : mêmes
+# vagues (-3 ConfigMaps/compte/politiques, -2 base/Valkey/pooler/ExternalSecret, -1 Job, 0 le reste).
+# Le Job s'appelle désormais « mediagenda-migrations » : tout ce qui visait « mediagenda-migrate »
+# (component livraison, component identifiants-dynamiques, politiques réseau nommées) suit.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - job.yaml
+patches:
+  - target:
+      kind: ConfigMap
+    patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: ignore
+        annotations:
+          argocd.argoproj.io/sync-wave: "-3"
+  - target:
+      kind: ServiceAccount
+    patch: |-
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: ignore
+        annotations:
+          argocd.argoproj.io/sync-wave: "-3"
+  - target:
+      group: networking.k8s.io
+      kind: NetworkPolicy
+    patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: ignore
+        annotations:
+          argocd.argoproj.io/sync-wave: "-3"
+  - target:
+      group: cilium.io
+      kind: CiliumNetworkPolicy
+    patch: |-
+      apiVersion: cilium.io/v2
+      kind: CiliumNetworkPolicy
+      metadata:
+        name: ignore
+        annotations:
+          argocd.argoproj.io/sync-wave: "-3"
+  - target:
+      group: postgresql.cnpg.io
+      kind: Cluster
+      name: mediagenda-db
+    patch: |-
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      metadata:
+        name: ignore
+        annotations:
+          argocd.argoproj.io/sync-wave: "-2"
+  - target:
+      group: apps
+      kind: StatefulSet
+      name: valkey
+    patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: ignore
+        annotations:
+          argocd.argoproj.io/sync-wave: "-2"
+  - target:
+      kind: Service
+      name: valkey
+    patch: |-
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: ignore
+        annotations:
+          argocd.argoproj.io/sync-wave: "-2"

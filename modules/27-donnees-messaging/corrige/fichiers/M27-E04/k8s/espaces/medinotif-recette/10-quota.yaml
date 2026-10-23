@@ -1,0 +1,19 @@
+# plateforme/k8s — espaces/medinotif-recette/10-quota.yaml (M27-E04)
+# Un worker de 128 Mio, et de la place pour la mise à l'échelle de M28 (KEDA, jusqu'à 5 pods).
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota-equipe
+  namespace: medinotif-recette
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 1Gi
+    limits.cpu: "3"
+    limits.memory: 2Gi
+    pods: "10"
+    services: "3"
+    services.nodeports: "0"
+    services.loadbalancers: "0"
+    configmaps: "10"
+    secrets: "10"

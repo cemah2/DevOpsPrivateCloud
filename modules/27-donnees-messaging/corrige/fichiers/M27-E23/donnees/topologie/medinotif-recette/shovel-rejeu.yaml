@@ -1,0 +1,23 @@
+# plateforme/donnees — topologie/medinotif-recette/shovel-rejeu.yaml (M27-E23, INC-5423) : TEMPORAIRE.
+# Rejoue le rebut vers la file de travail, puis s'arrête (srcDeleteAfter: queue-length : il déplace le
+# nombre de messages présents au démarrage). À RETIRER du dépôt une fois le rebut vidé (le CR supprimé, le
+# Topology Operator supprime le shovel). Prérequis : plugin rabbitmq_shovel dans additionalPlugins du
+# RabbitmqCluster ; Secret « shovel-rejeu-uri » (clés srcUri et destUri, AMQPS vers le vhost de recette,
+# compte dédié lisant le rebut et écrivant dans notifications), par ExternalSecret depuis OpenBao.
+apiVersion: rabbitmq.com/v1beta1
+kind: Shovel
+metadata:
+  name: rejeu-rebut-recette
+  namespace: messagerie
+spec:
+  name: rejeu-rebut-recette
+  vhost: medinotif-recette
+  uriSecret:
+    name: shovel-rejeu-uri
+  srcQueue: notifications.rebut
+  srcDeleteAfter: queue-length
+  destQueue: notifications
+  ackMode: on-confirm
+  addForwardHeaders: true
+  rabbitmqClusterReference:
+    name: rabbitmq

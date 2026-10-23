@@ -1,0 +1,14 @@
+# Vhost de prod : cloisonne files, échanges et permissions de la prod.
+# defaultQueueType: quorum → une file déclarée sans type dans ce vhost est une file quorum.
+# deletionPolicy: retain → supprimer l'objet (erreur de Git, Application supprimée) ne supprime PAS
+# le vhost dans RabbitMQ (ni donc ses files et leurs messages).
+apiVersion: rabbitmq.com/v1beta1
+kind: Vhost
+metadata:
+  name: medinotif-prod
+spec:
+  name: medinotif-prod
+  defaultQueueType: quorum
+  deletionPolicy: retain
+  rabbitmqClusterReference:
+    name: rabbitmq

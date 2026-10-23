@@ -1,0 +1,16 @@
+# plateforme/portail — app-config.production.yaml : blocs AJOUTÉS en M28-E08 (DEV-2908).
+catalog:
+  locations:
+    # Les modèles : un emplacement par fichier, avec SA règle (les règles globales n'acceptent pas
+    # les Template depuis les dépôts, M28-E07). plateforme/portail-modeles est exclu de la découverte.
+    - type: url
+      target: https://git01.par1.medisphere.internal/plateforme/portail-modeles/-/blob/main/modeles/nouveau-service/template.yaml
+      rules:
+        - allow: [Template]
+
+scaffolder:
+  # Auteur des commits faits par le portail (publication et MR) : traçable dans l'historique.
+  defaultAuthor:
+    name: Portail MédiSphère (svc-portail)
+    email: plateforme@medisphere.internal
+  defaultCommitMessage: "chore: créé par le portail"

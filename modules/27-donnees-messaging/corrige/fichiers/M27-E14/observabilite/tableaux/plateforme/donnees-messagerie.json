@@ -1,0 +1,712 @@
+{
+  "uid": "m27-donnees",
+  "title": "Données et messagerie",
+  "tags": [
+    "medisphere",
+    "donnees",
+    "m27"
+  ],
+  "description": "PostgreSQL (CloudNativePG), pooler PgBouncer, RabbitMQ et Valkey de MédiAgenda et MédiNotif (M27-E14, RB-274).",
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "timezone": "browser",
+  "refresh": "1m",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0
+      },
+      {
+        "name": "env",
+        "label": "Environnement",
+        "type": "custom",
+        "query": "recette,prod",
+        "current": {
+          "text": "prod",
+          "value": "prod"
+        },
+        "options": [
+          {
+            "text": "recette",
+            "value": "recette",
+            "selected": false
+          },
+          {
+            "text": "prod",
+            "value": "prod",
+            "selected": true
+          }
+        ],
+        "hide": 0
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "RB-274",
+      "type": "link",
+      "url": "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-274-alertes-donnees.md",
+      "targetBlank": true
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "PostgreSQL (mediagenda-db)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Instances : primaire (0) ou en récupération (1)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "cnpg_pg_replication_in_recovery{namespace=~\"mediagenda-$env\"}",
+          "legendFormat": "{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Réplicas connectés au primaire",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max(cnpg_pg_replication_streaming_replicas{namespace=~\"mediagenda-$env\"} and on (namespace, pod) cnpg_pg_replication_in_recovery == 0)",
+          "legendFormat": "réplicas"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Instance isolée (fencing)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (pod) (cnpg_collector_fencing_on{namespace=~\"mediagenda-$env\"})",
+          "legendFormat": "{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Retard de rejeu des réplicas",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "cnpg_pg_replication_lag{namespace=~\"mediagenda-$env\"}",
+          "legendFormat": "{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Connexions par état et application",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (state, application_name) (cnpg_backends_total{namespace=~\"mediagenda-$env\", datname=\"mediagenda\"})",
+          "legendFormat": "{{application_name}} {{state}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Sessions en attente de verrou",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (pod) (cnpg_backends_waiting_total{namespace=~\"mediagenda-$env\"})",
+          "legendFormat": "{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Transaction la plus longue (par état)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (state) (cnpg_backends_max_tx_duration_seconds{namespace=~\"mediagenda-$env\", datname=\"mediagenda\"})",
+          "legendFormat": "{{state}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "row",
+      "title": "Pooler PgBouncer (mediagenda-db-pooler-rw)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "panels": []
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Clients actifs et en attente",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 26
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(cnpg_pgbouncer_pools_cl_active{namespace=~\"mediagenda-$env\"})",
+          "legendFormat": "actifs"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(cnpg_pgbouncer_pools_cl_waiting{namespace=~\"mediagenda-$env\"})",
+          "legendFormat": "en attente"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Connexions serveur et attente maximale",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(cnpg_pgbouncer_pools_sv_active{namespace=~\"mediagenda-$env\"})",
+          "legendFormat": "serveur actives"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(cnpg_pgbouncer_pools_sv_idle{namespace=~\"mediagenda-$env\"})",
+          "legendFormat": "serveur inactives"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max(cnpg_pgbouncer_pools_maxwait{namespace=~\"mediagenda-$env\"})",
+          "legendFormat": "attente max (s)"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "row",
+      "title": "RabbitMQ (messagerie/rabbitmq, vhost medinotif-$env)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "panels": []
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Messages prêts et non acquittés par file",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 35
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (queue) (rabbitmq_detailed_queue_messages_ready{vhost=\"medinotif-$env\"})",
+          "legendFormat": "{{queue}} prêts"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (queue) (rabbitmq_detailed_queue_messages_unacked{vhost=\"medinotif-$env\"})",
+          "legendFormat": "{{queue}} non acquittés"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Consommateurs par file",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 35
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (queue) (rabbitmq_detailed_queue_consumers{vhost=\"medinotif-$env\"})",
+          "legendFormat": "{{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Débit de la grappe (publication, livraison, redélivrance)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 43
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(rabbitmq_global_messages_received_total[5m]))",
+          "legendFormat": "publiés"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(rabbitmq_global_messages_delivered_total[5m]))",
+          "legendFormat": "livrés"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(rabbitmq_global_messages_redelivered_total[5m]))",
+          "legendFormat": "redélivrés"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Alarmes et ressources",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 43
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (pod) (rabbitmq_alarms_memory_used_watermark)",
+          "legendFormat": "alarme mémoire {{pod}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (pod) (rabbitmq_alarms_free_disk_space_watermark)",
+          "legendFormat": "alarme disque {{pod}}"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (pod) (rabbitmq_process_resident_memory_bytes / rabbitmq_resident_memory_limit_bytes)",
+          "legendFormat": "mémoire / seuil {{pod}}"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "min by (pod) (rabbitmq_disk_space_available_bytes / rabbitmq_disk_space_available_limit_bytes)",
+          "legendFormat": "disque libre / seuil {{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "type": "row",
+      "title": "Valkey (cache de MédiAgenda)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 51
+      },
+      "panels": []
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Mémoire utilisée / maxmemory",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 52
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "redis_memory_used_bytes{namespace=~\"mediagenda-$env\"} / (redis_memory_max_bytes{namespace=~\"mediagenda-$env\"} > 0)",
+          "legendFormat": "{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Évictions",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 52
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(redis_evicted_keys_total{namespace=~\"mediagenda-$env\"}[5m]))",
+          "legendFormat": "clés évincées/s"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Cache de MédiAgenda : succès, échecs, erreurs",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 52
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (resultat) (rate(mediagenda_cache_total{namespace=~\"mediagenda-$env\"}[5m]))",
+          "legendFormat": "{{resultat}}"
+        }
+      ]
+    }
+  ]
+}

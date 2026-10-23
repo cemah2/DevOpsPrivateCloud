@@ -1,0 +1,15 @@
+# plateforme/donnees — vendor/rabbitmq/cluster-operator/kustomization.yaml (M27-E03)
+# Copie épinglée du manifeste de publication v2.23.1 (outils/recopier-operateurs.sh). On ne MODIFIE
+# jamais la copie : tout écart passe par un correctif ici, visible et relu.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cluster-operator-2.23.1.yml
+patches:
+  # L'espace appartient à plateforme/k8s (étiquettes Pod Security, quota, LimitRange).
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: rabbitmq-system

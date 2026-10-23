@@ -1,0 +1,23 @@
+# plateforme/k8s — espaces/k6/30-politiques-reseau.yaml (M29-E14)
+# Entrées de l'espace k6 : l'API REST de k6 (6565) des exécuteurs n'est joignable que depuis l'espace k6
+# (démarreur et opérateur) ; les métriques de l'opérateur (8443, kube-rbac-proxy du chart) depuis
+# Prometheus. Sorties : non restreintes ici (le générateur de charge vise la Gateway, le DNS, Prometheus) ;
+# voir « Pour aller plus loin » du corrigé pour une sortie fermée.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: k6-entree
+  namespace: k6
+spec:
+  description: "Entrées de l'espace k6 : API de k6 entre pods de l'espace, métriques de l'opérateur"
+  endpointSelector: {}
+  ingress:
+    - fromEndpoints:
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: k6}
+      toPorts:
+        - ports: [{port: "6565", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: supervision, app.kubernetes.io/name: prometheus}
+      toPorts:
+        - ports: [{port: "8443", protocol: TCP}]
+    - fromEntities: [host]

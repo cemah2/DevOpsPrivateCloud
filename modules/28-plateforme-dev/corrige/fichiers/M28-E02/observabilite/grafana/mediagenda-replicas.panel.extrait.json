@@ -1,0 +1,15 @@
+{
+  "_commentaire": "plateforme/observabilite — tableau de bord MédiAgenda (M21) : panneau AJOUTÉ (M28-E02). Source : variable « datasource » du tableau (M21-E05) ; métriques de kube-state-metrics 2.20.",
+  "type": "timeseries",
+  "title": "Réplicas de l'API (HPA) — désirés, actuels, maximum",
+  "datasource": { "type": "prometheus", "uid": "${datasource}" },
+  "targets": [
+    { "refId": "A", "legendFormat": "{{namespace}} désirés",
+      "expr": "kube_horizontalpodautoscaler_status_desired_replicas{namespace=~\"mediagenda-(recette|prod)\", horizontalpodautoscaler=\"mediagenda\"}" },
+    { "refId": "B", "legendFormat": "{{namespace}} actuels",
+      "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=~\"mediagenda-(recette|prod)\", horizontalpodautoscaler=\"mediagenda\"}" },
+    { "refId": "C", "legendFormat": "{{namespace}} maximum",
+      "expr": "kube_horizontalpodautoscaler_spec_max_replicas{namespace=~\"mediagenda-(recette|prod)\", horizontalpodautoscaler=\"mediagenda\"}" }
+  ],
+  "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "min": 0 } }
+}

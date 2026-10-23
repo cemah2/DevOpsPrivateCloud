@@ -1,0 +1,14 @@
+# components/valkey/service.yaml (M27-E07) — inchangé depuis « dependances » (M17) : même nom, même port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey
+  labels:
+    app.kubernetes.io/name: valkey
+spec:
+  selector:
+    app.kubernetes.io/name: valkey
+  ports:
+    - name: valkey
+      port: 6379
+      targetPort: valkey

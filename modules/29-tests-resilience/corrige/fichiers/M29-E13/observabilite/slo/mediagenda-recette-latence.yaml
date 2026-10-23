@@ -1,0 +1,23 @@
+# plateforme/observabilite — slo/mediagenda-recette-latence.yaml (M29-E13, PLAT-3013)
+# SLO de RECETTE : instrument de mesure des expériences de chaos et des tests de charge, pas un
+# engagement. Fenêtre de 7 jours (les expériences consomment le budget : il se reconstitue vite).
+# Pas d'alerte : la recette est volontairement dégradée pendant les expériences (alerting.disabled) ;
+# on lit les taux de consommation dans Pyrra ou Grafana pendant l'expérience.
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: mediagenda-recette-latence
+  labels:
+    pyrra.dev/equipe: mediagenda
+spec:
+  description: "API MédiAgenda (recette) : requêtes servies en moins de 250 ms"
+  target: "95"
+  window: 7d
+  indicator:
+    latency:
+      success:
+        metric: mediagenda_http_request_duration_seconds_bucket{namespace="mediagenda-recette", route!~"/sante|/pret|/metrics", le="0.25"}
+      total:
+        metric: mediagenda_http_request_duration_seconds_count{namespace="mediagenda-recette", route!~"/sante|/pret|/metrics"}
+  alerting:
+    disabled: true

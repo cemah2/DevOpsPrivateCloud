@@ -1,0 +1,44 @@
+# mediagenda/api — catalog-info.yaml (M28-E07, PLAT-2907 ; annotations Kubernetes et TechDocs en E10)
+# Découvert par le portail (fournisseur GitLab « mediagenda »). Propriétaire : l'ÉQUIPE.
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: mediagenda-api
+  title: API MédiAgenda
+  description: Prise de rendez-vous en ligne (FastAPI, PostgreSQL, Valkey) ; publie les demandes de notification.
+  annotations:
+    gitlab.com/project-slug: mediagenda/api
+  links:
+    - url: https://mediagenda.apps.par1.medisphere.internal
+      title: Production
+    - url: https://mediagenda-recette.apps.par1.medisphere.internal
+      title: Recette
+  tags: [python, fastapi]
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/mediagenda
+  system: mediagenda
+  providesApis:
+    - mediagenda-api
+  dependsOn:
+    - resource:default/mediagenda-db
+    - resource:default/mediagenda-valkey
+    - resource:default/rabbitmq
+    - component:default/medidoc
+---
+# Contrat de l'API : le document OpenAPI que FastAPI génère, EXPORTÉ dans le dépôt (openapi.json,
+# régénéré en CI et comparé : un écart fait échouer le pipeline) — le portail le lit dans GitLab,
+# sans dépendre d'un environnement qui tourne ni d'un flux vers la Gateway.
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: mediagenda-api
+  title: API REST de MédiAgenda
+spec:
+  type: openapi
+  lifecycle: production
+  owner: group:default/mediagenda
+  system: mediagenda
+  definition:
+    $text: ./openapi.json

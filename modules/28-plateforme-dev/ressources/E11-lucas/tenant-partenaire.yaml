@@ -1,0 +1,23 @@
+# Proposition de Lucas Martin — NE PAS APPLIQUER (M28-E11)
+apiVersion: capsule.clastix.io/v1beta2
+kind: Tenant
+metadata:
+  name: partenaire
+spec:
+  owners:
+    - kind: User
+      name: lucas.martin
+      clusterRoles:
+        - cluster-admin
+  forceTenantPrefix: false
+  resourceQuotas:
+    scope: Namespace
+    items:
+      - hard:
+          requests.cpu: "64"
+          requests.memory: 256Gi
+  serviceOptions:
+    allowedServices:
+      loadBalancer: true
+      nodePort: true
+      externalName: true

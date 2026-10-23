@@ -1,0 +1,6 @@
+{# plateforme/ansible — roles/supervision_temoin/templates/regles-temoin.yml.j2 : expression de
+   SondeEnEchec MODIFIÉE en M29-E07. Les sondes Goss ont leurs propres alertes (avertissement,
+   files/regles/goss.yml) : sans cette exclusion, un test Goss rouge déclencherait SondeEnEchec,
+   CRITIQUE, et réveillerait l'astreinte pour un fichier de configuration qui a dérivé. #}
+      - alert: SondeEnEchec
+        expr: probe_success{job="blackbox", groupe!="goss"} == 0

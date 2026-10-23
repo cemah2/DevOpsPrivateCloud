@@ -1,0 +1,85 @@
+# plateforme/k8s — locataires/medinotif.yaml (M28-E05, PLAT-2905) — Application Argo CD « locataires ».
+# Locataire Capsule « medinotif » : propriétaire = groupe OIDC oidc:mediagenda — l'équipe de Julien Petit possède
+# MédiNotif, il n'y a pas de groupe FreeIPA dédié (jamais une personne : une arrivée ou un
+# départ se gère dans l'annuaire, ce fichier ne change pas).
+#
+# ⚠️ Les espaces rattachés portent une référence de propriétaire vers ce Tenant : le supprimer
+# supprimerait ces espaces (production comprise). D'où preventDeletion (refus par le webhook de
+# Capsule) ET les options d'Argo CD (jamais élagué, jamais supprimé avec l'Application).
+apiVersion: capsule.clastix.io/v1beta2
+kind: Tenant
+metadata:
+  name: medinotif
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    medisphere.internal/equipe: mediagenda
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    medisphere.internal/ticket: "PLAT-2905"
+spec:
+  preventDeletion: true
+  forceTenantPrefix: true
+  owners:
+    # Dans TOUS les espaces du locataire (environnements compris) : lecture seule, comme les
+    # liaisons oidc-* du M24 (pas de « admin » par défaut de Capsule sur la production).
+    - kind: Group
+      name: "oidc:mediagenda"
+      clusterRoles:
+        - view
+  namespaceOptions:
+    # Espaces existants rattachés + espaces de libre-service.
+    quota: 4
+    # Ce que l'équipe ne peut ni poser ni changer sur ses espaces : l'étiquette qui distingue un
+    # environnement (medisphere.internal/environnement), le niveau Pod Security, les étiquettes de
+    # la plateforme.
+    forbiddenLabels:
+      deniedRegex: '^(medisphere\.internal|pod-security\.kubernetes\.io)/.*'
+    # Posé d'office sur les espaces de LIBRE-SERVICE (sans étiquette d'environnement).
+    additionalMetadataList:
+      - namespaceSelector:
+          matchExpressions:
+            - key: medisphere.internal/environnement
+              operator: DoesNotExist
+        labels:
+          pod-security.kubernetes.io/enforce: restricted
+          pod-security.kubernetes.io/enforce-version: latest
+          pod-security.kubernetes.io/warn: restricted
+          medisphere.internal/libre-service: "oui"
+          medisphere.internal/proprietaire: mediagenda
+  # Seule classe autorisée (cephfs, ceph-rbd-retain, ceph-rbd-chiffre refusées) ; un PVC sans classe
+  # reçoit celle-ci.
+  storageClasses:
+    allowed:
+      - ceph-rbd
+    default: ceph-rbd
+  rules:
+    # Espaces de libre-service (sans étiquette d'environnement) : l'équipe y est administratrice et
+    # peut les supprimer ; budget de ressources PARTAGÉ entre ces espaces (GlobalResourceQuota
+    # « medinotif-libre-service »). Les environnements gardent leurs quotas de plateforme/k8s/espaces/.
+    - namespaceSelector:
+        matchExpressions:
+          - key: medisphere.internal/environnement
+            operator: DoesNotExist
+      permissions:
+        bindings:
+          - clusterRoleName: admin
+            subjects:
+              - apiGroup: rbac.authorization.k8s.io
+                kind: Group
+                name: "oidc:mediagenda"
+          - clusterRoleName: capsule-namespace-deleter
+            subjects:
+              - apiGroup: rbac.authorization.k8s.io
+                kind: Group
+                name: "oidc:mediagenda"
+      quota:
+        - name: libre-service
+          hard:
+            requests.cpu: "1"
+            requests.memory: 2Gi
+            limits.memory: 4Gi
+            pods: "15"
+            persistentvolumeclaims: "5"
+            requests.storage: 20Gi
+            services.loadbalancers: "0"
+            services.nodeports: "0"

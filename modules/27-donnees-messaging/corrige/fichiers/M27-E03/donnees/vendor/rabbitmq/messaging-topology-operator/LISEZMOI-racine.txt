@@ -1,0 +1,2 @@
+# Range ici une copie du certificat PUBLIC « MédiSphère Root CA » sous le nom medisphere-root-ca.crt
+# (adm01 : /usr/local/share/ca-certificates/medisphere-root-ca.crt). Ce n'est pas un secret.

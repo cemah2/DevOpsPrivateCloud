@@ -1,0 +1,28 @@
+# medinotif/deploiement — overlays/recette/amqp.yaml (M27-E04, DEV-2804)
+# URL AMQP de MédiNotif en recette, lue dans OpenBao (kv/medinotif/recette/amqp, clé url) par le
+# SecretStore « openbao » de l'espace (rôle eso-medinotif-recette). Le même chemin sert à la
+# plateforme pour créer l'utilisateur RabbitMQ (topologie/medinotif-recette/utilisateurs.yaml) :
+# un mot de passe changé dans OpenBao change des deux côtés au rafraîchissement suivant (1 h) ;
+# le worker, lui, ne relit son URL qu'au redémarrage (Reloader, M25-E15, si on l'annote).
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: medinotif-amqp
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: openbao
+  target:
+    name: medinotif-amqp
+    creationPolicy: Owner
+    deletionPolicy: Retain
+    template:
+      metadata:
+        labels:
+          medisphere.internal/source: openbao
+  data:
+    - secretKey: url
+      remoteRef:
+        key: medinotif/recette/amqp
+        property: url

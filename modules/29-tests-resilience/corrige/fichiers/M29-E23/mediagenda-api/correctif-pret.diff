@@ -1,0 +1,60 @@
+# Correctif proposé à l'équipe MédiAgenda (DEV-3013, M29-E23) : /pret ne dépend plus de Valkey.
+# Diff relatif au code de référence de apps/mediagenda (M12) : sur ton dépôt mediagenda/api, qui a
+# évolué depuis (M22-E06, M23, M27-E08), applique-le à la main (git apply --3way, ou recopie la fonction).
+# Vérifié : pytest (28 réussis) et ruff check / ruff format --check sur le code de référence.
+--- a/src/mediagenda/app.py
++++ b/src/mediagenda/app.py
+@@ -104,7 +104,12 @@
+ 
+     @app.get("/pret")
+     def pret(request: Request) -> JSONResponse:
+-        """Disponibilité : PostgreSQL et Valkey répondent, sinon 503."""
++        """Disponibilité : 503 seulement si PostgreSQL ne répond pas.
++
++        Valkey est un cache : sans lui, l'API sert quand même (créneaux calculés depuis la base,
++        mode dégradé). Le faire entrer dans la disponibilité sortait TOUS les pods du Service à la
++        moindre coupure du cache (M29-E13, INC-5623) : son état est seulement rapporté.
++        """
+         etats: dict[str, str] = {}
+         for nom, dependance in (
+             ("postgresql", request.app.state.depot),
+@@ -118,11 +123,9 @@
+                     "dépendance indisponible", extra={"dependance": nom, "erreur": str(exc)}
+                 )
+                 etats[nom] = "indisponible"
+-        pret_ = all(v == "ok" for v in etats.values())
+-        return JSONResponse(
+-            {"statut": "pret" if pret_ else "pas-pret", **etats},
+-            status_code=200 if pret_ else 503,
+-        )
++        pret_ = etats["postgresql"] == "ok"
++        statut = "pas-pret" if not pret_ else ("pret" if etats["valkey"] == "ok" else "degrade")
++        return JSONResponse({"statut": statut, **etats}, status_code=200 if pret_ else 503)
+ 
+     @app.get("/metrics")
+     def metrics() -> Response:
+--- a/tests/test_api.py
++++ b/tests/test_api.py
+@@ -34,11 +34,20 @@
+     assert r.json()["valkey"] == "ok"
+ 
+ 
+-def test_pret_503_si_valkey_absent(client, cache):
++def test_pret_200_degrade_si_valkey_absent(client, cache):
++    # Valkey est un cache : son absence dégrade sans retirer le pod du Service (M29-E13, INC-5623).
++    cache.en_panne = True
++    r = client.get("/pret")
++    assert r.status_code == 200
++    assert r.json() == {"statut": "degrade", "postgresql": "ok", "valkey": "indisponible"}
++
++
++def test_pret_503_si_postgresql_et_valkey_absents(client, depot, cache):
++    depot.en_panne = True
+     cache.en_panne = True
+     r = client.get("/pret")
+     assert r.status_code == 503
+-    assert r.json()["valkey"] == "indisponible"
++    assert r.json()["statut"] == "pas-pret"
+ 
+ 
+ def test_cycle_complet_rendez_vous(client):

@@ -1,0 +1,51 @@
+# mediagenda/deploiement — components/autoscaling/hpa.yaml (M28-E02, DEV-2902)
+# Bornes de RECETTE (2 → 4) ; la prod les remplace (3 → 6) dans overlays/prod/kustomization.yaml.
+# Utilisation CPU = consommation / requests du conteneur « api » (requests fixées dans
+# base/values-communes.yaml, M28-E02) : sans requests CPU, la métrique ne se calcule pas.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: mediagenda
+  labels:
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/component: api
+spec:
+  # Le Rollout expose la sous-ressource « scale » (CRD rollouts.argoproj.io) : specReplicasPath
+  # .spec.replicas, statusReplicasPath .status.HPAReplicas, labelSelectorPath .status.selector.
+  scaleTargetRef:
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    name: mediagenda
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          # 70 % des requests : marge pour absorber le temps de démarrage d'un pod (≈ 20 s, sonde
+          # de démarrage) sans saturer ceux qui tournent.
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      # Montée sans attente, mais bornée : au plus +100 % ou +2 pods par minute (le plus grand des
+      # deux), pour ne pas vider le quota de l'espace sur un pic de quelques secondes.
+      stabilizationWindowSeconds: 0
+      selectPolicy: Max
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      # Descente lente : la recommandation retenue est la PLUS HAUTE des 5 dernières minutes
+      # (c'est ce qui supprime le yo-yo), puis au plus un pod retiré toutes les 2 minutes.
+      stabilizationWindowSeconds: 300
+      selectPolicy: Min
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120

@@ -1,0 +1,28 @@
+# plateforme/resilience — chaos/e09/01-pod-failure-api.yaml (M29-E09, PLAT-3009)
+# Hypothèse : un pod de l'API MédiAgenda de recette indisponible 60 s ne cause aucune erreur vue
+#   par les utilisateurs (les autres réplicas servent, la sonde /pret le retire du Service).
+# Mesure : sum(rate(mediagenda_http_requests_total{namespace="mediagenda-recette",code=~"5.."}[1m]))
+#   et le nombre de pods prêts, avant / pendant / après (et le test k6 de E05 en fond).
+# Arrêt d'urgence : kubectl -n chaos-experiences annotate podchaos e09-pod-failure-api \
+#   experiment.chaos-mesh.org/pause=true   — ou — kubectl -n chaos-experiences delete podchaos e09-pod-failure-api
+# Effet réel : pod-failure remplace l'image des conteneurs du pod choisi par l'image « pause » du
+# cluster pendant « duration », puis la rend (le pod n'est PAS supprimé : ses redémarrages comptent).
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: e09-pod-failure-api
+  namespace: chaos-experiences
+  labels:
+    medisphere.internal/exercice: M29-E09
+  annotations:
+    medisphere.internal/ticket: PLAT-3009
+spec:
+  action: pod-failure
+  mode: one
+  duration: 60s
+  selector:
+    namespaces:
+      - mediagenda-recette
+    labelSelectors:
+      app.kubernetes.io/name: mediagenda
+      app.kubernetes.io/component: api

@@ -1,0 +1,24 @@
+# mediagenda/api — .gitlab-ci.yml : job AJOUTÉ (M28-E10, DEV-2910). Garde le reste de TON fichier.
+# Construit la documentation (mkdocs + techdocs-core, sans Docker) et la publie dans portail-techdocs
+# à chaque fusion sur main. Identité d'ÉCRITURE du compartiment : variables PROTÉGÉES et MASQUÉES du
+# groupe mediagenda (TECHDOCS_S3_CLE, TECHDOCS_S3_SECRET), ou lues dans OpenBao par le job (M25).
+techdocs:publication:
+  stage: publication
+  tags: [k8s]
+  # Image d'outils de plateforme/ci-templates (Node.js, techdocs-cli, mkdocs + techdocs-core) :
+  # les pods de job tournent en UID 1000, rien ne s'installe pendant le job.
+  image: registry.par1.medisphere.internal/plateforme/outils-techdocs:1.0.0@sha256:<DIGEST-OUTILS-TECHDOCS>
+  needs: []
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes: [docs/**/*, mkdocs.yml]
+  variables:
+    AWS_REGION: us-east-1
+    NODE_EXTRA_CA_CERTS: $MEDISPHERE_ROOT_CA
+  script:
+    - techdocs-cli generate --no-docker --verbose
+    - >
+      AWS_ACCESS_KEY_ID="$TECHDOCS_S3_CLE" AWS_SECRET_ACCESS_KEY="$TECHDOCS_S3_SECRET"
+      techdocs-cli publish --publisher-type awsS3 --storage-name portail-techdocs
+      --entity default/Component/mediagenda-api
+      --awsEndpoint https://s3-01.par1.medisphere.internal:8333 --awsS3ForcePathStyle

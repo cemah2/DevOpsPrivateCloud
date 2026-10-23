@@ -1,0 +1,57 @@
+# wb-essais — cibles-e24.yaml (M29-E24) : deux pods jetables, conformes à « restricted ».
+#   kubectl -n wb-essais apply -f cibles-e24.yaml ; … ; kubectl -n wb-essais delete -f cibles-e24.yaml
+# cible-e24 : serveur HTTP minimal de busybox (httpd) sur 8080 ; client-e24 : une requête par seconde,
+# avec la durée de chaque requête (time -p) dans son journal (kubectl -n wb-essais logs -f client-e24).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cible-e24
+  labels: {app: cible-e24}
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: cible
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command: ["sh", "-c", "mkdir -p /tmp/www && echo ok > /tmp/www/index.html && exec httpd -f -p 8080 -h /tmp/www"]
+      ports: [{containerPort: 8080}]
+      resources:
+        requests: {cpu: 50m, memory: 16Mi}
+        limits: {cpu: 500m, memory: 64Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: false
+        capabilities: {drop: [ALL]}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cible-e24
+spec:
+  selector: {app: cible-e24}
+  ports: [{port: 8080, targetPort: 8080}]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: client-e24
+  labels: {app: client-e24}
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: client
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      # « time -p » (applet de busybox) écrit « real 0.10 » : la durée de chaque requête, au centième.
+      command: ["sh", "-c", "while true; do time -p wget -q -T 5 -O /dev/null http://cible-e24:8080/ || echo echec; sleep 1; done"]
+      resources:
+        requests: {cpu: 20m, memory: 16Mi}
+        limits: {cpu: 100m, memory: 32Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities: {drop: [ALL]}

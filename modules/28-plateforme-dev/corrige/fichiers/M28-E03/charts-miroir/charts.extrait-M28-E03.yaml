@@ -1,0 +1,11 @@
+# À INTÉGRER dans plateforme/charts-miroir — charts.yaml (format de M20-E13), M28-E03 (PLAT-2903).
+# Empreinte : sha256 de l'archive, relevée dans l'index amont puis recalculée sur l'archive téléchargée
+#   curl -s https://kedacore.github.io/charts/index.yaml | yq '.entries.keda[] | select(.version == "2.21.0") | .digest'
+# (vérifiée à la rédaction le 23/10/2026 : index et archive concordent).
+charts:
+  # … entrées existantes …
+  - nom: keda
+    depot: https://kedacore.github.io/charts
+    version: 2.21.0
+    empreinte: sha256:a7da56bf41a33dad9d2fc82a6fdecee552fff947d80bf1e1dbcf4db0f9e26dee
+    usage: "Autoscaling piloté par les événements (M28-E03), Application plateforme/gitops plateforme/keda.yaml"

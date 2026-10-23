@@ -1,0 +1,15 @@
+# mediagenda/deploiement — components/migrations : EXTRAIT du Job « mediagenda-migrations » (M27-E21).
+# Délais d'attente de Flyway sur ses connexions : une migration qui attend un verrou plus de 30 s échoue
+# avec un message clair (« canceling statement due to lock timeout ») au lieu de pendre jusqu'à
+# activeDeadlineSeconds. initSql est joué à chaque connexion ouverte par Flyway (option « initSql » de
+# Flyway, variable FLYWAY_INIT_SQL) ; lockRetryCount borne l'attente du verrou consultatif propre à Flyway.
+spec:
+  template:
+    spec:
+      containers:
+        - name: flyway   # nom du conteneur du Job de M27-E05 : adapte
+          env:
+            - name: FLYWAY_INIT_SQL
+              value: "SET lock_timeout = '30s'; SET statement_timeout = '10min'"
+            - name: FLYWAY_LOCK_RETRY_COUNT
+              value: "60"

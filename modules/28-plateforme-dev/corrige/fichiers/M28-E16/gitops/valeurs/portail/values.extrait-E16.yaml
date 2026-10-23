@@ -1,0 +1,68 @@
+# plateforme/gitops — valeurs/portail/values.yaml : EXTRAIT (M28-E16, PLAT-2916)
+# Clés vérifiées dans values.yaml du chart backstage 2.10.2 (backstage/charts). Image : la version
+# promue par MR (tag + digest), signée (Kyverno ne vérifie la signature qu'en recette/prod, la règle
+# de la maison reste de ne déployer que des images signées).
+backstage:
+  image:
+    registry: registry.par1.medisphere.internal
+    repository: plateforme/portail
+    tag: "<VERSION-PROMUE>@sha256:<DIGEST-PROMU>"
+  replicas: 2
+  # Le chart passe « command » au conteneur (M28-E06) : c'est ici que le SDK OpenTelemetry est chargé
+  # avant le backend (instrumentation.js copié à la racine de l'image, Dockerfile.extrait-E16).
+  command: ["node", "--require", "./instrumentation.js", "packages/backend"]
+  # Un pod par nœud : la perte d'un travailleur ne coupe pas le portail.
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: backstage
+          app.kubernetes.io/instance: portail   # release = Application « portail » (fullnameOverride: portail)
+  pdb:
+    create: true
+    minAvailable: 1
+  priorityClassName: medisphere-standard
+  # Recommandation du VPA (rapport de E14) arrondie ; le backend Node grossit avec le catalogue.
+  resources:
+    requests: {cpu: 100m, memory: 512Mi}
+    limits: {memory: 1Gi}
+  # Démarrage mesuré : ≈ 40 s (migrations des bases des plugins au premier démarrage d'une version).
+  # La sonde de démarrage laisse jusqu'à 5 min ; ensuite vivacité et disponibilité prennent le relais.
+  startupProbe:
+    httpGet: {path: /.backstage/health/v1/liveness, port: 7007, scheme: HTTP}
+    periodSeconds: 10
+    failureThreshold: 30
+  livenessProbe:
+    httpGet: {path: /.backstage/health/v1/liveness, port: 7007, scheme: HTTP}
+    periodSeconds: 20
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readinessProbe:
+    httpGet: {path: /.backstage/health/v1/readiness, port: 7007, scheme: HTTP}
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  # Port de l'exportateur Prometheus d'OpenTelemetry.
+  extraPorts:
+    - name: metrics
+      containerPort: 9464
+      protocol: TCP
+  # Secret de session OIDC commun aux deux réplicas : AUTH_SESSION_SECRET (ExternalSecret « portail »,
+  # kv/plateforme/portail, propriété session_secret, M28-E06) — déjà partagé, rien à changer ; vérifie
+  # seulement qu'aucune valeur n'est générée au démarrage.
+service:
+  extraPorts:
+    - name: metrics
+      port: 9464
+      targetPort: 9464
+      protocol: TCP
+metrics:
+  serviceMonitor:
+    enabled: true
+    labels:
+      medisphere.internal/supervision: "oui"
+    path: /metrics
+    port: metrics
+    interval: 30s

@@ -1,0 +1,10 @@
+# mediagenda/deploiement — outils/promouvoir.sh : EXTRAIT (M27-E05, DEV-2805)
+# Le script du M20-E14 fixait l'empreinte de l'API ; il fixe désormais AUSSI celle de l'image de
+# migration de la MÊME version, et refuse la promotion si l'une des deux manque (une API v1.9.0 avec
+# des migrations v1.8.0 serait une version incohérente du schéma).
+for depot in mediagenda-api mediagenda-migrations; do
+  image="registry.par1.medisphere.internal/medisphere/${depot}:${version}"
+  empreinte="$(crane digest "$image")" || { echo "image absente : $image" >&2; exit 1; }
+  (cd "overlays/${cible}" && kustomize edit set image \
+      "registry.par1.medisphere.internal/medisphere/${depot}:${version}@${empreinte}")
+done

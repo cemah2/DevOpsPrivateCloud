@@ -1,0 +1,13 @@
+# À INTÉGRER dans plateforme/charts-miroir — charts.yaml (format de M20-E13), M29-E14 (PLAT-3014).
+# Empreinte : sha256 de l'archive publiée, relevée dans l'index du dépôt amont
+#   curl -s https://grafana.github.io/helm-charts/index.yaml \
+#     | yq '.entries.k6-operator[] | select(.version == "4.7.0") | .digest'
+# (valeur ci-dessous relevée le 23/10/2026), puis recalculée sur l'archive téléchargée : les deux doivent
+# être égales. Chart publié le 15/10/2026, appVersion 1.7.0 (image controller-v1.7.0).
+charts:
+  # … entrées existantes …
+  - nom: k6-operator
+    depot: https://grafana.github.io/helm-charts
+    version: 4.7.0
+    empreinte: sha256:714acfbca962dcc000d950798e117cb9760739ca941c67e9c144a5477ffa8986
+    usage: "Tests de charge distribués (M29-E14), Application plateforme/gitops plateforme/k6-operator.yaml"

@@ -1,0 +1,38 @@
+# plateforme/k8s — espaces/mediagenda-secours/00-espace.yaml (M27-E15, PLAT-2815)
+# Espace du réplica de secours de la base de production de MédiAgenda. Données de santé : même régime
+# que mediagenda-prod (PSA restricted, refus réseau par défaut, accès réservé à la plateforme).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mediagenda-secours
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    medisphere.internal/equipe: plateforme
+    medisphere.internal/environnement: secours
+    medisphere.internal/donnees-sante: "oui"
+    medisphere.internal/supervision-regles: "oui"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota
+  namespace: mediagenda-secours
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 2Gi
+    limits.memory: 3Gi
+    persistentvolumeclaims: "4"
+    requests.storage: 24Gi
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: defauts
+  namespace: mediagenda-secours
+spec:
+  limits:
+    - type: Container
+      default: {memory: 256Mi}
+      defaultRequest: {cpu: 50m, memory: 128Mi}

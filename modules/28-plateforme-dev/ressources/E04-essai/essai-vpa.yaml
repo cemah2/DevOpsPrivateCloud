@@ -1,0 +1,69 @@
+# ressources/E04-essai/essai-vpa.yaml — M28-E04 : essai de redimensionnement EN PLACE par le VPA.
+# Espace wb-essais uniquement (kubectl apply -f, puis kubectl delete -f à la fin de l'exercice).
+# Un pod qui consomme ≈ 100 m de CPU (boucle de calcul + pauses) pour des requests de 20 m : le VPA
+# recommandera plus, et l'updater appliquera la recommandation SANS recréer le pod si possible.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: essai-vpa
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: essai-vpa
+    medisphere.internal/essai: m28-e04
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: essai-vpa
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: essai-vpa
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: calcul
+          image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+          command: ["sh", "-c", "while true; do i=0; while [ $i -lt 20000 ]; do i=$((i+1)); done; sleep 0.05; done"]
+          # Changement de CPU sans redémarrage du conteneur ; de mémoire, avec redémarrage.
+          resizePolicy:
+            - resourceName: cpu
+              restartPolicy: NotRequired
+            - resourceName: memory
+              restartPolicy: RestartContainer
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 500m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: essai-vpa
+  namespace: wb-essais
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: essai-vpa
+  updatePolicy:
+    updateMode: "InPlaceOrRecreate"
+    # À COMPLÉTER (étape 5) : le champ qui permet à l'updater d'agir sur une charge d'UN seul pod.
+  resourcePolicy:
+    containerPolicies:
+      - containerName: calcul
+        minAllowed: {cpu: 20m, memory: 32Mi}
+        maxAllowed: {cpu: 300m, memory: 128Mi}

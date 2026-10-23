@@ -1,0 +1,48 @@
+# plateforme/observabilite — kps/values.yaml : EXTRAIT (M28-E14). kube-state-metrics n'exporte les
+# étiquettes des espaces que si on les liste : on expose l'appartenance au locataire Capsule, pour
+# sommer requests et quotas PAR LOCATAIRE (série kube_namespace_labels, étiquette
+# label_capsule_clastix_io_tenant). Clé du sous-chart kube-state-metrics.
+kube-state-metrics:
+  metricLabelsAllowlist:
+    - namespaces=[capsule.clastix.io/tenant]
+  # Recommandations du VPA dans Prometheus (panneau « Recommandation VPA / requests ») : kube-state-metrics
+  # n'exporte plus les VPA en natif ; on les décrit en « custom resource state ». Format de la
+  # documentation de kube-state-metrics (docs/metrics/extend/customresourcestate-metrics.md) — conversion
+  # des quantités (« 262144k », « 25m ») à VÉRIFIER sur ta version (sinon : la MR de recommandations suffit).
+  rbac:
+    extraRules:
+      - apiGroups: [autoscaling.k8s.io]
+        resources: [verticalpodautoscalers]
+        verbs: [list, watch]
+  customResourceState:
+    enabled: true
+    config:
+      kind: CustomResourceStateMetrics
+      spec:
+        resources:
+          - groupVersionKind: {group: autoscaling.k8s.io, version: v1, kind: VerticalPodAutoscaler}
+            metricNamePrefix: kube_customresource_vpa
+            labelsFromPath:
+              namespace: [metadata, namespace]
+              verticalpodautoscaler: [metadata, name]
+              target_kind: [spec, targetRef, kind]
+              target_name: [spec, targetRef, name]
+            metrics:
+              - name: cible_memoire_octets
+                help: "Mémoire recommandée (cible) par conteneur"
+                each:
+                  type: Gauge
+                  gauge:
+                    path: [status, recommendation, containerRecommendations]
+                    labelsFromPath:
+                      container: [containerName]
+                    valueFrom: [target, memory]
+              - name: cible_cpu_coeurs
+                help: "CPU recommandé (cible) par conteneur"
+                each:
+                  type: Gauge
+                  gauge:
+                    path: [status, recommendation, containerRecommendations]
+                    labelsFromPath:
+                      container: [containerName]
+                    valueFrom: [target, cpu]

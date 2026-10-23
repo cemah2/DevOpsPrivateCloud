@@ -1,0 +1,18 @@
+# plateforme/donnees — rabbitmq/sauvegarde-definitions/utilisateur.yaml (M27-E15)
+# Compte de l'export. GET /api/definitions (toute la grappe) exige l'étiquette « administrator » : c'est
+# un compte puissant, d'où : mot de passe fort dans OpenBao (kv/plateforme/rabbitmq/sauvegarde-definitions),
+# AUCUNE permission sur les vhosts (il ne lit ni n'écrit aucun message), utilisé par un seul pod, depuis
+# un seul espace (reseau.yaml). Écart consigné dans l'ADR-0270 ; à revoir si une version permet l'export
+# avec une étiquette moindre (à vérifier sur ta version : export par vhost avec « policymaker »).
+apiVersion: rabbitmq.com/v1beta1
+kind: User
+metadata:
+  name: sauvegarde-definitions
+  namespace: messagerie
+spec:
+  tags:
+    - administrator
+  rabbitmqClusterReference:
+    name: rabbitmq
+  importCredentialsSecret:
+    name: sauvegarde-definitions-identifiants

@@ -1,0 +1,49 @@
+# mediagenda/api — .gitlab-ci.yml : EXTRAIT (M27-E05, DEV-2805). À AJOUTER au pipeline existant.
+# 1. migrations:verifier : Flyway contre un PostgreSQL 18 JETABLE (service du job) : nommage,
+#    sommes de contrôle, application de TOUTES les migrations sur une base vide, puis validate et
+#    info. Échoue si un fichier est mal nommé, si une migration ne passe pas sur PostgreSQL 18, ou
+#    si une version est en double.
+# 2. migrations:image : déclenche le pipeline enfant ci/migrations.yml (construction, analyse,
+#    publication et signature de medisphere/mediagenda-migrations), et attend son résultat.
+migrations:verifier:
+  stage: test
+  tags: [k8s]
+  image:
+    name: registry.par1.medisphere.internal/dockerhub/flyway/flyway:13.11.1@sha256:<EMPREINTE-FLYWAY>
+    entrypoint: [""]
+  services:
+    - name: registry.par1.medisphere.internal/dockerhub/library/postgres:18@sha256:<EMPREINTE-POSTGRES>
+      alias: db
+  variables:
+    POSTGRES_DB: mediagenda
+    POSTGRES_USER: mediagenda
+    # Base jetable, détruite avec le pod du job : un mot de passe fixe n'a aucune valeur.
+    POSTGRES_PASSWORD: essai-ci
+    FLYWAY_URL: jdbc:postgresql://db:5432/mediagenda
+    FLYWAY_USER: mediagenda
+    FLYWAY_PASSWORD: essai-ci
+    FLYWAY_LOCATIONS: filesystem:migrations,filesystem:flyway/rappels
+    FLYWAY_CONNECT_RETRIES: "30"
+    FLYWAY_VALIDATE_MIGRATION_NAMING: "true"
+    REDGATE_DISABLE_TELEMETRY: "true"
+  script:
+    - flyway migrate
+    - flyway validate
+    - flyway info
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: [migrations/**/*, flyway/**/*, Dockerfile.migrations]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+
+migrations:image:
+  stage: construction
+  needs: [migrations:verifier]
+  trigger:
+    include: ci/migrations.yml
+    strategy: depend
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: [migrations/**/*, flyway/**/*, Dockerfile.migrations]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/

@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: Goss 0.4 (binaire épinglé), tests des rôles du socle, goss serve sans privilège (essai M29-E07)
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+dependencies: []

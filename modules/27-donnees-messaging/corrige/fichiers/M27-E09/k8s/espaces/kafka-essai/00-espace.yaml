@@ -1,0 +1,49 @@
+# plateforme/k8s — espaces/kafka-essai/ (M27-E09, PLAT-2809) — ESSAI, supprimé en fin d'E10.
+# Espace de PLATEFORME (pas d'étiquette d'équipe : ni GeneratingPolicy de refus par défaut, ni
+# collecte automatique) ; l'opérateur génère lui-même les NetworkPolicy de chaque écouteur.
+# Pod Security « restricted » : Strimzi 1.2+ produit des pods conformes par défaut.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kafka-essai
+  labels:
+    medisphere.internal/domaine: donnees
+    medisphere.internal/essai: "oui"
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+  annotations:
+    medisphere.internal/responsable: "karim.benali"
+    medisphere.internal/ticket: "PLAT-2809"
+    medisphere.internal/retrait-prevu: "fin de M27-E10"
+---
+# Trois nœuds × 1 Gio, opérateur (384 Mio), opérateurs d'entité (2 × 256 Mio), MédiNotif d'essai (E10),
+# Job de production ; 3 × 10 Gio de stockage.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota-essai
+  namespace: kafka-essai
+spec:
+  hard:
+    requests.cpu: "3"
+    requests.memory: 6Gi
+    limits.memory: 7Gi
+    requests.storage: 40Gi
+    persistentvolumeclaims: "4"
+    pods: "15"
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limites-defaut
+  namespace: kafka-essai
+spec:
+  limits:
+    - type: Container
+      defaultRequest: {cpu: 50m, memory: 128Mi}
+      default: {memory: 256Mi}
+      max: {memory: 2Gi}

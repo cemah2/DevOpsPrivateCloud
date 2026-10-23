@@ -1,0 +1,5 @@
+# plateforme/observabilite — slo/kustomization.yaml (EXTRAIT M29-E13) : deux ressources à AJOUTER.
+resources:
+  # … entrées existantes (M21) …
+  - mediagenda-recette-latence.yaml
+  - mediagenda-recette-disponibilite.yaml

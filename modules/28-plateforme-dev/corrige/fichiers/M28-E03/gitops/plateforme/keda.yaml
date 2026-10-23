@@ -1,0 +1,38 @@
+# plateforme/gitops — plateforme/keda.yaml (M28-E03, PLAT-2903)
+# KEDA 2.21.0 dans l'espace keda (décrit dans plateforme/k8s : espaces/keda/). Deux sources (M20-E13) :
+# le chart recopié et signé dans Harbor, les valeurs versionnées ici.
+# Vague -1 : les CRD de KEDA (ScaledObject, TriggerAuthentication) doivent exister avant que les
+# Applications des équipes qui en déclarent ne se synchronisent.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keda
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    medisphere.internal/ticket: "PLAT-2903"
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: keda
+      targetRevision: 2.21.0
+      helm:
+        releaseName: keda
+        valueFiles:
+          - $values/valeurs/keda/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: keda
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

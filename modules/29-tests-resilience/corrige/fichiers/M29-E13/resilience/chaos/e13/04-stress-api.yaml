@@ -1,0 +1,36 @@
+# plateforme/resilience — chaos/e13/04-stress-api.yaml (M29-E13, PLAT-3013)
+#
+# Hypothèse : un pod de l'API dont le CPU est occupé à 80 % par deux processus étrangers voit sa
+#   latence monter ; l'HPA (cible CPU, M28-E02) ajoute un pod en moins de 2 min et le p95 global revient
+#   sous 250 ms avant la fin des 5 min.
+#   Attention : stress-ng tourne DANS le cgroup du conteneur visé : sa consommation compte dans la
+#   limite CPU du conteneur (étranglement, throttling) ET dans la métrique que lit l'HPA.
+# Mesure : p95 par pod (sum by (le, pod)), container_cpu_cfs_throttled_periods_total du conteneur,
+#   kube_horizontalpodautoscaler_status_desired_replicas, réplicas prêts du Rollout.
+# Critère d'arrêt : p95 global > 1 s pendant 2 min.
+# Arrêt d'urgence : kubectl -n chaos-experiences annotate stresschaos m29-e13-stress-api \
+#   experiment.chaos-mesh.org/pause=true
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: m29-e13-stress-api
+  namespace: chaos-experiences
+  labels:
+    medisphere.internal/exercice: m29-e13
+  annotations:
+    medisphere.internal/ticket: PLAT-3013
+spec:
+  mode: one
+  selector:
+    namespaces: [mediagenda-recette]
+    labelSelectors:
+      app.kubernetes.io/name: mediagenda
+      app.kubernetes.io/component: api
+  # Conteneur de l'application (nom à vérifier : kubectl -n mediagenda-recette get pod <pod> \
+  #   -o jsonpath='{.spec.containers[*].name}'). Sans containerNames, tous les conteneurs du pod.
+  containerNames: [api]
+  stressors:
+    cpu:
+      workers: 2
+      load: 80
+  duration: 5m

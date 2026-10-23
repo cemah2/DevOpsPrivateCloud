@@ -1,0 +1,111 @@
+# medinotif/deploiement — base/deployment.yaml (M27-E04, DEV-2804)
+# Worker MédiNotif (apps/medinotif, image du M12/M19) : consomme la file quorum « notifications »
+# du vhost de son environnement, n'en déclare AUCUNE (MEDINOTIF_DECLARER_FILE=0 : la plateforme
+# déclare la topologie ; le compte n'a d'ailleurs pas le droit « configure »).
+#   - URL AMQP (amqps://…@rabbitmq.messagerie.svc:5671/medinotif-<env>) dans le Secret
+#     medinotif-amqp (ExternalSecret de l'overlay) : jamais en clair (Kyverno, interdire-identifiants-url).
+#   - TLS : pika vérifie le certificat ET le nom avec le magasin par défaut de Python, que
+#     SSL_CERT_FILE remplace par la racine MédiSphère (ConfigMap racine-medisphere de l'overlay).
+#   - Arrêt : SIGTERM termine le message en cours, annule l'abonnement (les messages reçus et non
+#     acquittés retournent dans la file), puis sort (apps/medinotif/README.md). 30 s couvrent un envoi.
+#   - Pas de sonde de disponibilité : aucun trafic entrant ; la vivacité est le serveur de métriques.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medinotif
+  labels:
+    app.kubernetes.io/name: medinotif
+    app.kubernetes.io/instance: medinotif
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: medinotif
+      app.kubernetes.io/instance: medinotif
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: medinotif
+        app.kubernetes.io/instance: medinotif
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: medinotif
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      priorityClassName: medisphere-standard
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10002
+        runAsGroup: 10002
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          # Étiquette et empreinte fixées par l'overlay (images:) : signée, vérifiée par Kyverno.
+          image: registry.par1.medisphere.internal/medisphere/medinotif-worker:v0.0.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MEDINOTIF_BACKEND
+              value: rabbitmq
+            - name: MEDINOTIF_AMQP_URL
+              valueFrom:
+                secretKeyRef:
+                  name: medinotif-amqp
+                  key: url
+            - name: MEDINOTIF_FILE
+              value: notifications
+            - name: MEDINOTIF_DECLARER_FILE
+              value: "0"
+            - name: MEDINOTIF_PORT_METRIQUES
+              value: "9100"
+            - name: MEDINOTIF_LOG_FORMAT
+              value: json
+            - name: MEDINOTIF_LOG_LEVEL
+              value: INFO
+            - name: SSL_CERT_FILE
+              value: /etc/medisphere/racine/medisphere-root-ca.crt
+          ports:
+            - name: metriques
+              containerPort: 9100
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metriques
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: racine-medisphere
+              mountPath: /etc/medisphere/racine
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: racine-medisphere
+          configMap:
+            name: racine-medisphere
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi

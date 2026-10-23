@@ -1,0 +1,307 @@
+{
+  "uid": "m29-charge-k6",
+  "title": "Charge k6 — MédiAgenda recette",
+  "tags": [
+    "k6",
+    "charge",
+    "m29"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "label": "Source",
+        "current": {}
+      },
+      {
+        "name": "testid",
+        "type": "query",
+        "label": "Essai (testid)",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(k6_http_reqs_total, testid)",
+          "refId": "testid"
+        },
+        "definition": "label_values(k6_http_reqs_total, testid)",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "sort": 2
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Débit envoyé par k6 (toutes requêtes)",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "sum(rate(k6_http_reqs_total{testid=~\"$testid\"}[1m]))",
+          "legendFormat": "req/s"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Utilisateurs virtuels (somme des exécuteurs)",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "sum(k6_vus{testid=~\"$testid\"})",
+          "legendFormat": "VU"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Latence : p95 côté serveur (MédiAgenda) et p95/p99 côté client (k6, max des exécuteurs)",
+      "description": "Le p95 client de k6 est cumulé depuis le début de l'essai et propre à chaque exécuteur : on en montre le max, jamais la moyenne. Le p95 serveur est exact (histogramme agrégé).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 24,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(mediagenda_http_request_duration_seconds_bucket{namespace=\"mediagenda-recette\", route!~\"/sante|/pret|/metrics\"}[1m])))",
+          "legendFormat": "p95 serveur (MédiAgenda)"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "B",
+          "expr": "max(k6_http_req_duration_p95{testid=~\"$testid\", type=\"metier\"})",
+          "legendFormat": "p95 client (k6, cumulé, max des exécuteurs)"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "C",
+          "expr": "max(k6_http_req_duration_p99{testid=~\"$testid\", type=\"metier\"})",
+          "legendFormat": "p99 client (k6, cumulé, max des exécuteurs)"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "D",
+          "expr": "vector(0.25)",
+          "legendFormat": "SLO 250 ms"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Taux d'erreurs (k6 : http_req_failed cumulé, max des exécuteurs ; serveur : 5xx)",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "max(k6_http_req_failed_rate{testid=~\"$testid\", type=\"metier\"})",
+          "legendFormat": "k6 (fraction cumulée, max des exécuteurs)"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "B",
+          "expr": "sum(rate(mediagenda_http_requests_total{namespace=\"mediagenda-recette\", route!~\"/sante|/pret|/metrics\", code=~\"5..\"}[1m])) / sum(rate(mediagenda_http_requests_total{namespace=\"mediagenda-recette\", route!~\"/sante|/pret|/metrics\"}[1m]))",
+          "legendFormat": "5xx serveur"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Pods prêts de l'API (recette) et réplicas voulus par l'HPA",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 17,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "sum(kube_pod_status_ready{namespace=\"mediagenda-recette\", condition=\"true\", pod=~\"mediagenda-.*\"})",
+          "legendFormat": "pods prêts"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "B",
+          "expr": "max(kube_horizontalpodautoscaler_status_desired_replicas{namespace=\"mediagenda-recette\"})",
+          "legendFormat": "réplicas voulus (HPA)"
+        }
+      ]
+    }
+  ]
+}

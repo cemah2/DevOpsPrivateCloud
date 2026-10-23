@@ -1,0 +1,31 @@
+# medinotif/deploiement — overlays/recette/kustomization.yaml (M27-E04, DEV-2804)
+# Synchronisé automatiquement par l'Application medinotif-recette (ApplicationSet « medinotif »).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: medinotif-recette
+resources:
+  - ../../base
+  - amqp.yaml
+labels:
+  - pairs:
+      medisphere.internal/environnement: recette
+    includeSelectors: false
+configMapGenerator:
+  # Racine MédiSphère (certificat PUBLIC) : vérification du certificat de RabbitMQ (« MédiSphère
+  # Services CA »). Copie de /usr/local/share/ca-certificates/medisphere-root-ca.crt d'adm01.
+  - name: racine-medisphere
+    files:
+      - medisphere-root-ca.crt
+patches:
+  - target:
+      kind: Deployment
+      name: medinotif
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: {name: MEDINOTIF_VERSION, value: "<VERSION-MEDINOTIF>"}
+# Image signée PAR EMPREINTE (relevée dans Harbor après la publication et la signature par la CI).
+images:
+  - name: registry.par1.medisphere.internal/medisphere/medinotif-worker
+    newTag: <VERSION-MEDINOTIF>
+    digest: sha256:<EMPREINTE-MEDINOTIF>

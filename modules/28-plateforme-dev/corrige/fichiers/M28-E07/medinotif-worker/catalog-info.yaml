@@ -1,0 +1,18 @@
+# medinotif/worker — catalog-info.yaml (M28-E07, PLAT-2907)
+# MédiNotif appartient à l'équipe de Julien Petit (groupe mediagenda : pas de groupe dédié).
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: medinotif-worker
+  title: MédiNotif (worker)
+  description: Consomme la file notifications (RabbitMQ) et envoie SMS et courriels (simulés).
+  annotations:
+    gitlab.com/project-slug: medinotif/worker
+  tags: [python, rabbitmq]
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/mediagenda
+  system: medinotif
+  dependsOn:
+    - resource:default/rabbitmq

@@ -1,0 +1,4 @@
+# plateforme/donnees — topologie/medinotif-recette/kustomization.yaml : EXTRAIT (M28-E03).
+resources:
+  # … ressources du M27-E04 (vhost, échanges, files, liaisons, politique, utilisateurs, permissions) …
+  - keda.yaml

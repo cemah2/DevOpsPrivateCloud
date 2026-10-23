@@ -1,0 +1,37 @@
+# plateforme/k8s — rbac/wb-checks-services.yaml (M27-E02, PLAT-2802 ; PLAN §4.13)
+# Lecture seule des objets des SERVICES DE PLATEFORME du bloc G pour le compte des vérifications du
+# workbook (wb-system/wb-checks, M14-E06). AGRÉGÉE au ClusterRole « wb-checks » par l'étiquette
+# workbook.medisphere.internal/checks=true (comme wb-checks-stockage, -observabilite, -securite) :
+# aucune liaison à écrire. Une règle sur un groupe d'API absent (Strimzi avant E09, ou après son
+# retrait en E10) ne gêne pas.
+#
+# Ce qui est DÉJÀ lisible, à ne pas répéter ici :
+#   - postgresql.cnpg.io/* et barmancloud.cnpg.io/* : wb-checks-stockage (M16-E10) couvre déjà
+#     Pooler, Database, DatabaseRole, ImageCatalog… : aucune CRD de CloudNativePG ne manque ;
+#   - batch (Jobs de migration), apps, networking, cilium.io, policy : wb-checks-base (M14-E06) ;
+#   - monitoring.coreos.com (PodMonitor, ServiceMonitor) : wb-checks-observabilite (M21) ;
+#   - external-secrets.io : wb-checks-securite (M24-M25) ; cert-manager.io : wb-checks-reseau (M15).
+# Les modules 28 et 29 ajoutent leurs propres ClusterRoles agrégées (KEDA, VPA, Capsule, Chaos Mesh,
+# k6-operator) plutôt que de modifier ce fichier.
+#
+# JAMAIS de Secret : ni la ressource « secrets » (aucun groupe ci-dessous ne la contient), ni les
+# objets qui en recopient les valeurs. Les CRD de RabbitMQ et de Strimzi ne portent pas de mot de
+# passe : les User et KafkaUser RÉFÉRENCENT un Secret, que ce rôle ne lit pas.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wb-checks-services
+  labels:
+    app.kubernetes.io/part-of: workbook
+    workbook.medisphere.internal/checks: "true"
+rules:
+  # RabbitMQ : RabbitmqCluster (Cluster Operator) et topologie (Messaging Topology Operator :
+  # Vhost, Exchange, Queue, Binding, Policy, User, Permission…). Statuts compris.
+  - apiGroups: ["rabbitmq.com"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  # Strimzi (M27-E09/E10) : Kafka, KafkaNodePool, KafkaTopic, KafkaUser (kafka.strimzi.io) et les
+  # StrimziPodSet qui portent les pods des courtiers (core.strimzi.io).
+  - apiGroups: ["kafka.strimzi.io", "core.strimzi.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]

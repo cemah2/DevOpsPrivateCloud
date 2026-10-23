@@ -1,0 +1,28 @@
+# plateforme/observabilite/thanos/cnp-lecture-charge.yaml (M29-E14, PLAT-3014)
+# Le job planifié de non-régression (plateforme/resilience) lit les résultats agrégés dans Thanos Query
+# depuis son pod de CI (espace ci-jobs, étiquette medisphere.internal/ci: job du M19). Lecture seule,
+# requêtes instantanées seulement. Effet de bord assumé (RB-295) : tout job de ci-jobs peut LIRE les
+# métriques ; aucune donnée de santé ni secret n'y figure (politique des étiquettes du M21).
+# Flux : ci-jobs/<job> → supervision/thanos-query 9090 (GET /api/v1/query, /api/v1/query_range)
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: thanos-query-lecture-charge
+  namespace: supervision
+spec:
+  description: "Lecture de Thanos Query par les jobs de CI (non-régression de performance)"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: thanos-query}
+  enableDefaultDeny: {ingress: false}
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: ci-jobs
+            medisphere.internal/ci: job
+      toPorts:
+        - ports: [{port: "9090", protocol: TCP}]
+          rules:
+            http:
+              - {method: GET, path: "/api/v1/query"}
+              - {method: POST, path: "/api/v1/query"}
+              - {method: GET, path: "/api/v1/query_range"}

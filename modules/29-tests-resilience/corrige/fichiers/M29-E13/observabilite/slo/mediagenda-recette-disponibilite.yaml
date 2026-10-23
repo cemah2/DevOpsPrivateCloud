@@ -1,0 +1,23 @@
+# plateforme/observabilite — slo/mediagenda-recette-disponibilite.yaml (M29-E13, PLAT-3013)
+# SLO de RECETTE (voir mediagenda-recette-latence.yaml) : 99 % de réponses sans 5xx sur 7 jours.
+# Limite : une réponse 503 de la Gateway (aucun pod prêt) n'est PAS comptée ici, puisqu'aucun pod ne l'a
+# servie : pour une indisponibilité totale, lire aussi les métriques de la Gateway (Envoy de Cilium) et
+# k6 (http_req_failed). La partition vers Valkey de M29-E13 l'a montré.
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: mediagenda-recette-disponibilite
+  labels:
+    pyrra.dev/equipe: mediagenda
+spec:
+  description: "API MédiAgenda (recette) : requêtes servies sans erreur 5xx"
+  target: "99"
+  window: 7d
+  indicator:
+    ratio:
+      errors:
+        metric: mediagenda_http_requests_total{namespace="mediagenda-recette", route!~"/sante|/pret|/metrics", code=~"5.."}
+      total:
+        metric: mediagenda_http_requests_total{namespace="mediagenda-recette", route!~"/sante|/pret|/metrics"}
+  alerting:
+    disabled: true

@@ -1,0 +1,29 @@
+# Échange de publication : MédiAgenda publie avec la clé « notifications » (direct : routage exact).
+apiVersion: rabbitmq.com/v1beta1
+kind: Exchange
+metadata:
+  name: medinotif-prod-notifications
+spec:
+  name: notifications
+  vhost: medinotif-prod
+  type: direct
+  durable: true
+  autoDelete: false
+  rabbitmqClusterReference:
+    name: rabbitmq
+---
+# Échange de rebut : reçoit ce que la file « notifications » rejette (nack sans remise en file,
+# limite de livraison dépassée). Fanout : tout message va à la file de rebut, quelle que soit sa
+# clé de routage d'origine (conservée dans l'en-tête x-death).
+apiVersion: rabbitmq.com/v1beta1
+kind: Exchange
+metadata:
+  name: medinotif-prod-notifications-rebut
+spec:
+  name: notifications.rebut
+  vhost: medinotif-prod
+  type: fanout
+  durable: true
+  autoDelete: false
+  rabbitmqClusterReference:
+    name: rabbitmq

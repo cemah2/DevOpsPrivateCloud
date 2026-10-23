@@ -1,0 +1,4 @@
+# À AJOUTER à rabbitmq/kustomization.yaml de plateforme/donnees (Application « rabbitmq »), M27-E14.
+# L'entrée de Prometheus sur 15692 est déjà ouverte par reseau.yaml (M27-E03).
+resources:
+  - servicemonitor.yaml

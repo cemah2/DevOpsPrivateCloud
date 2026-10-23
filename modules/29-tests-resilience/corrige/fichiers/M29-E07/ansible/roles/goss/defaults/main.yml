@@ -1,0 +1,25 @@
+---
+# Rôle goss — essai de Goss 0.4 sur deux VMs Debian 13 du socle (M29-E07, PLAT-3007).
+# Mêmes vérifications que les tests Testinfra de M29-E04 (node_exporter, alloy, chrony), écrites
+# en YAML, exécutées SUR la VM ; « goss serve » publie le résultat en HTTP pour le blackbox de mon01.
+
+goss_version: "0.4.10"
+# goss_0.4.10_linux_x86_64.tar.gz, ligne de goss_0.4.10_SHA256SUMS de la publication (vérifiée).
+# Depuis 0.4.10, le projet publie des archives (goreleaser) et non plus un binaire « goss-linux-amd64 ».
+goss_sha256: 26e365428946294bcec0c61d867bb3c8349f39feb3d0e6f59084e98632785cc7
+goss_url: "https://github.com/goss-org/goss/releases/download/v{{ goss_version }}/goss_{{ goss_version }}_linux_x86_64.tar.gz"
+goss_cache_controleur: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/medisphere/goss"
+goss_dossier: /opt/goss
+
+# Écoute de « goss serve » : adresse de service de la VM (comme node_exporter), port 8099.
+goss_ecoute: "{{ ansible_facts['default_ipv4']['address'] }}:8099"
+# Résultats gardés 30 s : une sonde toutes les 30 s (mon01) ne relance pas tout à chaque fois.
+goss_cache: 30s
+
+# Valeurs attendues (celles des rôles testés ; à tenir à jour avec eux).
+goss_node_exporter_version: "1.12.1"
+goss_alloy_version: "1.21.1"
+# Sources de temps : les deux passerelles du VLAN (.2 et .3, M07-E25).
+goss_sources_ntp: >-
+  {{ [ansible_facts['default_ipv4']['network'] | regex_replace('\.0$', '.2'),
+      ansible_facts['default_ipv4']['network'] | regex_replace('\.0$', '.3')] }}

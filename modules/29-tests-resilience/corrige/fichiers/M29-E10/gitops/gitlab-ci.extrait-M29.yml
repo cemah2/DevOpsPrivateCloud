@@ -1,0 +1,18 @@
+# plateforme/gitops — .gitlab-ci.yml : EXTRAIT (M29-E10, PLAT-3010).
+# Applications, AppProjects, ApplicationSets validés contre les CRD d'Argo CD du cluster ; charts des
+# Applications de plateforme/ rendus avec leurs valeurs (outils/rendre-charts.sh, M29-E02) puis validés
+# et passés aux règles Rego. Les valeurs venant de plateforme/politiques (falco) : REF_politiques.
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/validation@v2.11.0
+    inputs:
+      schemas_crd_version: "2026.10.23"
+      politiques_ref: v1.4.0
+      manifestes: [racine, projets, plateforme, applications]
+      charts_argocd: true
+
+# Compléments locaux du job du composant (fusionnés avec sa définition) : identifiants du robot de
+# lecture des charts (variables du groupe plateforme, M17) et dépôt des règles Falco pour le rendu.
+validation:manifestes:
+  before_script:
+    - git clone -q --depth 1 "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/plateforme/politiques.git" /tmp/ref-politiques
+    - export REF_politiques=/tmp/ref-politiques

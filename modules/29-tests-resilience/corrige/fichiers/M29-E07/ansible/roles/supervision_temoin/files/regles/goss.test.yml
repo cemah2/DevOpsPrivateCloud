@@ -1,0 +1,53 @@
+# plateforme/ansible — roles/supervision_temoin/files/regles/goss.test.yml (M29-E07)
+#   promtool test rules roles/supervision_temoin/files/regles/goss.test.yml
+rule_files:
+  - goss.yml
+evaluation_interval: 1m
+
+tests:
+  # Un test échoue sur dns02 (503) pendant 20 min : alerte après 15 min ; nbx01 reste vert.
+  - interval: 1m
+    input_series:
+      - series: 'probe_http_status_code{job="blackbox", groupe="goss", instance="http://dns02.par1.medisphere.internal:8099/healthz"}'
+        values: '200x5 503x20'
+      - series: 'probe_success{job="blackbox", groupe="goss", instance="http://dns02.par1.medisphere.internal:8099/healthz"}'
+        values: '1x5 0x20'
+      - series: 'probe_http_status_code{job="blackbox", groupe="goss", instance="http://nbx01.par1.medisphere.internal:8099/healthz"}'
+        values: '200x25'
+      - series: 'probe_success{job="blackbox", groupe="goss", instance="http://nbx01.par1.medisphere.internal:8099/healthz"}'
+        values: '1x25'
+    alert_rule_test:
+      - eval_time: 18m
+        alertname: TestsGossEnEchec
+        exp_alerts: []
+      - eval_time: 21m
+        alertname: TestsGossEnEchec
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme, job: blackbox, groupe: goss, instance: "http://dns02.par1.medisphere.internal:8099/healthz"}
+            exp_annotations:
+              resume: "Tests Goss en échec sur http://dns02.par1.medisphere.internal:8099/healthz"
+              description: "goss serve répond 503 depuis 15 minutes : au moins un test du socle (node_exporter, alloy, chrony) échoue sur la VM. Lire le détail : curl -s http://dns02.par1.medisphere.internal:8099/healthz | jq '.results[] | select(.successful == false)'."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/qualite/runbooks/RB-291-sonde-goss.md
+      - eval_time: 21m
+        alertname: SondeGossMuette
+        exp_alerts: []
+
+  # goss serve arrêté sur nbx01 : plus de code HTTP (0), sonde en échec.
+  - interval: 1m
+    input_series:
+      - series: 'probe_http_status_code{job="blackbox", groupe="goss", instance="http://nbx01.par1.medisphere.internal:8099/healthz"}'
+        values: '200x5 0x20'
+      - series: 'probe_success{job="blackbox", groupe="goss", instance="http://nbx01.par1.medisphere.internal:8099/healthz"}'
+        values: '1x5 0x20'
+    alert_rule_test:
+      - eval_time: 21m
+        alertname: SondeGossMuette
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme, job: blackbox, groupe: goss, instance: "http://nbx01.par1.medisphere.internal:8099/healthz"}
+            exp_annotations:
+              resume: "goss serve ne répond pas sur http://nbx01.par1.medisphere.internal:8099/healthz"
+              description: "Aucune réponse HTTP de goss serve depuis 15 minutes (service arrêté, VM éteinte, pare-feu local). RB-291 § « la sonde ne répond pas »."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/qualite/runbooks/RB-291-sonde-goss.md
+      - eval_time: 21m
+        alertname: TestsGossEnEchec
+        exp_alerts: []

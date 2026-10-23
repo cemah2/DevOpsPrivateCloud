@@ -1,0 +1,25 @@
+# composants/reseau/politiques/isolement-locataire-medinotif.yaml — M28-E15 (SEC-2915)
+# Cloison du locataire medinotif : aucun échange direct avec un autre locataire (MédiNotif ne parle
+# qu'à RabbitMQ, espace messagerie, hors locataires ; KEDA, espace keda, n'est pas un locataire).
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: isolement-locataire-medinotif
+spec:
+  description: "Cloison du locataire medinotif : aucun échange avec les autres locataires (SEC-2915)"
+  endpointSelector:
+    matchLabels:
+      io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant: medinotif
+  enableDefaultDeny:
+    ingress: false
+    egress: false
+  ingressDeny:
+    - fromEndpoints:
+        - matchExpressions:
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: Exists}
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: NotIn, values: [medinotif]}
+  egressDeny:
+    - toEndpoints:
+        - matchExpressions:
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: Exists}
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: NotIn, values: [medinotif]}

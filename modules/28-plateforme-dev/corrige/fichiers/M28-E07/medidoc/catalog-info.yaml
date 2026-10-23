@@ -1,0 +1,17 @@
+# medidoc/medidoc — catalog-info.yaml (M28-E07, PLAT-2907)
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: medidoc
+  title: MédiDoc
+  description: Gestion des documents patients (Go, stockage objet sur le RGW de ceph-par1).
+  annotations:
+    gitlab.com/project-slug: medidoc/medidoc
+  tags: [go]
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:default/medidoc
+  system: medidoc
+  dependsOn:
+    - resource:default/medidoc-documents

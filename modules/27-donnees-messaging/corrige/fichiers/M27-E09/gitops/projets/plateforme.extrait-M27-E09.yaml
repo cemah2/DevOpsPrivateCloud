@@ -1,0 +1,7 @@
+# À INTÉGRER dans plateforme/gitops — projets/plateforme.yaml (AppProject), M27-E09 (PLAT-2809).
+# Un espace de destination de plus (retiré en E10). Les types de cluster du chart (CRD, ClusterRole,
+# ClusterRoleBinding) sont déjà permis depuis M27-E03 ; le dépôt OCI des charts aussi (M20).
+spec:
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: kafka-essai

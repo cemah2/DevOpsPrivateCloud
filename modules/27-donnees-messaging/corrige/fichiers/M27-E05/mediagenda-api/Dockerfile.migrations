@@ -1,0 +1,33 @@
+# mediagenda/api — Dockerfile.migrations (M27-E05, DEV-2805)
+# Image de MIGRATION de MédiAgenda : Flyway 13 (édition OSS, Apache 2.0, JRE 25 embarqué) + les
+# fichiers SQL de CE commit. Construite par le pipeline enfant ci/migrations.yml, publiée sous la
+# MÊME étiquette que l'API (medisphere/mediagenda-migrations:vX.Y.Z), signée par le composant
+# « securite ». Le Job mediagenda-migrations (mediagenda/deploiement) la lance en hook Sync.
+#
+# Base : image officielle par le cache Harbor, ÉTIQUETTE ET EMPREINTE (relevée : crane digest
+# registry.par1.medisphere.internal/dockerhub/flyway/flyway:13.11.1 — à TA valeur ; Renovate la
+# tiendra à jour comme les autres, M13).
+FROM registry.par1.medisphere.internal/dockerhub/flyway/flyway:13.11.1@sha256:<EMPREINTE-FLYWAY>
+
+# Emplacement par défaut des migrations dans l'image officielle : /flyway/sql (« filesystem:sql »
+# relatif au répertoire d'installation /flyway). On n'y met QUE des fichiers relus en MR.
+COPY migrations/ /flyway/sql/
+# Rappel SQL exécuté avant une reprise (baseline) : refuse de reprendre une base où V1 et V2
+# n'auraient pas été appliquées par l'ancien outil (M27-E05). Hors de migrations/ : l'ancien
+# « python -m mediagenda.migrate » refuserait ce nom de fichier.
+COPY flyway/rappels/beforeBaseline.sql /flyway/sql/
+
+# Pas de télémétrie vers Redgate (le cluster ne sort pas vers Internet de toute façon).
+ENV REDGATE_DISABLE_TELEMETRY=true \
+    FLYWAY_VALIDATE_MIGRATION_NAMING=true
+
+# Utilisateur non root, sans répertoire personnel (l'image officielle tourne en root par défaut).
+# 10004 : à la suite des UID applicatifs du M12 (10001 MédiAgenda, 10002 MédiNotif, 10003
+# MédiAnnuaire). Flyway fonctionne avec une racine en lecture seule et un /tmp inscriptible
+# (vérifié : docker run --user 10004 --read-only --tmpfs /tmp …).
+USER 10004:10004
+
+# L'ENTRYPOINT « flyway » de l'image de base est conservé ; la commande par défaut affiche l'état
+# sans rien modifier. « clean » est refusé par défaut depuis Flyway 10 (cleanDisabled=true) :
+# on ne l'active jamais.
+CMD ["info"]

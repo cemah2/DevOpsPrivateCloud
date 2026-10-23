@@ -1,0 +1,43 @@
+# plateforme/gitops — projets/medinotif.yaml (M27-E04, DEV-2804)
+# Projet de MédiNotif (équipe de Julien Petit) : un seul dépôt source, deux espaces, aucun objet de
+# cluster, et rien de ce que la plateforme gouverne (quotas, limites, magasin de secrets,
+# générateurs). Même modèle que « mediagenda » (M20-E07, M25-E13).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: medinotif
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: MédiNotif (équipe de Julien Petit) — recette, prod
+  sourceRepos:
+    - https://git01.par1.medisphere.internal/medinotif/deploiement.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: medinotif-recette
+    - server: https://kubernetes.default.svc
+      namespace: medinotif-prod
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+    - {group: "", kind: ResourceQuota}
+    - {group: "", kind: LimitRange}
+    - {group: external-secrets.io, kind: SecretStore}
+    - {group: external-secrets.io, kind: PushSecret}
+    - {group: generators.external-secrets.io, kind: "*"}
+  orphanedResources:
+    warn: true
+    ignore:
+      # Posés par la plateforme : magasin de secrets (plateforme/k8s) et modèle réseau (Kyverno,
+      # GeneratingPolicy networkpolicy-par-defaut du M26 : tout espace avec l'étiquette d'équipe).
+      - {group: external-secrets.io, kind: SecretStore, name: openbao}
+      - {group: "", kind: ServiceAccount, name: eso}
+      - {group: networking.k8s.io, kind: NetworkPolicy, name: refus-par-defaut}
+      - {group: networking.k8s.io, kind: NetworkPolicy, name: sortie-dns}
+  roles:
+    - name: equipe
+      description: "Équipe MédiNotif : rôle porteur de jetons de projet seulement ; les personnes passent par policy.csv"
+      groups: []
+      policies:
+        - p, proj:medinotif:equipe, applications, get, medinotif/*, allow
+        - p, proj:medinotif:equipe, applications, sync, medinotif/medinotif-recette, allow

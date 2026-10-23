@@ -1,0 +1,17 @@
+# plateforme/k8s — espaces/portail/00-namespace.yaml (M28-E06, PLAT-2906) — « task espaces ».
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: portail
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    medisphere.internal/role: plateforme
+    medisphere.internal/proprietaire: plateforme
+    medisphere.internal/supervision-regles: "oui"
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    medisphere.internal/responsable: "karim.benali"
+    medisphere.internal/ticket: "PLAT-2906"

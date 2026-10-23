@@ -1,0 +1,18 @@
+# plateforme/gitops — applications/medinotif.yaml (ApplicationSet du M27-E04) : EXTRAIT (M28-E03).
+# Même filet qu'en M28-E02 pour MédiAgenda : le nombre de pods de MédiNotif appartient à l'HPA créé
+# par KEDA (keda-hpa-medinotif). Dans le gabarit (template.spec), pour TOUS les environnements
+# (la prod recevra son ScaledObject au palier 3) ; ajoute aussi RespectIgnoreDifferences=true aux
+# syncOptions s'il n'y est pas déjà.
+spec:
+  template:
+    spec:
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          name: medinotif
+          jsonPointers:
+            - /spec/replicas
+      syncPolicy:
+        syncOptions:
+          # … options du M27 (ServerSideApply, CreateNamespace=false…) …
+          - RespectIgnoreDifferences=true

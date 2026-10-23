@@ -1,0 +1,36 @@
+# plateforme/tofu-modules — .gitlab-ci.yml (EXTRAIT M29-E21, INC-5621).
+# 1. Terratest (manuel, M29-E08) : délai EXPLICITE de go test, supérieur au pire cas mesuré (création +
+#    démarrage + cloud-init + destruction ≈ 9 min) et inférieur au délai du job : sans -timeout, go test
+#    panique à 10 min et AUCUN defer ne s'exécute (les VMs restent).
+# 2. Nettoyeur planifié (pipeline planifié « nettoyage-terratest », chaque nuit à 3 h, NETTOYAGE=1) :
+#    simulation par défaut ; il échoue (code 3) s'il trouve des orphelines, ce qui prévient la plateforme.
+#    Destruction : relance manuelle du job avec NETTOYAGE_APPLIQUER=1, après lecture du journal.
+
+terratest-vm-debian:
+  stage: test
+  image: registry.par1.medisphere.internal/dockerhub/library/golang:1.26-trixie
+  tags: [k8s]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+  resource_group: terratest            # jamais deux Terratest en même temps (plage de 10 VMID)
+  timeout: 25m
+  script:
+    - cd vm-debian/test
+    - go test -v -count=1 -timeout 20m ./...
+
+nettoyage-terratest:
+  stage: test
+  image: registry.par1.medisphere.internal/dockerhub/alpine/k8s:1.36.5   # curl, jq, bash
+  tags: [k8s]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $NETTOYAGE == "1"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $NETTOYAGE == "1"'
+  resource_group: terratest
+  script:
+    - |
+      if [ "${NETTOYAGE_APPLIQUER:-0}" = 1 ]; then
+        outils/nettoyer-terratest.sh --appliquer
+      else
+        outils/nettoyer-terratest.sh --simulation
+      fi

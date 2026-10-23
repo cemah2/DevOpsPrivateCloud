@@ -1,0 +1,46 @@
+# plateforme/gitops — plateforme/vpa.yaml (M28-E04, PLAT-2904)
+# Vertical Pod Autoscaler 1.7.1 (chart fairwinds-stable/vpa 5.1.0) dans l'espace vpa.
+# Vague -1 : la CRD VerticalPodAutoscaler existe avant les Applications des équipes qui en déclarent.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vpa
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    medisphere.internal/ticket: "PLAT-2904"
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: vpa
+      targetRevision: 5.1.0
+      helm:
+        releaseName: vpa
+        valueFiles:
+          - $values/valeurs/vpa/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vpa
+  # Le Job « certgen-patch » du chart (crochet post-install/post-upgrade) écrit le caBundle du webhook
+  # APRÈS la synchronisation : sans cette exclusion, un selfHeal pourrait remettre le webhook rendu
+  # (sans caBundle) et l'apiserver n'appellerait plus l'admission-controller (TLS).
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      name: vpa-webhook-config
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false
+      - RespectIgnoreDifferences=true

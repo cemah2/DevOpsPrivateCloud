@@ -1,0 +1,12 @@
+# plateforme/donnees — politique réseau de l'espace messagerie (M27-E03) : règle d'ENTRÉE à AJOUTER
+# (M28-E03). L'opérateur de KEDA interroge l'API de gestion en HTTPS (15671) ; rien d'autre.
+# À placer dans la CiliumNetworkPolicy qui sélectionne les pods de la grappe « rabbitmq » (garde son nom).
+  ingress:
+    # … règles du M27 (AMQPS 5671 depuis medinotif-* et mediagenda-*, Prometheus 15692, interface 15671
+    #   depuis la Gateway, grappe 25672/4369/…) …
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: keda
+            app: keda-operator
+      toPorts:
+        - ports: [{port: "15671", protocol: TCP}]

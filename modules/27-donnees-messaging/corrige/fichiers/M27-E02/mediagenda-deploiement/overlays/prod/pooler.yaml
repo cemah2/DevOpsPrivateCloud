@@ -1,0 +1,68 @@
+# mediagenda/deploiement — overlays/prod/pooler.yaml (M27-E02, PLAT-2802)
+# Même réserve de connexions qu'en recette (plateforme/k8s, espaces/mediagenda-recette/
+# 56-mediagenda-db-pooler.yaml), dans le dépôt de l'équipe parce que la base de PROD est rendue
+# ici (components/dependances). Image PAR EMPREINTE : la politique Kyverno exiger-digest s'applique
+# aux espaces marqués medisphere.internal/environnement=prod (M26-E16).
+# Vague -2 (avec la base) : prêt avant le Job de migration et l'API.
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: mediagenda-db-pooler-rw
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  cluster:
+    name: mediagenda-db
+  instances: 2
+  type: rw
+  pgbouncer:
+    poolMode: transaction
+    image: registry.par1.medisphere.internal/ghcr/cloudnative-pg/pgbouncer:1.26.1@sha256:<EMPREINTE-PGBOUNCER>
+    parameters:
+      max_client_conn: "300"
+      default_pool_size: "15"
+      max_db_connections: "50"
+      idle_transaction_timeout: "60"
+  template:
+    spec:
+      priorityClassName: medisphere-standard
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  cnpg.io/poolerName: mediagenda-db-pooler-rw
+      containers:
+        - name: pgbouncer
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mediagenda-db-pooler-rw
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      cnpg.io/poolerName: mediagenda-db-pooler-rw
+---
+# Base déclarée, jamais supprimée avec l'objet (voir la recette).
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: mediagenda-db-mediagenda
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  cluster:
+    name: mediagenda-db
+  name: mediagenda
+  owner: mediagenda
+  ensure: present
+  databaseReclaimPolicy: retain

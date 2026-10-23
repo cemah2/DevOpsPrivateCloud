@@ -1,0 +1,23 @@
+# plateforme/k8s — espaces/chaos-experiences/00-namespace.yaml (M29-E09, PLAT-3009)
+# Les EXPÉRIENCES (PodChaos, NetworkChaos…, Schedule, Workflow) vivent ici, jamais dans l'espace
+# visé : on les liste, on les met en pause et on les supprime d'un seul endroit (RB-292). Aucun pod
+# n'y tourne : restricted. Seule exception écrite à « rien à la main hors Argo CD » (ADR-0290) :
+# les expériences sont appliquées depuis adm01, sous l'identité OIDC de la personne, et versionnées
+# dans plateforme/resilience/chaos/.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chaos-experiences
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    medisphere.internal/role: plateforme
+    medisphere.internal/proprietaire: plateforme
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+  annotations:
+    medisphere.internal/responsable: "karim.benali"
+    medisphere.internal/ticket: "PLAT-3009"

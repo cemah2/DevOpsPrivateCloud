@@ -1,0 +1,19 @@
+# plateforme/ansible — host_vars/s3-01/seaweedfs.yml : EXTRAIT, ajouts de M28-E10 (DEV-2910).
+seaweedfs_identites:
+  # … identités existantes …
+  # Publication des sites TechDocs par la CI des projets (job techdocs:publication).
+  - nom: techdocs-ecriture
+    cle_acces: "{{ vault_s3_techdocs_ecriture_cle_acces }}"
+    cle_secrete: "{{ vault_s3_techdocs_ecriture_cle_secrete }}"
+    actions: [Read:portail-techdocs, Write:portail-techdocs, List:portail-techdocs]
+  # Lecture par le portail (kv/plateforme/portail : techdocs_cle, techdocs_secret) et par les checks
+  # (~/.config/workbook/s3-techdocs.env).
+  - nom: techdocs-lecture
+    cle_acces: "{{ vault_s3_techdocs_lecture_cle_acces }}"
+    cle_secrete: "{{ vault_s3_techdocs_lecture_cle_secrete }}"
+    actions: [Read:portail-techdocs, List:portail-techdocs]
+
+seaweedfs_compartiments:
+  # … compartiments existants …
+  - nom: portail-techdocs
+    versionnage: false

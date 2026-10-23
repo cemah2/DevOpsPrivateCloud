@@ -1,0 +1,42 @@
+# plateforme/observabilite — regles/keda.yaml (M28-E13, PLAT-2913)
+# Santé de l'autoscaling piloté par les événements. Métriques de l'opérateur KEDA 2.21 (page
+# « Integrations → Prometheus ») : étiquettes namespace, scaledObject, scaler, triggerIndex, metric,
+# type ; « namespace » est renommée exported_namespace par la collecte (ServiceMonitor sans honorLabels).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: keda
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision-regles: "oui"
+spec:
+  groups:
+    - name: keda
+      rules:
+        - alert: KedaScalerEnErreur
+          expr: >-
+            sum by (exported_namespace, scaledObject, scaler) (rate(keda_scaler_detail_errors_total[5m])) > 0
+          for: 10m
+          labels: {gravite: avertissement, equipe: plateforme}
+          annotations:
+            resume: "KEDA ne lit plus la source {{ $labels.scaler }} de {{ $labels.exported_namespace }}/{{ $labels.scaledObject }}"
+            description: "Erreurs continues depuis 10 min : l'autoscaling de cette charge est aveugle (repli éventuel en cours)."
+            runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/plateforme-dev/runbooks/RB-285-autoscaling-muet.md"
+        - alert: KedaScaledObjectEnPause
+          expr: >-
+            max by (exported_namespace, scaledObject) (keda_scaled_object_paused) == 1
+          for: 2h
+          labels: {gravite: avertissement, equipe: plateforme}
+          annotations:
+            resume: "{{ $labels.exported_namespace }}/{{ $labels.scaledObject }} est en pause depuis plus de 2 h"
+            description: "Une pause de maintenance oubliée fige l'effectif : retirer l'annotation par MR (RB-285)."
+            runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/plateforme-dev/runbooks/RB-285-autoscaling-muet.md"
+        - alert: KedaAbsent
+          expr: >-
+            absent(up{job=~".*keda-operator"} == 1) or absent(up{job=~".*keda-operator-metrics-apiserver"} == 1)
+          for: 5m
+          labels: {gravite: critique, equipe: plateforme}
+          annotations:
+            resume: "KEDA (opérateur ou adaptateur de métriques) ne répond plus à Prometheus"
+            description: "Sans opérateur, aucune activation depuis 0 ; sans adaptateur, les HPA keda-hpa-* n'ont plus de métrique."
+            runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/plateforme-dev/runbooks/RB-285-autoscaling-muet.md"

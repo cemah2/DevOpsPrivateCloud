@@ -1,0 +1,63 @@
+# plateforme/gitops — valeurs/capsule/values.yaml (M28-E05, PLAT-2905) — chart projectcapsule/capsule 0.15.1.
+# Clés vérifiées dans le values.yaml du chart 0.15.1 et rendues par « helm template ».
+# ⚠️ Capsule 0.15 exige Kubernetes ≥ 1.36.0 (k8s-par1 : 1.36.5) ; 0.15.0 corrige un contournement
+# d'autorisation (GHSA-p8j8-x28r-3c9v) : ne jamais descendre sous 0.15.0.
+
+# Les CRD sont livrées par le chart (dossier crds/, « crds.install: true » par défaut).
+
+manager:
+  image:
+    registry: registry.par1.medisphere.internal/ghcr
+    repository: projectcapsule/capsule
+    tag: "v0.15.1@sha256:<DIGEST-CAPSULE>"
+    pullPolicy: IfNotPresent
+  # Ressources (le chart n'en pose pas).
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 512Mi}
+  options:
+    # La CapsuleConfiguration « default » est rendue par le chart à partir de ces options.
+    createConfiguration: true
+    capsuleConfiguration: default
+    # Utilisateurs Capsule : SEULES les requêtes de ces groupes passent par les règles de Capsule
+    # (création d'espaces, préfixe, quotas…). Champ « users » (kind/name) de la 0.15 ; les anciens
+    # « capsuleUserGroups »/« userNames » (userGroups/userNames de la CRD) sont dépréciés.
+    # Groupes tels que l'apiserver les voit : préfixe « oidc: » de l'authentification structurée (M24).
+    users:
+      - kind: Group
+        name: "oidc:mediagenda"
+      - kind: Group
+        name: "oidc:medidoc"
+    # Administrateurs : propriétaires implicites de TOUS les locataires (rattacher, déplacer, retirer
+    # un espace). Ni Argo CD (il n'est pas un utilisateur Capsule, Capsule ne le contraint pas) ni
+    # personne d'autre que les administrateurs de la plateforme.
+    administrators:
+      - kind: Group
+        name: "oidc:plateforme-admins"
+    # Un espace créé par une équipe porte le nom de son locataire en préfixe (« mediagenda-… ») :
+    # l'appartenance se déduit du nom, pas d'étiquette à poser.
+    forceTenantPrefix: true
+    # Une équipe ne doit pas pouvoir se faire passer pour une autre par le nom d'un espace.
+    protectedNamespaceRegex: ""
+    allowServiceAccountPromotion: false
+
+# Jobs du chart (post-install, pre/post-delete) : image kubectl de Capsule par le cache Harbor.
+global:
+  jobs:
+    kubectl:
+      image:
+        registry: registry.par1.medisphere.internal/dockerhub
+        repository: clastix/kubectl
+        # Sans « tag », le chart prend la version de Kubernetes du cluster (v1.36.5) : on la fixe,
+        # par empreinte. Vérifie que cette étiquette existe (Harbor, cache dockerhub).
+        tag: "v1.36.5@sha256:<DIGEST-KUBECTL>"
+
+# Certificats des webhooks : générés par le contrôleur (défaut), renouvelés par lui.
+# (cert-manager possible par certManager.generateCertificates ; on garde le défaut documenté.)
+
+# Supervision (M21) : ServiceMonitor du contrôleur avec l'étiquette de sélection.
+monitoring:
+  serviceMonitor:
+    enabled: true
+    labels:
+      medisphere.internal/supervision: "oui"

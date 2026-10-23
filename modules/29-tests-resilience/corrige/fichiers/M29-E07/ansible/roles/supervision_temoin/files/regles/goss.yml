@@ -1,0 +1,35 @@
+# plateforme/ansible — roles/supervision_temoin/files/regles/goss.yml (M29-E07, PLAT-3007)
+# Règles du Prometheus TÉMOIN (mon01) pour l'essai Goss : la sonde blackbox du groupe « goss »
+# interroge http://<vm>:8099/healthz ; goss serve répond 200 si tous ses tests passent, 503 sinon.
+# Deux situations distinctes, deux alertes :
+#   - 503 : la VM répond, mais un test du socle échoue (dérive de configuration) → avertissement ;
+#   - pas de réponse HTTP : goss serve arrêté, VM éteinte, pare-feu → avertissement aussi (la VM
+#     elle-même est surveillée ailleurs ; Goss n'est pas un service de production).
+# Ces sondes sont EXCLUES de SondeEnEchec (critique) : voir regles-temoin.extrait-M29.yml.j2.
+groups:
+  - name: goss
+    rules:
+      - alert: TestsGossEnEchec
+        expr: probe_http_status_code{job="blackbox", groupe="goss"} == 503
+        for: 15m
+        labels:
+          gravite: avertissement
+          equipe: plateforme
+        annotations:
+          resume: "Tests Goss en échec sur {{ $labels.instance }}"
+          description: >-
+            goss serve répond 503 depuis 15 minutes : au moins un test du socle (node_exporter, alloy,
+            chrony) échoue sur la VM. Lire le détail : curl -s {{ $labels.instance }} | jq '.results[] | select(.successful == false)'.
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/qualite/runbooks/RB-291-sonde-goss.md
+      - alert: SondeGossMuette
+        expr: probe_success{job="blackbox", groupe="goss"} == 0 and probe_http_status_code{job="blackbox", groupe="goss"} == 0
+        for: 15m
+        labels:
+          gravite: avertissement
+          equipe: plateforme
+        annotations:
+          resume: "goss serve ne répond pas sur {{ $labels.instance }}"
+          description: >-
+            Aucune réponse HTTP de goss serve depuis 15 minutes (service arrêté, VM éteinte, pare-feu
+            local). RB-291 § « la sonde ne répond pas ».
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/qualite/runbooks/RB-291-sonde-goss.md

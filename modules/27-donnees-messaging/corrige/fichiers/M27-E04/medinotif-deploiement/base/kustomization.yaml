@@ -1,0 +1,15 @@
+# medinotif/deploiement — base/kustomization.yaml (M27-E04, DEV-2804)
+# Même modèle que mediagenda/deploiement (M17, M20) : une base commune, un overlay par
+# environnement (recette en E04, prod en E08), synchronisés par l'ApplicationSet « medinotif ».
+# La base ne contient AUCUN secret ni aucune valeur propre à un environnement.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: medinotif
+    includeSelectors: false
+resources:
+  - compte.yaml
+  - deployment.yaml
+  - metriques.yaml
+  - reseau.yaml

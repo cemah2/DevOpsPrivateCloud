@@ -1,0 +1,32 @@
+# plateforme/observabilite — regles/alertes-donnees.yaml : EXTRAIT à ajouter (M27-E23, INC-5423).
+# Ce qui a manqué pendant l'incident : un signal sur les publications ratées de MédiAgenda (silencieuses
+# par conception, M27-E08) et sur un rebut qui se remplit. La métrique de M27-E08 compte les publications
+# par résultat : adapte la valeur d'échec (« echec » ici) à celle de ton correctif.
+    - name: donnees.notifications
+      rules:
+        - alert: MediagendaPublicationEnEchec
+          expr: |
+            sum by (namespace) (rate(mediagenda_notifications_total{resultat!~"publie|ok|succes"}[10m]))
+              / sum by (namespace) (rate(mediagenda_notifications_total[10m])) > 0.05
+          for: 10m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.namespace }} : {{ $value | humanizePercentage }} des notifications ne sont pas publiées"
+            description: >-
+              MédiAgenda n'arrive plus à publier les demandes de notification ({{ $labels.namespace }}) :
+              les rendez-vous sont pris, aucune confirmation ne part. Les requêtes réussissent quand même.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-277-consommateur-arrete.md
+        - alert: RabbitmqRebutAlimente
+          expr: |
+            sum by (vhost) (rabbitmq_detailed_queue_messages{queue="notifications.rebut"})
+              - sum by (vhost) (rabbitmq_detailed_queue_messages{queue="notifications.rebut"} offset 30m) > 10
+          for: 5m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.vhost }} : {{ $value }} messages de plus au rebut en 30 min"
+            description: "Des demandes de notification partent au rebut ({{ $labels.vhost }}) : invalides, limite de livraison ou longueur de file. Regarder x-death."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-277-consommateur-arrete.md

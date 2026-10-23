@@ -1,0 +1,9 @@
+# plateforme/k8s — espaces/portail/50-portail-db.yaml : EXTRAIT (M28-E16). Ajout au Cluster de E06 :
+# archivage continu des WAL par le plugin (sans lui, une sauvegarde de base seule ne permet pas de
+# restaurer à un instant précis, et le plugin refuse une sauvegarde « plugin » sans archiveur).
+spec:
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: cnpg-s3

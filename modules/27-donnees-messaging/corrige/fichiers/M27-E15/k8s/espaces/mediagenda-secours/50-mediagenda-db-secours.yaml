@@ -1,0 +1,69 @@
+# plateforme/k8s — espaces/mediagenda-secours/50-mediagenda-db-secours.yaml (M27-E15, PLAT-2815)
+# Réplica de secours AUTONOME (« standalone replica cluster ») de la base de production de MédiAgenda :
+# démarré depuis la dernière sauvegarde de base de la prod (bootstrap.recovery), puis en récupération
+# continue depuis l'archive des WAL (replica.enabled, source = même externalClusters). Aucune connexion
+# réseau à la prod : tout passe par s3-01. Retard ≥ archive_timeout de la prod (5 min, CNPG).
+#
+# Il N'ARCHIVE RIEN (pas de .spec.plugins) : en récupération, il n'a rien à archiver, et le jour de sa
+# promotion (RB-275) on lui ajoute l'archivage sous un NOUVEAU serverName.
+# Appliqué depuis adm01 comme la base de recette (kubectl apply -f), JAMAIS supprimé par Argo CD.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db-secours
+  namespace: mediagenda-secours
+  labels:
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  description: "Réplica de secours de mediagenda-db (production), alimenté par l'archive (PLAT-2815)"
+  instances: 2
+  # Même image que la production (une majeure différente ne peut pas rejouer ses WAL).
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
+
+  bootstrap:
+    recovery:
+      source: mediagenda-db-prod
+      # Base applicative pour laquelle l'opérateur génère le Secret -app (M16 : défaut « app »).
+      database: mediagenda
+      owner: mediagenda
+
+  replica:
+    enabled: true
+    source: mediagenda-db-prod
+
+  externalClusters:
+    - name: mediagenda-db-prod
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: cnpg-s3
+          # Nom sous lequel la PRODUCTION archive (s3://cnpg-k8s-par1/<serverName>/). Vérifie-le :
+          #   kubectl -n mediagenda-prod get cluster mediagenda-db -o jsonpath='{.spec.plugins}'
+          serverName: mediagenda-db-prod
+
+  storage:
+    storageClass: ceph-rbd
+    size: 5Gi
+
+  # Un réplica en récupération exige des valeurs au moins égales à celles du primaire pour
+  # max_connections, max_worker_processes, max_wal_senders, max_prepared_transactions, max_locks_per_transaction.
+  postgresql:
+    parameters:
+      max_connections: "100"
+      timezone: Europe/Paris
+
+  affinity:
+    enablePodAntiAffinity: true
+    podAntiAffinityType: required
+    topologyKey: kubernetes.io/hostname
+    tolerations:
+      - key: dedie
+        operator: Equal
+        value: bdd
+        effect: NoSchedule
+
+  resources:
+    requests: {cpu: 50m, memory: 384Mi}
+    limits: {cpu: "1", memory: 768Mi}
+
+  enableSuperuserAccess: false

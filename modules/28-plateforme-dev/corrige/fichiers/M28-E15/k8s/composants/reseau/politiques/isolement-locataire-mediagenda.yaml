@@ -1,0 +1,45 @@
+# composants/reseau/politiques/isolement-locataire-mediagenda.yaml — M28-E15 (SEC-2915)
+# Même principe que isolement-locataire-medidoc.yaml. MédiAgenda et MédiNotif sont deux locataires de
+# la même équipe mais ne se parlent PAS directement : leur seule voie est RabbitMQ (espace messagerie,
+# hors locataires). Exception écrite (M23-E06) : l'API MédiAgenda → MédiDoc. Un refus porte sur le
+# pair ; pour exempter un pod SOURCE, la cloison est coupée en deux politiques par endpointSelector.
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: isolement-locataire-mediagenda
+spec:
+  description: "Cloison du locataire mediagenda : aucun échange avec les autres locataires (sauf API → MédiDoc, voir -hors-api) (SEC-2915)"
+  endpointSelector:
+    matchLabels:
+      io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant: mediagenda
+  enableDefaultDeny:
+    ingress: false
+    egress: false
+  ingressDeny:
+    - fromEndpoints:
+        - matchExpressions:
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: Exists}
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: NotIn, values: [mediagenda]}
+  egressDeny:
+    - toEndpoints:
+        - matchExpressions:
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: Exists}
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: NotIn, values: [mediagenda, medidoc]}
+---
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: isolement-locataire-mediagenda-hors-api
+spec:
+  description: "Pods du locataire mediagenda autres que l'API : aucun accès au locataire medidoc (SEC-2915)"
+  endpointSelector:
+    matchExpressions:
+      - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: In, values: [mediagenda]}
+      - {key: app.kubernetes.io/name, operator: NotIn, values: [mediagenda]}
+  enableDefaultDeny:
+    ingress: false
+    egress: false
+  egressDeny:
+    - toEndpoints:
+        - matchExpressions:
+            - {key: io.cilium.k8s.namespace.labels.capsule.clastix.io/tenant, operator: In, values: [medidoc]}

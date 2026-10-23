@@ -1,0 +1,35 @@
+# composants/reseau/politiques/collecte-prometheus.yaml — M21-E07 (DEV-2207) ; ports ajoutés au M27
+# Les espaces d'équipe sont en refus par défaut (M15-E17, M15-E34) : la collecte de Prometheus y
+# est un flux comme un autre, autorisé explicitement, par la PLATEFORME.
+# Une seule politique pour tous les espaces d'équipe (étiquette medisphere.internal/equipe) : un
+# nouvel espace d'équipe (medinotif-recette, medinotif-prod au M27) est collecté sans modification.
+# Ports : 8000 (MédiAgenda), 8080 (MédiDoc), 9187 (exportateur de CloudNativePG) ;
+#   M27-E02 : 9127 (exportateur des pods PgBouncer du Pooler) ;
+#   M27-E04 : 9100 (MédiNotif) ;
+#   M27-E07 : 9121 (exportateur de Valkey, conteneur annexe du StatefulSet valkey).
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: collecte-prometheus
+spec:
+  description: "Collecte des métriques des espaces d'équipe par Prometheus (supervision/kps) — DEV-2207, PLAT-2802"
+  endpointSelector:
+    matchExpressions:
+      - key: io.cilium.k8s.namespace.labels.medisphere.internal/equipe
+        operator: Exists
+  enableDefaultDeny:
+    ingress: false
+    egress: false
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - {port: "8000", protocol: TCP}
+            - {port: "8080", protocol: TCP}
+            - {port: "9187", protocol: TCP}
+            - {port: "9127", protocol: TCP}
+            - {port: "9100", protocol: TCP}
+            - {port: "9121", protocol: TCP}

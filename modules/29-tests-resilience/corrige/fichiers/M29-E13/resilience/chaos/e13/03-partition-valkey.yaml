@@ -1,0 +1,41 @@
+# plateforme/resilience — chaos/e13/03-partition-valkey.yaml (M29-E13, PLAT-3013)
+#
+# Hypothèse (tirée de la documentation de la plateforme, M27-E07) : « Valkey est un cache, sa perte
+#   dégrade sans casser » : pendant 2 min sans Valkey, les créneaux sont calculés depuis la base
+#   (mode dégradé), le p95 monte, mais aucune requête ne part en 5xx et l'API reste disponible.
+# Mesure : 5xx et réponses 503 de la Gateway (k6 : http_req_failed, checks), pods prêts de l'API
+#   (kube_pod_status_ready{namespace="mediagenda-recette", condition="true"}), mediagenda_cache_total
+#   {resultat="erreur"}, SLO mediagenda-recette-disponibilite.
+# Critère d'arrêt : plus aucun pod prêt de l'API pendant 30 s (indisponibilité totale) → pause
+#   immédiate, l'hypothèse est réfutée, inutile d'aller au bout.
+# Arrêt d'urgence : kubectl -n chaos-experiences annotate networkchaos m29-e13-partition-valkey \
+#   experiment.chaos-mesh.org/pause=true
+#
+# Partition = règles iptables (CHAOS-INPUT/CHAOS-OUTPUT) et ipset posés dans l'espace réseau des pods
+# du sélecteur ; « both » coupe les deux sens. Les connexions TCP établies vers Valkey ne reçoivent plus
+# rien : le client redis attend son délai (socket_timeout) avant d'échouer.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: m29-e13-partition-valkey
+  namespace: chaos-experiences
+  labels:
+    medisphere.internal/exercice: m29-e13
+  annotations:
+    medisphere.internal/ticket: PLAT-3013
+spec:
+  action: partition
+  mode: all
+  selector:
+    namespaces: [mediagenda-recette]
+    labelSelectors:
+      app.kubernetes.io/name: mediagenda
+      app.kubernetes.io/component: api
+  direction: both
+  target:
+    mode: all
+    selector:
+      namespaces: [mediagenda-recette]
+      labelSelectors:
+        app.kubernetes.io/name: valkey
+  duration: 2m

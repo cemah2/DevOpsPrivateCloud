@@ -1,0 +1,14 @@
+# plateforme/donnees — topologie/medinotif-recette/ (M27-E04, DEV-2804)
+# Topologie RabbitMQ de MédiNotif en recette, déclarée par le Messaging Topology Operator 1.20.
+# Noms des OBJETS Kubernetes préfixés par l'environnement (tout est dans l'espace messagerie) ;
+# noms dans RABBITMQ (spec.name) identiques d'un environnement à l'autre : le vhost cloisonne.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - vhost.yaml
+  - echanges.yaml
+  - files.yaml
+  - liaisons.yaml
+  - politique.yaml
+  - utilisateurs.yaml
+  - permissions.yaml

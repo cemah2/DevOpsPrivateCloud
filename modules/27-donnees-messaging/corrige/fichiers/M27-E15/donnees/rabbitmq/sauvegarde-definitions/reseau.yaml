@@ -1,0 +1,43 @@
+# plateforme/donnees — rabbitmq/sauvegarde-definitions/reseau.yaml (M27-E15)
+# Sortie du Job : API de gestion de la grappe (15671, TLS) et s3-01:8333 ; DNS. Entrée côté RabbitMQ :
+# la CNP de la grappe (M27-E03) doit autoriser 15671 depuis app.kubernetes.io/name=export-definitions.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: export-definitions
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: export-definitions
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports: [{port: "53", protocol: ANY}]
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: rabbitmq
+      toPorts:
+        - ports: [{port: "15671", protocol: TCP}]
+    - toCIDR: [10.10.20.14/32]
+      toPorts:
+        - ports: [{port: "8333", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: rabbitmq-depuis-export-definitions
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: rabbitmq
+  enableDefaultDeny:
+    ingress: false
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: export-definitions
+      toPorts:
+        - ports: [{port: "15671", protocol: TCP}]

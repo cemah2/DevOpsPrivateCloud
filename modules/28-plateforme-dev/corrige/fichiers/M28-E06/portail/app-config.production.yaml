@@ -1,0 +1,66 @@
+# plateforme/portail — app-config.production.yaml (M28-E06, PLAT-2906)
+# Couche de PRODUCTION, lue après app-config.yaml (arguments --config de l'image, repris dans les
+# valeurs du chart). Aucun secret ici : uniquement des ${VARIABLES} fournies au pod par des Secrets
+# (ExternalSecret « portail », Secret « portail-db-app » de CloudNativePG).
+# Complétée en E07 (intégration GitLab, catalogue) et en E10 (Kubernetes, TechDocs).
+
+app:
+  title: Portail MédiSphère
+  baseUrl: https://portail.apps.par1.medisphere.internal
+
+organization:
+  name: MédiSphère
+
+backend:
+  baseUrl: https://portail.apps.par1.medisphere.internal
+  listen: ':7007'
+  # Le frontend est servi par le même processus (app-backend) : même origine.
+  cors:
+    origin: https://portail.apps.par1.medisphere.internal
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+    credentials: true
+  database:
+    client: pg
+    # Une seule base (« portail », propriétaire « portail », CNPG) : un SCHÉMA par plugin au lieu
+    # d'une base par plugin (le propriétaire d'une base CNPG n'a pas CREATEDB).
+    pluginDivisionMode: schema
+    connection:
+      host: ${POSTGRES_HOST}
+      port: ${POSTGRES_PORT}
+      user: ${POSTGRES_USER}
+      password: ${POSTGRES_PASSWORD}
+      database: portail
+      # TLS vérifié avec l'autorité de CloudNativePG (Secret portail-db-ca, clé ca.crt, monté).
+      ssl:
+        rejectUnauthorized: true
+        ca:
+          $file: /etc/portail-db/ca.crt
+  auth:
+    # Accès externe statique pour les vérifications du workbook (adm01) : lecture du catalogue SEULE.
+    externalAccess:
+      - type: static
+        options:
+          token: ${BACKSTAGE_CHECKS_TOKEN}
+          subject: wb-checks
+        accessRestrictions:
+          - plugin: catalog
+            permissionAttribute:
+              action: read
+
+auth:
+  environment: production
+  session:
+    secret: ${AUTH_SESSION_SECRET}
+  providers:
+    oidc:
+      production:
+        metadataUrl: https://sso.par1.medisphere.internal/realms/medisphere/.well-known/openid-configuration
+        clientId: backstage
+        clientSecret: ${AUTH_OIDC_CLIENT_SECRET}
+        prompt: auto
+        sessionDuration: { hours: 8 }
+        # Pas de « signIn.resolvers » : le résolveur est dans le code (modules/authOidcMedisphere.ts).
+
+catalog:
+  # Remplace les emplacements d'exemple de app-config.yaml (une liste remplace la liste précédente).
+  locations: []

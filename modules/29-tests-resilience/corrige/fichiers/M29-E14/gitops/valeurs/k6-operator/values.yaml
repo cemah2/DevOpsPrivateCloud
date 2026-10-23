@@ -1,0 +1,44 @@
+# plateforme/gitops — valeurs/k6-operator/values.yaml (M29-E14, PLAT-3014)
+# Chart grafana/k6-operator 4.7.0 (k6-operator 1.7.0). Clés vérifiées dans le values.yaml du chart à
+# l'étiquette helm-k6-operator-4.7.0 (helm show values) et par « helm template » à la rédaction.
+
+# L'espace k6 est créé par plateforme/k8s (espaces/k6/) avec ses étiquettes PSA : le chart ne le crée pas.
+namespace:
+  create: false
+
+# CRD livrées par le chart.
+installCRDs: true
+
+# RBAC de portée cluster : l'opérateur surveille les TestRun de tous les espaces ; on n'en crée que dans k6.
+rbac:
+  namespaced: false
+
+manager:
+  replicas: 1
+  logging:
+    development: false        # journaux JSON (Loki)
+  image:
+    registry: registry.par1.medisphere.internal/ghcr
+    repository: grafana/k6-operator
+    tag: controller-v1.7.0
+    pullPolicy: IfNotPresent
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 200m, memory: 128Mi}
+  # restricted : le chart ne pose pas de contexte par défaut (valeurs vides).
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile: {type: RuntimeDefault}
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities: {drop: [ALL]}
+
+# Métriques de l'opérateur (TestRun créés, erreurs de réconciliation) : ServiceMonitor dans supervision,
+# sélectionné par l'étiquette de kube-prometheus-stack (M21).
+metrics:
+  serviceMonitor:
+    enabled: true
+    namespace: supervision
+    labels:
+      medisphere.internal/supervision: "oui"

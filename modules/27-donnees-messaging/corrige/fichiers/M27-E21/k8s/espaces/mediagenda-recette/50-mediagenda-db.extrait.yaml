@@ -1,0 +1,9 @@
+# plateforme/k8s — espaces/mediagenda-recette/50-mediagenda-db.yaml : EXTRAIT (M27-E21, INC-5421).
+# Une transaction ouverte et oubliée (« idle in transaction ») est fermée par le serveur au bout de
+# 10 minutes : elle ne peut plus tenir indéfiniment un verrou qui bloque les migrations ou la purge
+# (VACUUM). Paramètre rechargé à chaud par CNPG (pas de redémarrage). Valeur à reprendre en prod après
+# vérification qu'aucun traitement légitime ne garde une transaction oisive aussi longtemps.
+spec:
+  postgresql:
+    parameters:
+      idle_in_transaction_session_timeout: "10min"

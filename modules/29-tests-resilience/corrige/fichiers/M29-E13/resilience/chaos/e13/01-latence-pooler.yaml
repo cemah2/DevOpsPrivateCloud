@@ -1,0 +1,45 @@
+# plateforme/resilience — chaos/e13/01-latence-pooler.yaml (M29-E13, PLAT-3013)
+#
+# Hypothèse : avec 50 ms (± 10 ms) de plus sur chaque paquet de l'API vers le pooler PgBouncer, le p95
+#   des requêtes métier de la recette reste sous 250 ms et le taux de 5xx sous 1 %.
+#   (Une requête de création fait 2 à 3 allers-retours SQL : on s'attend à +100 à +150 ms au p95.)
+# Mesure : p95 = histogram_quantile(0.95, sum by (le) (rate(mediagenda_http_request_duration_seconds_bucket
+#   {namespace="mediagenda-recette", route!~"/sante|/pret|/metrics"}[1m]))) ; 5xx (même filtre, code=~"5..") ;
+#   SLO Pyrra mediagenda-recette-latence (taux de consommation 5 min / 1 h). Relevés 5 min avant, pendant,
+#   5 min après ; charge k6 de M29-E06 à 15 itérations/s.
+# Critère d'arrêt : p95 > 1 s pendant 1 min, ou 5xx > 5 %.
+# Arrêt d'urgence : kubectl -n chaos-experiences annotate networkchaos m29-e13-latence-pooler \
+#   experiment.chaos-mesh.org/pause=true   (retrait immédiat ; suppression : kubectl delete -f ce fichier)
+#
+# Sens : selector = pods de l'API (là où les règles tc sont posées), target = pods du pooler,
+# direction « to » = paquets qui PARTENT de l'API vers le pooler. Les réponses du pooler ne sont pas
+# retardées : l'aller-retour prend +50 ms, pas +100 ms.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: m29-e13-latence-pooler
+  namespace: chaos-experiences
+  labels:
+    medisphere.internal/exercice: m29-e13
+  annotations:
+    medisphere.internal/ticket: PLAT-3013
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces: [mediagenda-recette]
+    labelSelectors:
+      app.kubernetes.io/name: mediagenda
+      app.kubernetes.io/component: api
+  direction: to
+  target:
+    mode: all
+    selector:
+      namespaces: [mediagenda-recette]
+      labelSelectors:
+        cnpg.io/poolerName: mediagenda-db-pooler-rw
+  delay:
+    latency: 50ms
+    jitter: 10ms
+    correlation: "25"
+  duration: 5m

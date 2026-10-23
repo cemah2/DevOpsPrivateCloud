@@ -1,0 +1,12 @@
+# mediagenda/deploiement — components/livraison/kustomization.yaml : EXTRAIT (M27-E05, DEV-2805).
+# Dans le remplacement de « data.version » : la cible du Job change de nom ET de conteneur. L'image
+# du Job est medisphere/mediagenda-migrations : le remplacement ne touche que ce qui suit le « : »
+# (l'étiquette), le dépôt reste celui du Job. Même version que l'API, toujours.
+      - select:
+          kind: Job
+          name: mediagenda-migrations
+        fieldPaths:
+          - spec.template.spec.containers.[name=flyway].image
+        options:
+          delimiter: ':'
+          index: 1

@@ -1,0 +1,42 @@
+# mediagenda/deploiement — overlays/prod/kustomization.yaml : EXTRAIT (M27-E07). À FUSIONNER.
+resources:
+  # … existant …
+  - valkey.yaml
+components:
+  # … existant (dependances SANS Valkey désormais, migrations, canary, identifiants-dynamiques) …
+  - ../../components/racine-medisphere
+  # APRÈS identifiants-dynamiques : son annotation de Reloader sur le Rollout est complétée ici.
+  - ../../components/valkey
+  - ../../components/livraison         # toujours le dernier
+patches:
+  # Chemin OpenBao des comptes de Valkey de cet environnement.
+  - target:
+      group: external-secrets.io
+      kind: ExternalSecret
+      labelSelector: app.kubernetes.io/name=valkey
+    patch: |-
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: mediagenda/prod/valkey
+  # L'exportateur joint son voisin sous le nom du certificat, sans quitter le pod.
+  - target:
+      group: apps
+      kind: StatefulSet
+      name: valkey
+    patch: |-
+      - op: add
+        path: /spec/template/spec/hostAliases
+        value:
+          - ip: 127.0.0.1
+            hostnames: [valkey.mediagenda-prod.svc]
+# Prod : toutes les images par condensé (Kyverno exiger-digest, M26-E21). Condensés de l'index
+# multi-architecture relevés le 23/10/2026 sur Docker Hub ; vérifie-les dans Harbor
+# (crane digest registry.par1.medisphere.internal/dockerhub/valkey/valkey:9.1.2-trixie).
+images:
+  # … mediagenda-api (promouvoir.sh) …
+  - name: registry.par1.medisphere.internal/dockerhub/valkey/valkey
+    newTag: 9.1.2-trixie
+    digest: sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd
+  - name: registry.par1.medisphere.internal/dockerhub/oliver006/redis_exporter
+    newTag: v1.95.0
+    digest: sha256:afb21407aba3df1b4010899f155fc6b1ba2026c97b725d72aca4019d772e7b6b

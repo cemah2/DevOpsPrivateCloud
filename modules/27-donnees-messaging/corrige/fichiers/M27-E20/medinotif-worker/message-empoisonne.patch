@@ -1,0 +1,103 @@
+diff --git a/src/medinotif/sources/rabbitmq.py b/src/medinotif/sources/rabbitmq.py
+index a9fe792..eccc3ba 100644
+--- a/src/medinotif/sources/rabbitmq.py
++++ b/src/medinotif/sources/rabbitmq.py
+@@ -6,7 +6,9 @@ Garanties :
+   le message non acquitté est redistribué (livraison « au moins une fois ») ;
+ - message invalide : rejeté sans remise en file (``requeue=False``) ; si la file
+   a une *dead letter exchange*, il y part, sinon il est supprimé ;
+-- échec passager : rejeté avec remise en file, après une courte pause ;
++- échec passager : rejeté (basic.reject) avec remise en file, après une courte pause ; depuis
++  RabbitMQ 4.3, un reject compte pour la limite de livraison de la file quorum (un nack, non) :
++  un message qui échoue toujours finit au rebut au lieu de tourner sans fin (M27-E18, E20) ;
+ - connexion perdue : reconnexion avec attente croissante (1 s, 2 s, 4 s… 30 s).
+ """
+ 
+@@ -102,4 +104,4 @@ class SourceRabbitMQ:
+             canal.basic_nack(delivery_tag=etiquette, requeue=False)
+         else:
+             self._arret.wait(1)  # évite de reboucler à pleine vitesse sur un échec
+-            canal.basic_nack(delivery_tag=etiquette, requeue=True)
++            canal.basic_reject(delivery_tag=etiquette, requeue=True)
+diff --git a/src/medinotif/traitement.py b/src/medinotif/traitement.py
+index 853bd9e..2ef06d7 100644
+--- a/src/medinotif/traitement.py
++++ b/src/medinotif/traitement.py
+@@ -70,6 +70,12 @@ class Traiteur:
+                 journal.warning("message rejeté", extra={"raison": str(exc)})
+                 MESSAGES.labels("inconnu", Resultat.INVALIDE.value).inc()
+                 return Resultat.INVALIDE
++            except Exception as exc:  # M27-E20 : un message ne doit jamais tuer le worker
++                # Ex. JSON imbriqué à l'extrême (RecursionError dans json.loads) : sans ce garde-fou, le
++                # processus meurt, le message non acquitté revient, et le worker replante en boucle.
++                journal.error("message illisible, rejeté", extra={"erreur": type(exc).__name__})
++                MESSAGES.labels("inconnu", Resultat.INVALIDE.value).inc()
++                return Resultat.INVALIDE
+             try:
+                 self.expediteur.envoyer(notification)
+             except Exception:
+diff --git a/tests/test_rabbitmq.py b/tests/test_rabbitmq.py
+index 8cecbe4..d6e8c55 100644
+--- a/tests/test_rabbitmq.py
++++ b/tests/test_rabbitmq.py
+@@ -21,7 +21,7 @@ SMS = json.dumps(
+ class FauxCanal:
+     def __init__(self, messages):
+         self.messages = messages  # liste d'octets ; None = délai d'inactivité
+-        self.ack, self.nack, self.declarations = [], [], []
++        self.ack, self.nack, self.reject, self.declarations = [], [], [], []
+         self.annule = False
+ 
+     def queue_declare(self, queue, durable, arguments):
+@@ -43,6 +43,9 @@ class FauxCanal:
+     def basic_nack(self, delivery_tag, requeue):
+         self.nack.append((delivery_tag, requeue))
+ 
++    def basic_reject(self, delivery_tag, requeue):
++        self.reject.append((delivery_tag, requeue))
++
+     def cancel(self):
+         self.annule = True
+ 
+@@ -157,3 +160,22 @@ def test_vrai_rabbitmq():
+         return traiteur(corps)
+ 
+     source.consommer(traiter)
++
++
++def test_echec_passager_rejete_avec_remise_en_file(monkeypatch):
++    """Un échec passager est un basic.reject (compté par la limite de livraison), pas un nack."""
++    canal = FauxCanal([SMS, None])
++    source = source_avec(canal)
++    monkeypatch.setattr(source._arret, "wait", lambda _t: source._arret.is_set())
++    canal_consume = canal.consume
++
++    def consume(*a, **k):
++        for item in canal_consume(*a, **k):
++            if item[0] is None:
++                source.arreter()
++            yield item
++
++    canal.consume = consume
++    source.consommer(lambda _corps: Resultat.ECHEC)
++    assert canal.reject == [(1, True)]
++    assert canal.nack == []
+diff --git a/tests/test_worker.py b/tests/test_worker.py
+index 0067e3f..4151751 100644
+--- a/tests/test_worker.py
++++ b/tests/test_worker.py
+@@ -43,6 +43,14 @@ def test_traiteur_rejette_un_message_invalide():
+     assert compteur("inconnu", "invalide") == avant + 1
+ 
+ 
++def test_traiteur_survit_a_un_message_empoisonne():
++    """M27-E20 : un JSON imbriqué sur 100 000 niveaux fait lever RecursionError dans json.loads."""
++    avant = compteur("inconnu", "invalide")
++    poison = b"[" * 100_000 + b"]" * 100_000
++    assert Traiteur(ExpediteurSimule(0))(poison) is Resultat.INVALIDE
++    assert compteur("inconnu", "invalide") == avant + 1
++
++
+ def test_traiteur_signale_un_echec_d_envoi():
+     class ExpediteurEnPanne:
+         def envoyer(self, notification):

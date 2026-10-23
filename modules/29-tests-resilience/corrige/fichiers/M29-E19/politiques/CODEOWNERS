@@ -1,0 +1,9 @@
+# plateforme/politiques — CODEOWNERS (M29-E19, SEC-3019)
+# Ce qui décide de ce que la CI bloque est relu par la plateforme ET la sécurité.
+# GitLab Free : CODEOWNERS désigne les relecteurs et s'affiche dans la MR, mais l'approbation
+# OBLIGATOIRE des propriétaires (« Code owner approval ») est une fonction Premium. Garde-fou réel en
+# Free : branche main protégée, fusion réservée aux Maintainers (Karim Benali, Sophie Laurent, toi),
+# et ce job de non-régression qui échoue si une règle devient muette.
+/rego/tofu/        @karim.benali @sophie.laurent
+/tests/plans/      @karim.benali @sophie.laurent
+/.gitlab-ci.yml    @karim.benali @sophie.laurent

@@ -1,0 +1,72 @@
+# /etc/patroni/patroni.yml — {{ inventory_hostname }} (géré par Ansible, M27-E13).
+# Clés vérifiées sur la documentation de Patroni 4.1 (« YAML Configuration Settings ») ;
+# contrôle local : patroni --validate-config /etc/patroni/patroni.yml
+scope: {{ patroni_scope }}
+namespace: /service/
+name: {{ inventory_hostname }}
+
+restapi:
+  listen: 0.0.0.0:8008
+  connect_address: {{ ansible_host }}:8008
+  # Les requêtes qui MODIFIENT (switchover, restart…) exigent ce compte ; les GET restent ouverts
+  # (HAProxy interroge /primary sans s'authentifier).
+  authentication:
+    username: patroni
+    password: "{{ patroni_mdp_api }}"
+
+# API v3 d'etcd (section etcd3) : les clés v2 et v3 ne se voient pas entre elles.
+etcd3:
+  hosts: {% for h in groups['pg_essai'] %}{{ hostvars[h].ansible_host }}:2379{{ ',' if not loop.last else '' }}{% endfor %}
+
+bootstrap:
+  # Écrit dans le DCS au premier démarrage, puis IGNORÉ : on modifie ensuite par patronictl edit-config.
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    # Un réplica synchrone : une validation n'est confirmée qu'une fois reçue par lui (comme
+    # « method: any, number: 1 » chez CNPG). Patroni ne promeut que le réplica synchrone.
+    synchronous_mode: true
+    postgresql:
+      use_pg_rewind: true
+      use_slots: true
+      parameters:
+        wal_level: replica
+        hot_standby: "on"
+        wal_log_hints: "on"
+        max_wal_senders: 10
+        max_replication_slots: 10
+        password_encryption: scram-sha-256
+  initdb:
+    - encoding: UTF8
+    - locale: C.UTF-8
+    - data-checksums
+
+postgresql:
+  listen: 0.0.0.0:5432
+  connect_address: {{ ansible_host }}:5432
+  data_dir: {{ postgresql_data_dir }}
+  bin_dir: {{ postgresql_bin_dir }}
+  pgpass: /var/lib/postgresql/.pgpass_patroni
+  authentication:
+    superuser:
+      username: postgres
+      password: "{{ patroni_mdp_superutilisateur }}"
+    replication:
+      username: replicateur
+      password: "{{ patroni_mdp_replication }}"
+    rewind:
+      username: rewind
+      password: "{{ patroni_mdp_rewind }}"
+  pg_hba:
+    - local all all peer
+    - host replication replicateur {{ reseau_essai }} scram-sha-256
+    - host all all 127.0.0.1/32 scram-sha-256
+    - host all all {{ reseau_essai }} scram-sha-256
+
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false
+  nosync: false

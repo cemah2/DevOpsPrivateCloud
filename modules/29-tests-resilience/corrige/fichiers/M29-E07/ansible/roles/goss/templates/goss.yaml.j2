@@ -1,0 +1,95 @@
+# {{ ansible_managed | default('Fichier géré par Ansible (projet plateforme/ansible, rôle goss).') }}
+# /etc/goss/goss.yaml — mêmes vérifications que tests/infra (Testinfra, M29-E04), version Goss.
+# Exécuté SANS privilège par goss serve : seules des vérifications lisibles par un utilisateur
+# quelconque (fichiers 0644, métadonnées, systemd, sockets, sysctl, HTTP).
+#   goss --gossfile /etc/goss/goss.yaml validate --format documentation
+
+# --- node_exporter (M21-E08) ------------------------------------------------------------------
+file:
+  /usr/local/bin/node_exporter:
+    exists: true
+    filetype: symlink
+    linked-to: /opt/node_exporter/{{ goss_node_exporter_version }}/node_exporter
+  /var/lib/prometheus/node-exporter/medisphere.prom:
+    exists: true
+    filetype: file
+# --- alloy (M22-E05) ----------------------------------------------------------------------------
+  /usr/local/bin/alloy:
+    exists: true
+    filetype: symlink
+    linked-to: /opt/alloy/{{ goss_alloy_version }}/alloy-linux-amd64
+  /var/log/journal:
+    exists: true
+    filetype: directory
+# --- chrony (rôle base) ---------------------------------------------------------------------------
+  /etc/chrony/chrony.conf:
+    exists: true
+    filetype: file
+    contents:
+{% for source in goss_sources_ntp %}
+      - '/^server {{ source | regex_escape }} iburst nts$/'
+{% endfor %}
+      - '!/^\s*(pool|sourcedir)\b/'
+
+service:
+  node_exporter:
+    enabled: true
+    running: true
+  alloy:
+    enabled: true
+    running: true
+  chrony:
+    enabled: true
+    running: true
+  ms-ntp-passerelle:
+    enabled: false
+
+user:
+  node_exporter:
+    exists: true
+    shell: /usr/sbin/nologin
+  alloy:
+    exists: true
+    shell: /usr/sbin/nologin
+    groups:
+      contain-elements: [systemd-journal, adm]
+
+port:
+  tcp:9100:
+    listening: true
+    ip: ["{{ ansible_facts['default_ipv4']['address'] }}"]
+  tcp:12345:
+    listening: true
+    ip: ["127.0.0.1"]
+
+command:
+  node_exporter-version:
+    exec: "/usr/local/bin/node_exporter --version 2>&1"
+    exit-status: 0
+    stdout: ["version {{ goss_node_exporter_version }}"]
+    timeout: 5000
+  chrony-synchronise:
+    exec: "chronyc -n tracking"
+    exit-status: 0
+    stdout: ['/^Leap status\s*:\s*Normal$/']
+    timeout: 5000
+
+http:
+  # Comme Prometheus : HTTPS vérifié par le magasin du système (racine MédiSphère).
+  https://{{ inventory_hostname }}.par1.medisphere.internal:9100/metrics:
+    status: 200
+    allow-insecure: false
+    body: ['version="{{ goss_node_exporter_version }}"']
+    timeout: 5000
+  http://127.0.0.1:12345/-/ready:
+    status: 200
+    timeout: 5000
+
+kernel-param:
+  kernel.randomize_va_space:
+    value: "2"
+
+mount:
+  /tmp:
+    exists: true
+    opts: [nodev, nosuid]

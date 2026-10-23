@@ -1,0 +1,21 @@
+# plateforme/politiques — falco/regles-medisphere.yaml : bloc AJOUTÉ à customRules (M29-E09, EXC-D-002).
+# MODÈLE à adapter à ce que TU observes : pendant l'installation et la première expérience, relève
+# les règles PAR DÉFAUT de Falco 0.45 déclenchées par Chaos Mesh (Loki, locataire plateforme :
+# {namespace="falco"} |= "chaos-mesh" ; ou les alertes AlerteFalco d'Alertmanager). Pour CHACUNE,
+# une exception limitée à l'espace ET à l'image, ajoutée à la règle amont (override: append) : on ne
+# désactive ni ne réécrit une règle amont (convention du fichier, M26-E19).
+# « <RÈGLE-OBSERVÉE> » : nom exact de la règle (champ « rule » de l'événement Falco).
+    - list: medisphere_images_chaos
+      items:
+        - registry.par1.medisphere.internal/ghcr/chaos-mesh/chaos-daemon
+        - registry.par1.medisphere.internal/ghcr/chaos-mesh/chaos-mesh
+
+    - rule: <RÈGLE-OBSERVÉE>
+      exceptions:
+        - name: chaos_mesh
+          fields: [k8s.ns.name, container.image.repository]
+          comps: [=, in]
+          values:
+            - [chaos-mesh, (medisphere_images_chaos)]
+      override:
+        exceptions: append

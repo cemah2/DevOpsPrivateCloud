@@ -1,0 +1,33 @@
+# composants/reseau/politiques/isolement-medinotif-prod.yaml — M27-E08, modèle de M15-E28 et M20-E33.
+# Cloison de medinotif-prod : aucun échange avec les AUTRES espaces d'équipe (mediagenda-*,
+# medidoc-*, medinotif-recette). MédiNotif ne parle qu'à RabbitMQ (messagerie, espace de plateforme,
+# non concerné) ; MédiAgenda publie vers RabbitMQ, jamais vers MédiNotif directement.
+# Des REFUS : ils l'emportent sur toute autorisation.
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: isolement-medinotif-prod
+spec:
+  description: "Cloison de medinotif-prod : aucun échange avec les autres espaces d'équipe (DEV-2808)"
+  endpointSelector:
+    matchLabels:
+      io.kubernetes.pod.namespace: medinotif-prod
+  enableDefaultDeny:
+    ingress: false
+    egress: false
+  ingressDeny:
+    - fromEndpoints:
+        - matchExpressions:
+            - key: io.cilium.k8s.namespace.labels.medisphere.internal/equipe
+              operator: Exists
+            - key: io.kubernetes.pod.namespace
+              operator: NotIn
+              values: [medinotif-prod]
+  egressDeny:
+    - toEndpoints:
+        - matchExpressions:
+            - key: io.cilium.k8s.namespace.labels.medisphere.internal/equipe
+              operator: Exists
+            - key: io.kubernetes.pod.namespace
+              operator: NotIn
+              values: [medinotif-prod]

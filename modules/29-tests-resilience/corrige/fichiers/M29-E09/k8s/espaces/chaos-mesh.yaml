@@ -1,0 +1,24 @@
+# plateforme/k8s — espaces/chaos-mesh.yaml (M29-E09, PLAT-3009 ; exception EXC-K-005 du registre)
+# Espace de Chaos Mesh : contrôleur (Deployment) et démon par nœud (DaemonSet chaos-daemon). Le démon
+# est PRIVILÉGIÉ, partage l'espace de PID de l'hôte (hostPID) et monte la socket de containerd : seul
+# le profil privileged l'admet. Même schéma que falco et supervision-noeuds : enforce privileged,
+# audit et warn en restricted (toute autre charge posée ici laisse une trace), écriture par Argo CD seul.
+# Pas d'étiquette medisphere.internal/equipe : la GeneratingPolicy networkpolicy-par-defaut (M26-E16)
+# ne pose pas de refus par défaut ici (le webhook doit rester joignable depuis l'API).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chaos-mesh
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    medisphere.internal/role: plateforme
+    medisphere.internal/proprietaire: plateforme
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+  annotations:
+    medisphere.internal/responsable: "karim.benali"
+    medisphere.internal/ticket: "PLAT-3009"
+    medisphere.internal/exception-psa: "chaos-daemon : privileged, hostPID, socket containerd (EXC-K-005, PLAT-3009)"

@@ -1,0 +1,37 @@
+# plateforme/gitops — plateforme/capsule.yaml (M28-E05, PLAT-2905)
+# Capsule 0.15.1 dans capsule-system. Vague -1 : CRD Tenant avant l'Application « locataires » (vague 0).
+# Le contrôleur crée LUI-MÊME ses webhooks dynamiques (CapsuleConfiguration.spec.admission) et les
+# ClusterRoleBindings de ses utilisateurs : objets sans annotation de suivi, qu'Argo CD ne gère pas.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: capsule
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    medisphere.internal/ticket: "PLAT-2905"
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: capsule
+      targetRevision: 0.15.1
+      helm:
+        releaseName: capsule
+        valueFiles:
+          - $values/valeurs/capsule/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: capsule-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

@@ -1,0 +1,105 @@
+---
+# Rôle goss (M29-E07) : binaire vérifié, fichier de tests rendu par Ansible, « goss serve » en
+# service systemd SANS privilège (utilisateur dynamique : Goss lit, il n'écrit rien).
+
+- name: Refuser tout autre système que Debian 13
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] == '13'
+    fail_msg: "Essai Goss limité aux VMs Debian 13 (trouvé : {{ ansible_facts['distribution'] }})."
+    quiet: true
+
+- name: Dossier de cache du contrôleur
+  ansible.builtin.file:
+    path: "{{ goss_cache_controleur }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  run_once: true
+  become: false
+
+- name: Archive vérifiée par empreinte (contrôleur)
+  ansible.builtin.get_url:
+    url: "{{ goss_url }}"
+    dest: "{{ goss_cache_controleur }}/goss_{{ goss_version }}_linux_x86_64.tar.gz"
+    checksum: "sha256:{{ goss_sha256 }}"
+    mode: "0644"
+  delegate_to: localhost
+  run_once: true
+  become: false
+
+- name: Dossier de la version
+  ansible.builtin.file:
+    path: "{{ goss_dossier }}/{{ goss_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Décompresser le binaire
+  ansible.builtin.unarchive:
+    src: "{{ goss_cache_controleur }}/goss_{{ goss_version }}_linux_x86_64.tar.gz"
+    dest: "{{ goss_dossier }}/{{ goss_version }}"
+    include: [goss]
+    creates: "{{ goss_dossier }}/{{ goss_version }}/goss"
+    owner: root
+    group: root
+
+- name: Lien vers la version active
+  ansible.builtin.file:
+    src: "{{ goss_dossier }}/{{ goss_version }}/goss"
+    dest: /usr/local/bin/goss
+    state: link
+  notify: Redémarrer goss-serve
+
+- name: Dossier des tests
+  ansible.builtin.file:
+    path: /etc/goss
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Validé avant d'être posé : une clé inconnue ou un YAML cassé laisse l'ancien fichier.
+# « render » charge et rend le fichier (erreurs de syntaxe), sans exécuter les tests.
+- name: Fichier de tests
+  ansible.builtin.template:
+    src: goss.yaml.j2
+    dest: /etc/goss/goss.yaml
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/local/bin/goss --gossfile %s render
+  notify: Redémarrer goss-serve
+
+- name: Unité systemd de goss serve
+  ansible.builtin.template:
+    src: goss-serve.service.j2
+    dest: /etc/systemd/system/goss-serve.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Redémarrer goss-serve
+
+- name: Service actif au démarrage
+  ansible.builtin.systemd_service:
+    name: goss-serve
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Appliquer les redémarrages en attente
+  ansible.builtin.meta: flush_handlers
+
+# Contrôle : le point de santé RÉPOND (200 si tout passe, 503 sinon : les deux prouvent que le
+# service tourne ; le contenu, c'est le travail de la sonde).
+- name: Contrôle — /healthz répond
+  ansible.builtin.uri:
+    url: "http://{{ goss_ecoute }}/healthz"
+    status_code: [200, 503]
+  register: goss_sante
+  retries: 5
+  delay: 3
+  until: goss_sante.status in [200, 503]
+  changed_when: false

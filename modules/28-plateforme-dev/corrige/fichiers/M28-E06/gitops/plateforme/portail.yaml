@@ -1,0 +1,36 @@
+# plateforme/gitops — plateforme/portail.yaml (M28-E06, PLAT-2906)
+# Portail Backstage : chart backstage 2.10.2 recopié dans Harbor + valeurs versionnées ici. L'espace,
+# la base CNPG, l'ExternalSecret, la racine et les politiques réseau sont dans plateforme/k8s
+# (espaces/portail/, « task espaces ») et existent AVANT la première synchronisation.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: portail
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    medisphere.internal/ticket: "PLAT-2906"
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: backstage
+      targetRevision: 2.10.2
+      helm:
+        releaseName: portail
+        valueFiles:
+          - $values/valeurs/portail/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: portail
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

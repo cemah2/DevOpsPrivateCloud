@@ -1,0 +1,83 @@
+# plateforme/resilience — charge/distribue/testrun.yaml (M29-E14, PLAT-3014)
+# TestRun distribué de MédiAgenda (recette). Le job planifié remplace TESTID par un identifiant unique
+# (nuit-<id du pipeline>) avant de l'appliquer ; à la main :
+#   sed "s/TESTID/essai-$(date +%Y%m%d-%H%M)/" charge/distribue/testrun.yaml | kubectl apply -f -
+# La ConfigMap « charge-mediagenda-recette » est créée à partir du script :
+#   kubectl -n k6 create configmap charge-mediagenda-recette \
+#     --from-file=mediagenda-recette.js=charge/distribue/mediagenda-recette.js --dry-run=client -o yaml | kubectl apply -f -
+#
+# Cycle de vie (k6-operator 1.7) : initializer (k6 inspect du script : découpage) → 4 runners (chacun
+# reçoit --execution-segment, attend « paused ») → starter (POST /v1/status sur le port 6565 de chaque
+# runner) → stage « finished » ; cleanup: post supprime le TestRun et ses pods à la fin.
+apiVersion: k6.io/v1alpha1
+kind: TestRun
+metadata:
+  name: mediagenda-recette-distribue
+  namespace: k6
+  labels:
+    medisphere.internal/ticket: PLAT-3014
+spec:
+  parallelism: 4
+  script:
+    configMap:
+      name: charge-mediagenda-recette
+      file: mediagenda-recette.js
+  # --tag : étiquette de l'essai dans chaque série ; --out : écriture distante (nom de la sortie relu
+  # dans « k6 run --help » de la 1.8.2 : toujours « experimental-prometheus-rw »).
+  arguments: --tag testid=TESTID --out experimental-prometheus-rw
+  cleanup: post
+  runner:
+    image: registry.par1.medisphere.internal/dockerhub/grafana/k6:1.8.2
+    metadata:
+      labels:
+        medisphere.internal/composant: k6
+    env:
+      - name: TAUX_CIBLE
+        value: "40"
+      - name: PALIER
+        value: "5m"
+      # UN réplica de Prometheus (k6 n'accepte qu'une adresse) par le Service sans tête ; Thanos Query
+      # lit les deux réplicas et déduplique : la série n'existe que sur -0, c'est attendu.
+      - name: K6_PROMETHEUS_RW_SERVER_URL
+        value: http://prometheus-kps-prometheus-0.prometheus-operated.supervision.svc.cluster.local:9090/api/v1/write
+      - name: K6_PROMETHEUS_RW_TREND_STATS
+        value: "p(95),p(99),avg,max"
+      - name: K6_PROMETHEUS_RW_PUSH_INTERVAL
+        value: "10s"
+      # Racine MédiSphère pour vérifier le certificat de la Gateway (Go lit SSL_CERT_FILE).
+      - name: SSL_CERT_FILE
+        value: /etc/medisphere/ca/medisphere-root-ca.crt
+    volumes:
+      - name: racine
+        configMap:
+          name: medisphere-racine
+    volumeMounts:
+      - name: racine
+        mountPath: /etc/medisphere/ca
+        readOnly: true
+    resources:
+      requests: {cpu: 500m, memory: 256Mi}
+      limits: {cpu: "1", memory: 512Mi}
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 12345   # utilisateur « k6 » de l'image grafana/k6
+      seccompProfile: {type: RuntimeDefault}
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities: {drop: [ALL]}
+  starter:
+    # Par défaut l'opérateur prend ghcr.io/grafana/k6-operator:latest-starter (étiquette mobile, hors
+    # Harbor) : on épingle celle de la version (publiée par le pipeline de version du projet : starter-v1.7.0).
+    image: registry.par1.medisphere.internal/ghcr/grafana/k6-operator:starter-v1.7.0
+    resources:
+      requests: {cpu: 50m, memory: 32Mi}
+      limits: {cpu: 100m, memory: 64Mi}
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65532   # utilisateur de l'image (Dockerfile.starter : USER 65532)
+      seccompProfile: {type: RuntimeDefault}
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities: {drop: [ALL]}

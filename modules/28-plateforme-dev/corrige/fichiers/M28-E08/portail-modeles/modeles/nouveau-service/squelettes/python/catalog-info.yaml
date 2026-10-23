@@ -1,0 +1,14 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.nom }}
+  description: ${{ values.description }}
+  annotations:
+    gitlab.com/project-slug: ${{ values.locataire }}/${{ values.nom }}
+    backstage.io/kubernetes-id: ${{ values.nom }}
+  tags: [${{ values.langage }}]
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:default/${{ values.equipe }}
+  system: ${{ values.locataire }}

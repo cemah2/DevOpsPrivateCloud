@@ -1,0 +1,41 @@
+# plateforme/donnees — kafka-essai/pool.yaml (M27-E09) : trois nœuds aux deux rôles (contrôleur KRaft
+# ET courtier). Économe pour un essai ; en production on séparerait les contrôleurs (E09, plus loin).
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: double-role
+  labels:
+    strimzi.io/cluster: kafka-essai
+spec:
+  replicas: 3
+  roles:
+    - controller
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 10Gi
+        class: ceph-rbd
+        # Le journal des métadonnées KRaft partage ce volume avec les données.
+        kraftMetadata: shared
+        # false (défaut) : les PVC SURVIVENT à la suppression de la grappe (retrait d'E10 : à supprimer
+        # explicitement). true les supprimerait avec la grappe — pratique pour un essai, dangereux ailleurs.
+        deleteClaim: false
+  resources:
+    requests: {cpu: 250m, memory: 1Gi}
+    limits: {memory: 1Gi}
+  jvmOptions:
+    # Tas borné bien en dessous de la limite : le reste sert au cache de pages et à la mémoire hors tas.
+    "-Xms": 384m
+    "-Xmx": 384m
+  template:
+    pod:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  strimzi.io/pool-name: double-role

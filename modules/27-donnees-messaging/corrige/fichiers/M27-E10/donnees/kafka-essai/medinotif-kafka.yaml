@@ -1,0 +1,84 @@
+# plateforme/donnees — kafka-essai/medinotif-kafka.yaml (M27-E10, DEV-2810) — ESSAI.
+# MédiNotif sur Kafka, DANS l'espace de l'essai : il disparaît avec lui (pas d'objet orphelin dans
+# medinotif-recette). Même image que la recette, à condition qu'elle contienne le backend Kafka
+# (version publiée après la MR de kafka.patch) ; même expéditeur simulé.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medinotif-kafka
+  labels:
+    app.kubernetes.io/name: medinotif-kafka
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: medinotif-kafka
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: medinotif-kafka
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10002
+        runAsGroup: 10002
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: registry.par1.medisphere.internal/medisphere/medinotif-worker:<VERSION-MEDINOTIF-KAFKA>
+          ports:
+            - name: metriques
+              containerPort: 9100
+          env:
+            - {name: MEDINOTIF_BACKEND, value: kafka}
+            - {name: MEDINOTIF_KAFKA_BOOTSTRAP, value: "kafka-essai-kafka-bootstrap.kafka-essai.svc:9093"}
+            - {name: MEDINOTIF_KAFKA_TOPIC, value: rendez-vous.evenements}
+            - {name: MEDINOTIF_KAFKA_GROUPE, value: medinotif}
+            - {name: MEDINOTIF_KAFKA_TOPIC_REBUT, value: notifications.rebut}
+            - {name: MEDINOTIF_KAFKA_UTILISATEUR, value: medinotif}
+            - name: MEDINOTIF_KAFKA_MOT_DE_PASSE
+              valueFrom:
+                secretKeyRef:
+                  name: medinotif          # Secret créé par l'opérateur d'utilisateurs de Strimzi
+                  key: password
+            - {name: MEDINOTIF_KAFKA_CA, value: /etc/kafka-essai/ca.crt}
+            # Même latence simulée que la recette : la comparaison porte sur le courtier, pas l'envoi.
+            - {name: MEDINOTIF_DELAI_ENVOI_MS, value: "50"}
+            - {name: MEDINOTIF_VERSION, value: "<VERSION-MEDINOTIF-KAFKA>"}
+          readinessProbe:
+            httpGet: {path: /metrics, port: metriques}
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {memory: 192Mi}
+          volumeMounts:
+            - {name: ca, mountPath: /etc/kafka-essai, readOnly: true}
+      volumes:
+        - name: ca
+          secret:
+            secretName: kafka-essai-cluster-ca-cert
+            items:
+              - {key: ca.crt, path: ca.crt}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: medinotif-kafka
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: medinotif-kafka
+  podMetricsEndpoints:
+    - port: metriques
+      interval: 15s

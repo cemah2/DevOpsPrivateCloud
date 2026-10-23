@@ -1,0 +1,28 @@
+---
+# playbooks/goss-retrait.yml — retrait de l'essai Goss (M29-E07) : service, unité, binaires, tests.
+# Retirer AUSSI la règle 8099 de pare_feu_local (host_vars) et le groupe « goss » des sondes de mon01.
+- name: Retrait de l'essai Goss
+  hosts: dns02:nbx01
+  become: true
+  serial: 1
+  tasks:
+    - name: Arrêter et désactiver goss-serve
+      ansible.builtin.systemd_service:
+        name: goss-serve
+        state: stopped
+        enabled: false
+      failed_when: false
+
+    - name: Supprimer l'unité, les tests et les binaires
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/systemd/system/goss-serve.service
+        - /etc/goss
+        - /usr/local/bin/goss
+        - /opt/goss
+
+    - name: Relire les unités
+      ansible.builtin.systemd_service:
+        daemon_reload: true

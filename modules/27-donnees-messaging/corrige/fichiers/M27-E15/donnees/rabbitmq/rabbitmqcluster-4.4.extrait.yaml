@@ -1,0 +1,10 @@
+# plateforme/donnees — rabbitmq/rabbitmqcluster.yaml : EXTRAIT de la MR de montée en 4.4 (M27-E15, CHG-2815),
+# SEULEMENT si la répétition a réussi et que la décision écrite est « appliquer ». Aller simple : les
+# files classiques passent au stockage v2 de la 4.4, qui ne se relit pas en 4.3.
+# Avant la fusion : export manuel des définitions (CronJob), rabbitmqctl list_feature_flags (tous
+# « enabled »), rabbitmq-queues check_if_node_is_quorum_critical sur chaque nœud (rien de critique),
+# aucune alarme. Pendant : l'opérateur redémarre les nœuds un par un (du dernier au premier) ; suivre
+# rabbitmq-queues quorum_status --vhost medinotif-prod notifications et le tableau m27-donnees.
+spec:
+  image: registry.par1.medisphere.internal/dockerhub/library/rabbitmq:4.4.0-management
+  autoEnableAllFeatureFlags: true

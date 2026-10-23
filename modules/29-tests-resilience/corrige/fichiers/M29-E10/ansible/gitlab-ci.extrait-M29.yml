@@ -1,0 +1,18 @@
+# plateforme/ansible — .gitlab-ci.yml : EXTRAIT (M29-E10, PLAT-3010).
+# Testinfra (tests/infra, M29-E04) : chaque nuit (pipeline planifié PLANIF=testinfra) et à la demande
+# sur main. Le composant fournit le job ; ce dépôt lui donne ses secrets (.socle : OpenBao, clé SSH).
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/validation@v2.11.0
+    inputs:
+      schemas_crd_version: "2026.10.23"
+      politiques_ref: v1.4.0
+      regles_kubernetes: false
+      testinfra: true
+      testinfra_hotes: socle
+
+validation:manifestes:
+  rules:
+    - when: never
+
+validation:testinfra:
+  extends: .socle

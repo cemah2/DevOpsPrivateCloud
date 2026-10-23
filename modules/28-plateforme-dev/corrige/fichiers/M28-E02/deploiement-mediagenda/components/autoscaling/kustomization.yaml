@@ -1,0 +1,21 @@
+# mediagenda/deploiement — components/autoscaling/kustomization.yaml (M28-E02, DEV-2902)
+# Autoscaling horizontal du Rollout « mediagenda » sur son CPU (recette et prod ; jamais en dev, qui
+# n'a pas de Rollout). À placer APRÈS « canary » dans la liste des components de l'overlay : le
+# correctif ci-dessous vise le Rollout que « canary » apporte.
+#
+# Le Rollout ne déclare plus spec.replicas : c'est l'HPA qui le possède. Kustomize applique les
+# components de l'overlay AVANT les correctifs propres à l'overlay : un « replace /spec/replicas »
+# resté dans overlays/prod REMETTRAIT le champ sans erreur (kustomize 5.8 traite un « replace » sur
+# un chemin absent comme un ajout — vérifié par kustomize build) : il faut le retirer de prod.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - hpa.yaml
+patches:
+  - target:
+      group: argoproj.io
+      kind: Rollout
+      name: mediagenda
+    patch: |-
+      - op: remove
+        path: /spec/replicas

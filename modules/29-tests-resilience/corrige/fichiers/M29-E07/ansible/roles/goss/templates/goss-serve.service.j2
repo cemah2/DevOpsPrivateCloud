@@ -1,0 +1,36 @@
+# {{ ansible_managed | default('Fichier géré par Ansible (projet plateforme/ansible, rôle goss).') }}
+# goss serve {{ goss_version }} (M29-E07) : GET /healthz → 200 si tous les tests passent, 503 sinon.
+# Sans privilège : utilisateur dynamique, lecture seule. Les tests lisent des fichiers 0644, des
+# métadonnées (stat) et l'état systemd ; ce qui exige root (contenu de web.yml, sshd -T) n'est
+# PAS testé par Goss ici (voir la comparaison avec Testinfra, docs/qualite/testinfra-goss.md).
+[Unit]
+Description=Goss serve (tests du socle, essai M29-E07)
+Documentation=https://goss.readthedocs.io/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+DynamicUser=yes
+ExecStart=/usr/local/bin/goss --gossfile /etc/goss/goss.yaml serve \
+  --listen-addr {{ goss_ecoute }} \
+  --endpoint /healthz \
+  --format json \
+  --cache {{ goss_cache }}
+Restart=on-failure
+RestartSec=5s
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

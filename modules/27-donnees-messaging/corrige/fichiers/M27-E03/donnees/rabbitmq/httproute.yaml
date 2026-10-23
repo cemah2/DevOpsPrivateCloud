@@ -1,0 +1,30 @@
+# plateforme/donnees — rabbitmq/httproute.yaml (M27-E03, PLAT-2803)
+# Interface de gestion publiée sur gw-par1 (écouteur HTTPS, certificat joker apps-joker : aucun
+# Certificate à créer) ; nom publié par ExternalDNS. L'espace porte medisphere.internal/exposition:
+# oui (allowedRoutes de gw-par1). Vers le port HTTP 15672 du Service : TLS terminé par la Gateway.
+# Connexion des personnes : OAuth 2.0 (Keycloak). L'API /api/ accepte aussi l'authentification
+# basique : c'est par elle que passent les vérifications (wb-checks, étiquette monitoring).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: rabbitmq
+spec:
+  parentRefs:
+    - name: gw-par1
+      namespace: passerelles
+      sectionName: https
+  hostnames:
+    - rabbitmq.apps.par1.medisphere.internal
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /}
+      filters:
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - {name: Strict-Transport-Security, value: "max-age=31536000; includeSubDomains"}
+              - {name: X-Content-Type-Options, value: nosniff}
+              - {name: Referrer-Policy, value: no-referrer}
+      backendRefs:
+        - name: rabbitmq
+          port: 15672

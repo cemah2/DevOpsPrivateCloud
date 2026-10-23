@@ -1,0 +1,16 @@
+# plateforme/ansible — roles/ssh_durci/defaults/main.yml (EXTRAIT M29-E22, PLAT-3022) : à AJOUTER.
+# Fichiers de /etc/ssh/sshd_config.d/ dont on connaît l'auteur. Tout AUTRE fichier *.conf est retiré
+# par le rôle (sshd lit le premier mot-clé rencontré : un fichier « 00-… » posé à la main l'emporte sur
+# tous les rôles). Les rôles qui posent un fichier l'ajoutent ici (inventaire : group_vars/all).
+ssh_durci_fichiers_connus:
+  - 00-durcissement.conf        # rôle durcissement (M26)
+  - 01-ssh-durci.conf           # ce rôle (M04-E11)
+  - 02-ssh-ca-hote.conf         # rôle ssh_ca_hote (M06-E19)
+  - 03-ssh-ca-utilisateur.conf  # rôle ssh_ca_utilisateur (M06-E20)
+  - 03-pve-noeud.conf           # nœuds Proxmox imbriqués (M09)
+  - 05-durcissement.conf        # image dorée (M03-E13)
+  - 10-medisphere.conf          # image dorée (M03-E09)
+  - 10-durcissement.conf        # gw01 (M00-E10), si pas encore retiré par ssh_durci_fichiers_obsoletes
+  - 50-cloud-init.conf          # cloud-init (ssh_pwauth) : sans effet derrière 01- et 10-
+# true : retirer les fichiers inconnus ; false : seulement échouer en les nommant (premier passage).
+ssh_durci_retirer_inconnus: true

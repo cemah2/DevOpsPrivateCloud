@@ -1,0 +1,6 @@
+# À AJOUTER à regles/kustomization.yaml de plateforme/observabilite (M27-E14).
+resources:
+  - alertes-donnees.yaml
+# Et dans .gitlab-ci.yml (job de contrôle des règles du M21), le test unitaire :
+#   - yq '.spec' regles/alertes-donnees.yaml > /tmp/alertes-donnees.rules.yaml
+#   - promtool test rules regles/tests/alertes-donnees.test.yaml

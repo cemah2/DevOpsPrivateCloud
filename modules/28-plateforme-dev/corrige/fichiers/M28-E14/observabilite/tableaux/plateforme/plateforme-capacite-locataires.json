@@ -1,0 +1,342 @@
+{
+  "uid": "plateforme-capacite-locataires",
+  "title": "Capacité et locataires",
+  "tags": [
+    "plateforme",
+    "capacite",
+    "medisphere"
+  ],
+  "editable": false,
+  "description": "Réservation par nœud et par locataire Capsule, quotas, attente par priorité, évictions, recommandations du VPA (M28-E14, PLAT-2914).",
+  "timezone": "browser",
+  "refresh": "1m",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "schemaVersion": 41,
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Source",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0,
+        "refresh": 1,
+        "regex": "",
+        "options": []
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "Capacité (capacite.md)",
+      "type": "link",
+      "url": "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/plateforme-dev/capacite.md",
+      "targetBlank": true,
+      "icon": "doc",
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": false,
+      "tags": []
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "CPU réservé / allouable par nœud",
+      "description": "Ce que l'ordonnanceur a RÉSERVÉ (requests des pods en attente ou en cours) rapporté à l'allouable. Au-delà de 85 %, un pod de taille moyenne ne trouve plus de place sans préemption.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (node) (kube_pod_container_resource_requests{resource=\"cpu\"} * on(namespace, pod) group_left() max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"} == 1)) / sum by (node) (kube_node_status_allocatable{resource=\"cpu\"})",
+          "legendFormat": "{{node}}",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Mémoire réservée / allouable par nœud",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (node) (kube_pod_container_resource_requests{resource=\"memory\"} * on(namespace, pod) group_left() max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"} == 1)) / sum by (node) (kube_node_status_allocatable{resource=\"memory\"})",
+          "legendFormat": "{{node}}",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "CPU réservé par locataire (cœurs)",
+      "description": "Exige kube-state-metrics avec metricLabelsAllowlist namespaces=[capsule.clastix.io/tenant] (kps/values.yaml, M28-E14). À comparer au budget du locataire (capacite.md).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (label_capsule_clastix_io_tenant) (sum by (namespace) (kube_pod_container_resource_requests{resource=\"cpu\"}) * on(namespace) group_left(label_capsule_clastix_io_tenant) kube_namespace_labels{label_capsule_clastix_io_tenant!=\"\"})",
+          "legendFormat": "{{label_capsule_clastix_io_tenant}}",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Mémoire réservée par locataire",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (label_capsule_clastix_io_tenant) (sum by (namespace) (kube_pod_container_resource_requests{resource=\"memory\"}) * on(namespace) group_left(label_capsule_clastix_io_tenant) kube_namespace_labels{label_capsule_clastix_io_tenant!=\"\"})",
+          "legendFormat": "{{label_capsule_clastix_io_tenant}}",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 5,
+      "type": "bargauge",
+      "title": "Quotas d'espace : utilisé / plafond (requests.cpu)",
+      "description": "Quotas d'espace (plateforme/k8s/espaces/). Le budget global du locataire (GlobalResourceQuota de Capsule) se lit avec kubectl get globalresourcequotas.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (namespace) (kube_resourcequota{type=\"used\", resource=\"requests.cpu\"}) / max by (namespace) (kube_resourcequota{type=\"hard\", resource=\"requests.cpu\"})",
+          "legendFormat": "{{namespace}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Pods en attente par classe de priorité",
+      "description": "Une classe « lot » en attente est normale quand le cluster est plein ; « critique » en attente est un incident.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (priority_class) (max by (namespace, pod) (kube_pod_status_phase{phase=\"Pending\"} == 1) * on(namespace, pod) group_left(priority_class) max by (namespace, pod, priority_class) (kube_pod_info))",
+          "legendFormat": "{{priority_class}}",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Évictions (kubelet) et préemptions (ordonnanceur)",
+      "description": "Les préemptions ne s'affichent que si kube-scheduler est collecté par Prometheus (M21).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (namespace) (kube_pod_status_reason{reason=\"Evicted\"})",
+          "legendFormat": "évincés {{namespace}}",
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(increase(scheduler_preemption_attempts_total[10m]))",
+          "legendFormat": "tentatives de préemption (10 min)",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Recommandation VPA / requests déclarées (mémoire)",
+      "description": "Exige la configuration « customResourceState » de kube-state-metrics pour les VPA (kps/values.yaml, M28-E14 — à vérifier sur ta version). Au-delà de 150 % ou en deçà de 50 % : la MR de recommandations le signale.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (namespace, target_name, container) (kube_customresource_vpa_cible_memoire_octets) / on(namespace, container) group_left() max by (namespace, container) (kube_pod_container_resource_requests{resource=\"memory\"})",
+          "legendFormat": "",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {}
+    }
+  ]
+}

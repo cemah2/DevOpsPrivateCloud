@@ -1,0 +1,128 @@
+# plateforme/resilience — chaos/e13/07-workflow-degradation.yaml (M29-E13, PLAT-3013)
+#
+# Hypothèse : la recette encaisse une dégradation progressive (latence vers le pooler 3 min, puis perte
+#   d'un conteneur d'API) sans jamais échouer trois vérifications de /pret d'affilée.
+# Mesure : vérifications HTTP du Workflow (statut des WorkflowNode de type StatusCheck), plus les mesures
+#   de 01-latence-pooler.yaml et 06-schedule-kill-api.yaml.
+# Critère d'arrêt (automatique) : la vérification continue « surveillance » échoue 3 fois → le Workflow
+#   est INTERROMPU (abortWithStatusCheck) : les expériences en cours sont retirées.
+# Arrêt d'urgence : kubectl -n chaos-experiences annotate workflow m29-e13-degradation \
+#   experiment.chaos-mesh.org/pause=true   puis   kubectl delete -f ce fichier
+#
+# Règles du Workflow (Chaos Mesh 2.8) : la durée d'une étape de chaos se donne par « deadline » sur le
+# modèle ; une « duration » dans l'expérience embarquée est REFUSÉE par le webhook. Un Suspend attend
+# son deadline. Les vérifications HTTP sont faites PAR LE CONTRÔLEUR (espace chaos-mesh) : l'URL doit
+# lui être joignable (Service interne en HTTP ; une CiliumNetworkPolicy de mediagenda-recette doit
+# laisser entrer chaos-mesh/chaos-controller-manager sur le port 8000, GET /pret) et il ne fait pas
+# confiance à la racine MédiSphère (pas d'HTTPS interne ici).
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Workflow
+metadata:
+  name: m29-e13-degradation
+  namespace: chaos-experiences
+  labels:
+    medisphere.internal/exercice: m29-e13
+  annotations:
+    medisphere.internal/ticket: PLAT-3013
+spec:
+  entry: degradation-progressive
+  templates:
+    - name: degradation-progressive
+      templateType: Serial
+      deadline: 15m
+      children:
+        - verif-avant
+        - latence-sous-surveillance
+        - pause-1
+        - perte-api
+        - pause-2
+        - verif-apres
+    - name: verif-avant
+      templateType: StatusCheck
+      deadline: 1m
+      statusCheck:
+        mode: Synchronous
+        type: HTTP
+        successThreshold: 3
+        failureThreshold: 1
+        intervalSeconds: 5
+        timeoutSeconds: 2
+        http:
+          url: http://mediagenda.mediagenda-recette.svc.cluster.local/pret
+          method: GET
+          criteria:
+            statusCode: "200"
+    - name: latence-sous-surveillance
+      templateType: Parallel
+      deadline: 3m30s
+      children: [latence-pooler, surveillance]
+    - name: latence-pooler
+      templateType: NetworkChaos
+      deadline: 3m
+      networkChaos:
+        action: delay
+        mode: all
+        selector:
+          namespaces: [mediagenda-recette]
+          labelSelectors:
+            app.kubernetes.io/name: mediagenda
+            app.kubernetes.io/component: api
+        direction: to
+        target:
+          mode: all
+          selector:
+            namespaces: [mediagenda-recette]
+            labelSelectors:
+              cnpg.io/poolerName: mediagenda-db-pooler-rw
+        delay:
+          latency: 50ms
+          jitter: 10ms
+    - name: surveillance
+      templateType: StatusCheck
+      deadline: 3m
+      abortWithStatusCheck: true
+      statusCheck:
+        mode: Continuous
+        type: HTTP
+        intervalSeconds: 10
+        timeoutSeconds: 2
+        failureThreshold: 3
+        successThreshold: 1
+        http:
+          url: http://mediagenda.mediagenda-recette.svc.cluster.local/pret
+          method: GET
+          criteria:
+            statusCode: "200"
+    - name: pause-1
+      templateType: Suspend
+      deadline: 2m
+    - name: perte-api
+      templateType: PodChaos
+      deadline: 1m
+      podChaos:
+        action: container-kill
+        mode: one
+        selector:
+          namespaces: [mediagenda-recette]
+          labelSelectors:
+            app.kubernetes.io/name: mediagenda
+            app.kubernetes.io/component: api
+        containerNames: [api]
+    - name: pause-2
+      templateType: Suspend
+      deadline: 2m
+    - name: verif-apres
+      templateType: StatusCheck
+      deadline: 2m
+      statusCheck:
+        mode: Synchronous
+        type: HTTP
+        successThreshold: 3
+        failureThreshold: 3
+        intervalSeconds: 10
+        timeoutSeconds: 2
+        http:
+          url: http://mediagenda.mediagenda-recette.svc.cluster.local/pret
+          method: GET
+          criteria:
+            statusCode: "200"

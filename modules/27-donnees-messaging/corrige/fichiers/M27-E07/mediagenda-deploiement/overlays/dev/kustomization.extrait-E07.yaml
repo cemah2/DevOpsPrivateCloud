@@ -1,0 +1,31 @@
+# mediagenda/deploiement — overlays/dev/kustomization.yaml : EXTRAIT (M27-E07). À FUSIONNER.
+resources:
+  # … existant …
+  - valkey.yaml
+components:
+  # … existant (dependances SANS Valkey désormais, migrations, canary, identifiants-dynamiques) …
+  - ../../components/racine-medisphere
+  # APRÈS identifiants-dynamiques : son annotation de Reloader sur le Rollout est complétée ici.
+  - ../../components/valkey
+  - ../../components/livraison         # toujours le dernier
+patches:
+  # Chemin OpenBao des comptes de Valkey de cet environnement.
+  - target:
+      group: external-secrets.io
+      kind: ExternalSecret
+      labelSelector: app.kubernetes.io/name=valkey
+    patch: |-
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: mediagenda/dev/valkey
+  # L'exportateur joint son voisin sous le nom du certificat, sans quitter le pod.
+  - target:
+      group: apps
+      kind: StatefulSet
+      name: valkey
+    patch: |-
+      - op: add
+        path: /spec/template/spec/hostAliases
+        value:
+          - ip: 127.0.0.1
+            hostnames: [valkey.mediagenda-dev.svc]

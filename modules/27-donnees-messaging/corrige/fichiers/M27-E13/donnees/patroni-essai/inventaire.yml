@@ -1,0 +1,11 @@
+# patroni-essai/inventaire.yml — VMs de M27-E13 (plateforme/infra, envs/m27). Inventaire STATIQUE :
+# ces VMs jetables ne doivent jamais entrer dans les groupes du socle construits depuis NetBox.
+all:
+  children:
+    pg_essai:
+      hosts:
+        pg-patroni01: {ansible_host: 10.10.99.71}
+        pg-patroni02: {ansible_host: 10.10.99.72}
+        pg-patroni03: {ansible_host: 10.10.99.73}
+      vars:
+        ansible_user: admin

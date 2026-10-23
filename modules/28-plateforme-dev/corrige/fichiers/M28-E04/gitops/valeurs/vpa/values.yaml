@@ -1,0 +1,59 @@
+# plateforme/gitops — valeurs/vpa/values.yaml (M28-E04, PLAT-2904) — chart fairwinds-stable/vpa 5.1.0
+# (VPA 1.7.1). Clés vérifiées dans le values.yaml du chart 5.1.0 et rendues par « helm template ».
+# Pas de chart officiel du projet Kubernetes : celui de Fairwinds est le plus suivi ; ses images
+# sont celles du projet (registry.k8s.io/autoscaling/…), ici par le cache Harbor « k8s ».
+
+recommender:
+  enabled: true
+  image:
+    repository: registry.par1.medisphere.internal/k8s/autoscaling/vpa-recommender
+    tag: "1.7.1@sha256:<DIGEST-VPA-RECOMMENDER>"
+    pullPolicy: IfNotPresent
+  extraArgs:
+    v: "2"
+    # Plancher des recommandations (défauts du chart conservés).
+    pod-recommendation-min-cpu-millicores: 15
+    pod-recommendation-min-memory-mb: 100
+  resources:
+    requests: {cpu: 50m, memory: 300Mi}
+    limits: {memory: 600Mi}
+
+updater:
+  # Indispensable à l'essai InPlaceOrRecreate (E04) ; sans effet sur les VPA en « Off ».
+  enabled: true
+  image:
+    repository: registry.par1.medisphere.internal/k8s/autoscaling/vpa-updater
+    tag: "1.7.1@sha256:<DIGEST-VPA-UPDATER>"
+    pullPolicy: IfNotPresent
+  resources:
+    requests: {cpu: 50m, memory: 200Mi}
+    limits: {memory: 500Mi}
+
+admissionController:
+  enabled: true
+  image:
+    repository: registry.par1.medisphere.internal/k8s/autoscaling/vpa-admission-controller
+    tag: "1.7.1@sha256:<DIGEST-VPA-ADMISSION-CONTROLLER>"
+    pullPolicy: IfNotPresent
+  # Certificat du webhook par le Job « certgen » du chart (crochet Helm, traduit par Argo CD en
+  # hook PreSync) ; son image par le même cache, épinglée.
+  generateCertificate: true
+  certGen:
+    image:
+      repository: registry.par1.medisphere.internal/k8s/ingress-nginx/kube-webhook-certgen
+      tag: "v20230312-helm-chart-4.5.2-28-g66a760794@sha256:<DIGEST-CERTGEN>"
+      pullPolicy: IfNotPresent
+  mutatingWebhookConfiguration:
+    # « Ignore » (défaut) : si l'admission-controller est absent, les pods se créent quand même,
+    # avec les requests de leur manifeste. « Fail » bloquerait TOUTE création de pod du cluster.
+    failurePolicy: Ignore
+  resources:
+    requests: {cpu: 50m, memory: 100Mi}
+    limits: {memory: 300Mi}
+
+# metrics-server est déjà installé (Helmfile, M17) : le sous-chart reste désactivé.
+metrics-server:
+  enabled: false
+
+# Contextes de sécurité du chart conservés (runAsNonRoot, UID 65534, seccomp RuntimeDefault,
+# capacités retirées, lecture seule) : conformes à « restricted ».

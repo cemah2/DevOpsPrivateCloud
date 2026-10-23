@@ -1,0 +1,53 @@
+# plateforme/portail — app-config.production.yaml : blocs AJOUTÉS en M28-E10 (DEV-2910).
+# Clés relues dans la documentation 1.56 (Kubernetes « configuration », TechDocs « configuration »).
+
+kubernetes:
+  serviceLocatorMethod:
+    type: multiTenant
+  clusterLocatorMethods:
+    - type: config
+      clusters:
+        - name: k8s-par1
+          # Ignorée avec authProvider serviceAccount sans jeton : le client « dans le cluster »
+          # (compte de service du pod, CA montée par Kubernetes) est utilisé. Indiquée pour la lecture.
+          url: https://kubernetes.default.svc
+          authProvider: serviceAccount
+          skipTLSVerify: false
+          skipMetricsLookup: false
+          customResources:
+            - group: argoproj.io
+              apiVersion: v1alpha1
+              plural: rollouts
+  # Types lus (remplace la liste par défaut) : sans configmaps.
+  objectTypes:
+    - pods
+    - services
+    - deployments
+    - replicasets
+    - horizontalpodautoscalers
+    - statefulsets
+    - daemonsets
+    - jobs
+    - cronjobs
+    - ingresses
+    - limitranges
+    - resourcequotas
+  frontend:
+    podDelete:
+      enabled: false
+
+techdocs:
+  # Construction par la CI des projets (techdocs-cli generate) ; le portail ne fait que lire.
+  builder: external
+  publisher:
+    type: awsS3
+    awsS3:
+      bucketName: portail-techdocs
+      endpoint: https://s3-01.par1.medisphere.internal:8333
+      s3ForcePathStyle: true
+      region: us-east-1
+      # Identité de LECTURE (la CI a la sienne, d'écriture). « credentials » est déprécié au profit
+      # d'« accountId » + section « aws », qui vise AWS : pour un S3 compatible, on garde credentials.
+      credentials:
+        accessKeyId: ${TECHDOCS_S3_ACCESS_KEY_ID}
+        secretAccessKey: ${TECHDOCS_S3_SECRET_ACCESS_KEY}

@@ -1,0 +1,29 @@
+# plateforme/k8s — espaces/<espace>/00-namespace.yaml : EXTRAIT (M28-E05, PLAT-2905).
+# Deux étiquettes à AJOUTER au Namespace de chacun des huit espaces d'équipe (garde le reste) :
+#   capsule.clastix.io/tenant       : le locataire (rattachement, lu par les webhooks de Capsule)
+#   medisphere.internal/environnement : l'environnement — c'est ce qui sépare un environnement
+#     (lecture seule pour l'équipe) d'un espace de libre-service (administration) dans les règles
+#     du Tenant. Un environnement SANS cette étiquette donnerait « admin » à l'équipe : vérifie-les.
+#
+#   espace              tenant       environnement
+#   mediagenda-dev      mediagenda   dev
+#   mediagenda-recette  mediagenda   recette
+#   mediagenda-prod     mediagenda   prod
+#   mediagenda-secours  mediagenda   secours
+#   medidoc-dev         medidoc      dev
+#   medidoc-recette     medidoc      recette
+#   medinotif-recette   medinotif    recette
+#   medinotif-prod      medinotif    prod
+#
+# La RÉFÉRENCE DE PROPRIÉTAIRE vers le Tenant n'est pas dans ce fichier (elle contient l'UID du
+# Tenant, propre au cluster) : outils/rattacher-locataires.sh la pose une fois, comme le documente
+# Capsule (« Adding Namespace to a Tenant »). « task espaces » (kubectl apply) ne la retire pas :
+# un champ absent du manifeste n'est jamais supprimé par une application qui ne l'a jamais posé.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mediagenda-prod
+  labels:
+    # … étiquettes existantes (équipe, Pod Security, supervision…) …
+    capsule.clastix.io/tenant: mediagenda
+    medisphere.internal/environnement: prod

@@ -1,0 +1,39 @@
+# plateforme/observabilite — tests/keda.test.yaml (M28-E13) : promtool test rules tests/keda.test.yaml
+# promtool test rules (règles extraites de la PrometheusRule par outils/extraire-regles.sh, M21).
+rule_files:
+  - ../regles-extraites/keda.yaml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'keda_scaler_detail_errors_total{exported_namespace="medinotif-recette", scaledObject="medinotif", scaler="rabbitMQScaler", namespace="keda", job="keda-operator"}'
+        values: '0+3x20'
+      - series: 'keda_scaled_object_paused{exported_namespace="medinotif-recette", scaledObject="medinotif", namespace="keda", job="keda-operator"}'
+        values: '1x150'
+      - series: 'up{job="keda-operator", namespace="keda"}'
+        values: '1x150'
+      - series: 'up{job="keda-operator-metrics-apiserver", namespace="keda"}'
+        values: '1x150'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: KedaScalerEnErreur
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme, exported_namespace: medinotif-recette, scaledObject: medinotif, scaler: rabbitMQScaler}
+            exp_annotations:
+              resume: "KEDA ne lit plus la source rabbitMQScaler de medinotif-recette/medinotif"
+              description: "Erreurs continues depuis 10 min : l'autoscaling de cette charge est aveugle (repli éventuel en cours)."
+              runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/plateforme-dev/runbooks/RB-285-autoscaling-muet.md"
+      - eval_time: 60m
+        alertname: KedaScaledObjectEnPause
+        exp_alerts: []
+      - eval_time: 125m
+        alertname: KedaScaledObjectEnPause
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme, exported_namespace: medinotif-recette, scaledObject: medinotif}
+            exp_annotations:
+              resume: "medinotif-recette/medinotif est en pause depuis plus de 2 h"
+              description: "Une pause de maintenance oubliée fige l'effectif : retirer l'annotation par MR (RB-285)."
+              runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/plateforme-dev/runbooks/RB-285-autoscaling-muet.md"
+      - eval_time: 30m
+        alertname: KedaAbsent
+        exp_alerts: []

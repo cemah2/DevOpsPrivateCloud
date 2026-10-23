@@ -1,0 +1,17 @@
+# plateforme/gitops — projets/mediagenda.yaml, medidoc.yaml, medinotif.yaml : EXTRAIT (M28-E05).
+# Capsule pose dans chaque espace rattaché des objets qu'aucune Application ne déclare : les
+# RoleBindings de ses propriétaires et de ses règles (« capsule-<locataire>-… ») et, dans les espaces
+# de libre-service, les ResourceQuotas de ses GlobalResourceQuota (« capsule-global-quota-… »).
+# Sans ces lignes, la surveillance des ressources orphelines (M20-E07) les signale en permanence.
+# (Les noms acceptent les motifs de type glob.)
+spec:
+  orphanedResources:
+    warn: true
+    ignore:
+      # … entrées existantes (SecretStore openbao, refus-par-defaut…) …
+      - group: rbac.authorization.k8s.io
+        kind: RoleBinding
+        name: "capsule-*"
+      - group: ""
+        kind: ResourceQuota
+        name: "capsule-*"

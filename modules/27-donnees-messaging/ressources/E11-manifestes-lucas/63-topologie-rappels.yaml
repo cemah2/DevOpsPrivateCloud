@@ -1,0 +1,41 @@
+# File et compte des rappels — Lucas, DEV-2811
+apiVersion: rabbitmq.com/v1beta1
+kind: Queue
+metadata:
+  name: rappels-veille
+  namespace: mediagenda-recette
+spec:
+  name: rappels-veille
+  type: classic
+  durable: false
+  autoDelete: true
+  rabbitmqClusterReference:
+    name: rabbitmq-rappels
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: User
+metadata:
+  name: rappels-app
+  namespace: mediagenda-recette
+spec:
+  tags:
+    - administrator
+  importCredentialsSecret:
+    name: rappels-rabbitmq-admin
+  rabbitmqClusterReference:
+    name: rabbitmq-rappels
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Permission
+metadata:
+  name: rappels-app
+  namespace: mediagenda-recette
+spec:
+  vhost: "/"
+  user: lucas
+  permissions:
+    configure: ".*"
+    write: ".*"
+    read: ".*"
+  rabbitmqClusterReference:
+    name: rabbitmq-rappels

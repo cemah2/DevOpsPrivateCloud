@@ -1,0 +1,101 @@
+# plateforme/portail — app-config.production.yaml : blocs AJOUTÉS en M28-E07 (PLAT-2907).
+# Clés relues dans la documentation de la 1.56 (« GitLab Discovery », « LDAP Organizational Data »)
+# et dans les config.d.ts des modules.
+
+integrations:
+  gitlab:
+    - host: git01.par1.medisphere.internal
+      apiBaseUrl: https://git01.par1.medisphere.internal/api/v4
+      # Compte de service d'instance svc-portail (portée « api », expiration ; E07 et E08).
+      token: ${GITLAB_TOKEN}
+
+catalog:
+  # Depuis les dépôts (découverte GitLab → entités Location → fichiers) : jamais de User ni de Group
+  # (l'organisation vient de l'annuaire), jamais de Template (accepté seulement par l'emplacement
+  # dédié de plateforme/portail-modeles, E08).
+  rules:
+    - allow: [Component, System, API, Resource, Location, Domain]
+  locations: []
+  providers:
+    # Découverte : un fournisseur par groupe (les erreurs d'un groupe n'arrêtent pas les autres).
+    gitlab:
+      mediagenda:
+        host: git01.par1.medisphere.internal
+        group: mediagenda
+        branch: main
+        entityFilename: catalog-info.yaml
+        skipForkedRepos: true
+        schedule:
+          frequency: { minutes: 15 }
+          timeout: { minutes: 3 }
+      medidoc:
+        host: git01.par1.medisphere.internal
+        group: medidoc
+        branch: main
+        entityFilename: catalog-info.yaml
+        skipForkedRepos: true
+        schedule:
+          frequency: { minutes: 15 }
+          timeout: { minutes: 3 }
+      medinotif:
+        host: git01.par1.medisphere.internal
+        group: medinotif
+        branch: main
+        entityFilename: catalog-info.yaml
+        skipForkedRepos: true
+        schedule:
+          frequency: { minutes: 15 }
+          timeout: { minutes: 3 }
+      plateforme:
+        host: git01.par1.medisphere.internal
+        group: plateforme
+        branch: main
+        entityFilename: catalog-info.yaml
+        skipForkedRepos: true
+        # Les modèles sont chargés par leur emplacement propre (E08), avec leur règle.
+        excludeRepos:
+          - plateforme/portail-modeles
+        schedule:
+          frequency: { minutes: 15 }
+          timeout: { minutes: 3 }
+
+    # Organisation : FreeIPA (ipa01), LDAPS vérifié par la racine MédiSphère (NODE_EXTRA_CA_CERTS).
+    ldapOrg:
+      freeipa:
+        target: ldaps://ipa01.par1.medisphere.internal
+        bind:
+          dn: uid=svc-portail,cn=sysaccounts,cn=etc,dc=par1,dc=medisphere,dc=internal
+          secret: ${LDAP_SECRET}
+        schedule:
+          frequency: { minutes: 30 }
+          timeout: { minutes: 5 }
+        users:
+          - dn: cn=users,cn=accounts,dc=par1,dc=medisphere,dc=internal
+            options:
+              scope: one
+              # Personnes actives seulement (un compte désactivé ne doit plus « posséder » ni se connecter).
+              filter: (&(objectClass=inetOrgPerson)(!(nsAccountLock=TRUE)))
+            map:
+              rdn: uid
+              name: uid
+              displayName: cn
+              email: mail
+              memberOf: memberOf
+        groups:
+          - dn: cn=groups,cn=accounts,dc=par1,dc=medisphere,dc=internal
+            options:
+              scope: one
+              # Les équipes et les fonctions ; pas les groupes techniques de FreeIPA (admins,
+              # ipausers, editors, trust admins…).
+              filter: (&(objectClass=ipausergroup)(|(cn=plateforme)(cn=plateforme-admins)(cn=mediagenda)(cn=medidoc)(cn=securite)(cn=support)(cn=direction)))
+            map:
+              rdn: cn
+              name: cn
+              displayName: cn
+              description: description
+              members: member
+              memberOf: memberOf
+            # spec.type est OBLIGATOIRE pour une entité Group ; FreeIPA n'a pas d'attribut
+            # groupType (correspondance par défaut) : on le fixe.
+            set:
+              spec.type: equipe

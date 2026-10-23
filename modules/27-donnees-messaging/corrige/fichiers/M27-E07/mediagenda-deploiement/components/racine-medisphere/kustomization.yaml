@@ -1,0 +1,37 @@
+# mediagenda/deploiement — components/racine-medisphere (M27-E07 ; sert aussi en E08)
+# La racine MédiSphère (certificat PUBLIC) pour vérifier les services internes en TLS : Valkey
+# (rediss://, E07) et RabbitMQ (amqps://, E08). Python (redis, pika) lit son magasin de confiance
+# dans SSL_CERT_FILE : la variable le REMPLACE (les autorités publiques ne sont plus reconnues par ce
+# processus — l'API n'appelle rien hors du cluster).
+# medisphere-root-ca.crt : copie de /usr/local/share/ca-certificates/medisphere-root-ca.crt d'adm01.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+configMapGenerator:
+  - name: racine-medisphere
+    files:
+      - medisphere-root-ca.crt
+patches:
+  - target:
+      kind: Deployment
+      name: mediagenda
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: mediagenda
+      spec:
+        template:
+          spec:
+            containers:
+              - name: api
+                env:
+                  - name: SSL_CERT_FILE
+                    value: /etc/medisphere/racine/medisphere-root-ca.crt
+                volumeMounts:
+                  - name: racine-medisphere
+                    mountPath: /etc/medisphere/racine
+                    readOnly: true
+            volumes:
+              - name: racine-medisphere
+                configMap:
+                  name: racine-medisphere

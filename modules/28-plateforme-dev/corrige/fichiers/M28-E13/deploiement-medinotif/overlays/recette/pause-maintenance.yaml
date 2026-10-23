@@ -1,0 +1,15 @@
+# medinotif/deploiement — overlays/recette/pause-maintenance.yaml (M28-E13, procédure de pause)
+# Correctif à ajouter aux « patches » de l'overlay le temps d'une maintenance de RabbitMQ (par MR, puis
+# MR inverse) :
+#   - path: pause-maintenance.yaml
+#     target: {group: keda.sh, kind: ScaledObject, name: medinotif}
+# paused-replicas fige MédiNotif à 1 pod et arrête la boucle de KEDA pour ce ScaledObject (plus aucune
+# requête vers RabbitMQ ni Prometheus). Pour reprendre : retirer le fichier ET son entrée.
+# Alternative : « autoscaling.keda.sh/paused: "true" » seul, qui fige l'effectif COURANT.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: medinotif
+  annotations:
+    autoscaling.keda.sh/paused-replicas: "1"
+    medisphere.internal/ticket: "CHG-2913"

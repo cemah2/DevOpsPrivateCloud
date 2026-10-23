@@ -1,0 +1,62 @@
+# mediagenda/deploiement — components/valkey (M27-E07, PLAT-2807)
+# Valkey 9.1 de MédiAgenda, le même dans les trois environnements (avant : StatefulSet du component
+# « dependances » en dev et prod, StatefulSet du M16 hors d'Argo CD en recette).
+# C'est un CACHE : ni réplication ni persistance (save "", appendonly no, emptyDir). Sa perte vide le
+# cache ; l'API continue (lectures en base) — mais /pret échoue tant que Valkey ne répond pas.
+# Ce que chaque overlay ajoute (le nom de l'espace y figure) :
+#   - le Certificate valkey-tls (noms valkey.mediagenda-<env>.svc[.cluster.local]) ;
+#   - hostAliases du pod : valkey.mediagenda-<env>.svc → 127.0.0.1 (l'exportateur vérifie ce nom) ;
+#   - le chemin OpenBao des ExternalSecrets (kv/mediagenda/<env>/valkey) ;
+#   - en prod, les deux images par condensé (Kyverno exiger-digest).
+# À inclure avec le component « racine-medisphere » (racine de confiance de l'API et de la sonde).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - externalsecrets.yaml
+  - statefulset.yaml
+  - service.yaml
+  - reseau.yaml
+  - podmonitor.yaml
+configMapGenerator:
+  - name: valkey-config
+    files:
+      - valkey.conf
+    options:
+      labels:
+        app.kubernetes.io/name: valkey
+patches:
+  # L'API lit son URL (rediss://, avec le mot de passe de « mediagenda ») dans un Secret : la valeur
+  # en clair rendue par le chart (externalValkey.url) est remplacée (value: null la supprime, sans
+  # quoi value et valueFrom coexisteraient et l'API Kubernetes refuserait le Deployment).
+  - target:
+      kind: Deployment
+      name: mediagenda
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: mediagenda
+      spec:
+        template:
+          spec:
+            containers:
+              - name: api
+                env:
+                  - name: MEDIAGENDA_VALKEY_URL
+                    value: null
+                    valueFrom:
+                      secretKeyRef:
+                        name: mediagenda-valkey
+                        key: url
+  # Le Rollout redémarre ses pods quand l'URL change (mot de passe renouvelé) : Reloader (M25-E15).
+  - target:
+      group: argoproj.io
+      kind: Rollout
+      name: mediagenda
+    patch: |-
+      apiVersion: argoproj.io/v1alpha1
+      kind: Rollout
+      metadata:
+        name: mediagenda
+        annotations:
+          secret.reloader.stakater.com/reload: "mediagenda-db-api,mediagenda-valkey"

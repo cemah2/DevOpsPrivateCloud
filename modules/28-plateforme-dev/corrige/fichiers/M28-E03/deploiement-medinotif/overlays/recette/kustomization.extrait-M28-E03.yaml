@@ -1,0 +1,21 @@
+# medinotif/deploiement — overlays/recette/kustomization.yaml : EXTRAIT (M28-E03, PLAT-2903).
+# 1. Les trois objets de KEDA de la recette.
+# 2. Le Deployment ne déclare plus spec.replicas : il appartient à l'HPA que KEDA crée. Un
+#    « remove » échoue si le champ est absent de la base : vérifie que ta base (M27-E04) le déclare,
+#    sinon supprime simplement ce correctif.
+# 3. ESSAI SEULEMENT (étape 7) : MEDINOTIF_DELAI_ENVOI_MS à 500 pour ralentir le worker, par MR,
+#    retiré par une seconde MR après l'essai. Garde le reste de TON fichier.
+resources:
+  # … ressources du M27 …
+  - keda/externalsecret.yaml
+  - keda/triggerauthentication.yaml
+  - keda/scaledobject.yaml
+patches:
+  # … correctifs du M27 …
+  - target:
+      group: apps
+      kind: Deployment
+      name: medinotif
+    patch: |-
+      - op: remove
+        path: /spec/replicas

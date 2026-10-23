@@ -1,0 +1,64 @@
+# medinotif/deploiement — overlays/prod/keda/scaledobject.yaml (M28-E13, PLAT-2913)
+# Production : jamais moins de 2 pods (PDB minAvailable 1 de M28-E14 : un nœud peut être drainé sans
+# arrêter les envois). Même structure que la recette ; seuils issus des mesures de E13.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: medinotif
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: medinotif
+  pollingInterval: 15
+  cooldownPeriod: 600
+  minReplicaCount: 2
+  maxReplicaCount: 8
+  fallback:
+    failureThreshold: 3
+    replicas: 4
+    behavior: currentReplicasIfHigher
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          selectPolicy: Max
+          policies:
+            - {type: Percent, value: 100, periodSeconds: 15}
+            - {type: Pods, value: 4, periodSeconds: 15}
+        scaleDown:
+          stabilizationWindowSeconds: 600
+          selectPolicy: Min
+          policies:
+            - {type: Pods, value: 1, periodSeconds: 120}
+  triggers:
+    - type: rabbitmq
+      name: file-notifications
+      metadata:
+        protocol: http
+        vhostName: medinotif-prod
+        queueName: notifications
+        mode: QueueLength
+        value: "100"
+        activationValue: "0"
+        excludeUnacknowledged: "false"
+      authenticationRef:
+        name: medinotif-rabbitmq
+    # Campagnes de rappel : 8 h 00 (Paris), jours ouvrés ; 6 pods ≈ 120 messages/s.
+    - type: cron
+      name: campagne
+      metadata:
+        timezone: Europe/Paris
+        start: "50 7 * * 1-5"
+        end: "30 9 * * 1-5"
+        desiredReplicas: "6"
+    - type: prometheus
+      name: publication-mediagenda
+      metadata:
+        serverAddress: http://thanos-query.supervision.svc.cluster.local:9090
+        query: sum(rate(mediagenda_notifications_total{namespace="mediagenda-prod"}[2m]))
+        threshold: "20"
+        activationThreshold: "1"
+        ignoreNullValues: "true"
+        timeout: "3s"

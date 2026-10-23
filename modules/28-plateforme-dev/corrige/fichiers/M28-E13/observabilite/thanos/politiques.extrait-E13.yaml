@@ -1,0 +1,8 @@
+# plateforme/observabilite — thanos/politiques.yaml : EXTRAIT (M28-E13). Ajouter cette règle à la liste
+# « ingress » de la CiliumNetworkPolicy « thanos-query-entree » (M21-E24).
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: keda
+            app: keda-operator
+      toPorts:
+        - ports: [{port: "10902", protocol: TCP}]

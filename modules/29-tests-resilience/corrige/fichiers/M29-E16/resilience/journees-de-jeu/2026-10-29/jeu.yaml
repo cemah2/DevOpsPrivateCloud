@@ -1,0 +1,89 @@
+# plateforme/resilience — journees-de-jeu/2026-10-29/jeu.yaml (M29-E16, PLAT-3016)
+# Journée de jeu « la recette sous charge perd ses dépendances » : trois expériences ENCHAÎNÉES, dans
+# un ordre que l'astreinte ne connaît pas, séparées par des pauses de retour à la normale, avec une
+# vérification HTTP qui interrompt tout si l'API ne répond plus (/sante, 6 échecs d'affilée : critère
+# d'arrêt global ; pas /pret, qui tombe dès que le cache manque : faiblesse connue, DEV-3013).
+# Hypothèses, mesures et critères : docs/qualite/journees-de-jeu/2026-10-29-dependances-recette.md.
+# Arrêt d'urgence : kubectl -n chaos-experiences annotate workflow jdj-2026-10-29 experiment.chaos-mesh.org/pause=true
+#                   (puis outils/chaos-arret.sh --supprimer)
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Workflow
+metadata:
+  name: jdj-2026-10-29
+  namespace: chaos-experiences
+  labels:
+    medisphere.internal/journee-de-jeu: "2026-10-29"
+  annotations:
+    medisphere.internal/ticket: PLAT-3016
+spec:
+  entry: jeu
+  templates:
+    - name: jeu
+      templateType: Parallel
+      deadline: 30m
+      children: [sequence, garde-fou]
+    - name: garde-fou
+      templateType: StatusCheck
+      deadline: 29m
+      abortWithStatusCheck: true
+      statusCheck:
+        mode: Continuous
+        type: HTTP
+        intervalSeconds: 10
+        timeoutSeconds: 3
+        failureThreshold: 6
+        successThreshold: 1
+        http:
+          url: http://mediagenda.mediagenda-recette.svc.cluster.local/sante
+          method: GET
+          criteria:
+            statusCode: "200"
+    - name: sequence
+      templateType: Serial
+      deadline: 28m
+      children: [h1-perte-pooler, retour-1, h2-stress-medinotif, retour-2, h3-kill-api]
+    # H1 : 10 % de perte API → pooler pendant 4 min
+    - name: h1-perte-pooler
+      templateType: NetworkChaos
+      deadline: 4m
+      networkChaos:
+        action: loss
+        mode: all
+        selector:
+          namespaces: [mediagenda-recette]
+          labelSelectors: {app.kubernetes.io/name: mediagenda, app.kubernetes.io/component: api}
+        direction: to
+        target:
+          mode: all
+          selector:
+            namespaces: [mediagenda-recette]
+            labelSelectors: {cnpg.io/poolerName: mediagenda-db-pooler-rw}
+        loss: {loss: "10", correlation: "25"}
+    - name: retour-1
+      templateType: Suspend
+      deadline: 6m
+    # H2 : CPU volé à MédiNotif pendant qu'il consomme (la charge crée des rendez-vous)
+    - name: h2-stress-medinotif
+      templateType: StressChaos
+      deadline: 5m
+      stressChaos:
+        mode: all
+        selector:
+          namespaces: [medinotif-recette]
+          labelSelectors: {app.kubernetes.io/name: medinotif}
+        stressors:
+          cpu: {workers: 1, load: 90}
+    - name: retour-2
+      templateType: Suspend
+      deadline: 6m
+    # H3 : la moitié des API tuées d'un coup
+    - name: h3-kill-api
+      templateType: PodChaos
+      deadline: 1m
+      podChaos:
+        action: pod-kill
+        mode: fixed-percent
+        value: "50"
+        selector:
+          namespaces: [mediagenda-recette]
+          labelSelectors: {app.kubernetes.io/name: mediagenda, app.kubernetes.io/component: api}

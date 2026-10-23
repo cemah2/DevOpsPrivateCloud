@@ -1,0 +1,26 @@
+# plateforme/observabilite — tests/portail.test.yaml (M28-E16)
+# promtool test rules (règles extraites de la PrometheusRule par outils/extraire-regles.sh, M21).
+rule_files:
+  - ../regles-extraites/portail.yaml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'kube_deployment_status_replicas_available{namespace="portail", deployment="portail"}'
+        values: '2x5 0x15'
+      - series: 'probe_success{job="blackbox-portail", instance="https://portail.apps.par1.medisphere.internal/.backstage/health/v1/readiness"}'
+        values: '1x20'
+      - series: 'cnpg_collector_last_available_backup_timestamp{namespace="portail", pod="portail-db-1"}'
+        values: '0x200'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: PortailIndisponible
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: PortailIndisponible
+        exp_alerts:
+          - exp_labels: {gravite: critique, equipe: plateforme}
+            exp_annotations:
+              resume: "Le portail développeurs est indisponible"
+              description: "Aucun réplica prêt ou sonde HTTPS en échec depuis 5 min. Les applications tournent ; plus aucune création de service par le portail."
+              runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/plateforme-dev/runbooks/RB-284-portail-indisponible.md"

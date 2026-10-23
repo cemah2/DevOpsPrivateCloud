@@ -1,0 +1,25 @@
+# plateforme/k8s — rbac/wb-checks-services-m29.yaml (M29-E09, PLAT-3009)
+# Lecture seule des objets du module 29 pour le compte des vérifications du workbook
+# (wb-system/wb-checks, M14-E06). AGRÉGÉE au ClusterRole « wb-checks » par l'étiquette
+# workbook.medisphere.internal/checks=true, comme wb-checks-services (M27) qu'elle complète :
+# un fichier par module, aucune liaison à écrire. Jamais les Secrets, aucun verbe d'écriture.
+#   - Chaos Mesh (M29-E09 et suivants) : expériences, Schedule, Workflow, état ;
+#   - k6-operator (M29-E14) : TestRun, PrivateLoadZone ;
+#   - ValidatingAdmissionPolicy et liaisons (garde-fou medisphere-chaos-espaces).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wb-checks-services-m29
+  labels:
+    app.kubernetes.io/part-of: workbook
+    workbook.medisphere.internal/checks: "true"
+rules:
+  - apiGroups: ["chaos-mesh.org"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["k6.io"]
+    resources: ["testruns", "testruns/status", "privateloadzones", "privateloadzones/status"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+    verbs: ["get", "list", "watch"]

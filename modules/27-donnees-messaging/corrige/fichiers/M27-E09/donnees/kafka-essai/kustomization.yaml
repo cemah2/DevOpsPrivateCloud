@@ -1,0 +1,9 @@
+# plateforme/donnees — kafka-essai/ (M27-E09, E10) — ESSAI : tout ce dossier disparaît en fin d'E10.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: kafka-essai
+resources:
+  - kafka.yaml
+  - pool.yaml
+  - topics.yaml
+  - utilisateurs.yaml

@@ -1,0 +1,111 @@
+# ~/m27/e05/flyway-essai.yaml — RÉPÉTITION de la reprise par Flyway sur une base JETABLE (M27-E05).
+# Espace wb-essais (kubectl apply permis, M14). Tout est supprimé à la fin (étape 5).
+# 1. La grappe, une instance (le Secret flyway-essai-app de CNPG donne le propriétaire « app »).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: flyway-essai
+  namespace: wb-essais
+spec:
+  instances: 1
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
+  bootstrap:
+    initdb:
+      database: mediagenda
+      owner: mediagenda
+      encoding: UTF8
+  storage:
+    storageClass: ceph-rbd
+    size: 1Gi
+  resources:
+    requests: {cpu: 50m, memory: 256Mi}
+    limits: {memory: 512Mi}
+---
+# 2. L'ANCIEN outil, depuis l'image de l'API actuelle : amène la base dans l'état de la recette
+#    (V1, V2 et mediagenda_historique_schema). Une seule exécution (restartPolicy Never).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ancien-migrate
+  namespace: wb-essais
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: migrate
+      image: registry.par1.medisphere.internal/medisphere/mediagenda-api:<VERSION-API>
+      command: ["python", "-m", "mediagenda.migrate"]
+      env:
+        - name: MEDIAGENDA_DB_URL
+          valueFrom: {secretKeyRef: {name: flyway-essai-app, key: uri}}
+        - name: MEDIAGENDA_MIGRATIONS_DIR
+          value: /app/migrations
+      resources:
+        requests: {cpu: 50m, memory: 64Mi}
+        limits: {memory: 128Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities: {drop: ["ALL"]}
+---
+# 3. Flyway contre cette base, migrations montées depuis une ConfigMap fabriquée à la main :
+#      kubectl -n wb-essais create configmap migrations-essai \
+#          --from-file=$HOME/src/mediagenda-api/migrations/ \
+#          --from-file=$HOME/src/mediagenda-api/flyway/rappels/beforeBaseline.sql
+#    puis, pour chaque essai, change « args » (info ; migrate ; …) et relance :
+#      kubectl -n wb-essais delete pod flyway-essai --ignore-not-found && kubectl apply -f flyway-essai.yaml
+#      kubectl -n wb-essais logs -f flyway-essai
+apiVersion: v1
+kind: Pod
+metadata:
+  name: flyway-essai
+  namespace: wb-essais
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10004
+    runAsGroup: 10004
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: flyway
+      image: registry.par1.medisphere.internal/dockerhub/flyway/flyway:13.11.1
+      args: ["info"]          # puis : ["migrate"] ; puis la reprise (variables ci-dessous) ; ["validate"]
+      env:
+        - name: FLYWAY_URL
+          value: "jdbc:postgresql://flyway-essai-rw:5432/mediagenda?sslmode=verify-full&sslrootcert=/etc/ca/ca.crt"
+        - name: FLYWAY_USER
+          valueFrom: {secretKeyRef: {name: flyway-essai-app, key: username}}
+        - name: FLYWAY_PASSWORD
+          valueFrom: {secretKeyRef: {name: flyway-essai-app, key: password}}
+        - name: FLYWAY_LOCATIONS
+          value: filesystem:/migrations
+        - name: REDGATE_DISABLE_TELEMETRY
+          value: "true"
+        # Pour la reprise (étape 4), décommenter :
+        # - {name: FLYWAY_BASELINE_ON_MIGRATE, value: "true"}
+        # - {name: FLYWAY_BASELINE_VERSION, value: "2"}
+      resources:
+        requests: {cpu: 100m, memory: 256Mi}
+        limits: {memory: 512Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities: {drop: ["ALL"]}
+      volumeMounts:
+        - {name: migrations, mountPath: /migrations, readOnly: true}
+        - {name: ca, mountPath: /etc/ca, readOnly: true}
+        - {name: tmp, mountPath: /tmp}
+  volumes:
+    - name: migrations
+      configMap: {name: migrations-essai}
+    - name: ca
+      secret:
+        secretName: flyway-essai-ca
+        items: [{key: ca.crt, path: ca.crt}]
+    - name: tmp
+      emptyDir: {}

@@ -1,0 +1,49 @@
+# plateforme/portail — .gitlab-ci.yml (M28-E06, PLAT-2906)
+# Pipeline standard par composants (plateforme/ci-templates : versions EN VIGUEUR chez toi ;
+# celles-ci sont les dernières publiées dans les corrigés des M19 à M26).
+#   construction-image : BuildKit distant, Dockerfile multi-étapes (yarn tsc et build DANS l'image),
+#                        publication par empreinte (main-<sha>, puis vX.Y.Z) ;
+#   securite           : Trivy, SBOM, signature (clé du coffre, M25) sur le runner protégé ;
+#   release            : semantic-release pose vX.Y.Z (Conventional Commits).
+# Pas de promotion automatique : la version déployée est celle des valeurs de plateforme/gitops
+# (valeurs/portail/values.yaml), changée par MR relue.
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/construction-image@v2.8.0
+    inputs:
+      image_nom: plateforme/portail
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/securite@v2.10.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/release@v2.1.0
+
+stages: [lint, test, construction, analyse, publication, signature, release]
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+  auto_cancel:
+    on_new_commit: interruptible
+
+# Contrôle de la configuration : schéma de toutes les couches, sans secret (variables factices).
+portail:config:
+  stage: test
+  tags: [k8s]
+  interruptible: true
+  image: registry.par1.medisphere.internal/dockerhub/library/node:24-trixie-slim@sha256:<DIGEST-NODE-24>
+  needs: []
+  variables:
+    YARN_CACHE_FOLDER: $CI_PROJECT_DIR/.yarn-cache
+  cache:
+    key:
+      files: [yarn.lock]
+    paths: [.yarn-cache]
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - when: on_success
+  script:
+    - yarn install --immutable
+    - yarn backstage-cli config:check --lax --config app-config.yaml --config app-config.production.yaml
+    - yarn tsc

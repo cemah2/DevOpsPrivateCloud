@@ -1,0 +1,11 @@
+# À INTÉGRER dans plateforme/charts-miroir — charts.yaml (format de M20-E13), M28-E09 (PLAT-2909).
+#   curl -s https://charts.loft.sh/index.yaml | yq '.entries.vcluster[] | select(.version == "0.37.4") | .digest'
+# (vérifiée à la rédaction le 23/10/2026). L'entrée peut rester après le retrait de l'essai (une
+# archive dans Harbor ne coûte rien) ; retire-la si tu préfères un miroir sans charts inutilisés.
+charts:
+  # … entrées existantes …
+  - nom: vcluster
+    depot: https://charts.loft.sh
+    version: 0.37.4
+    empreinte: sha256:77b20091e505c16280c8643cf3157930edac5f242b45c5f6f3f9e38a30dc5c77
+    usage: "vCluster OSS, ESSAI temporaire vc-essai (M28-E09) — retiré en fin d'exercice"

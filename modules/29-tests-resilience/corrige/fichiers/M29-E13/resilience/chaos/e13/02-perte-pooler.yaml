@@ -1,0 +1,38 @@
+# plateforme/resilience — chaos/e13/02-perte-pooler.yaml (M29-E13, PLAT-3013)
+#
+# Hypothèse : avec 20 % de paquets perdus de l'API vers le pooler, TCP retransmet : le p95 monte
+#   (retransmissions de 200 ms au minimum sous Linux) mais le taux de 5xx reste sous 1 % (aucune
+#   connexion n'est coupée : il faut 15 retransmissions consécutives pour abandonner).
+# Mesure : p95, p99 et 5xx (requêtes de 01-latence-pooler.yaml), retransmissions côté nœud
+#   (node_netstat_Tcp_RetransSegs) ; k6 : http_req_failed.
+# Critère d'arrêt : 5xx > 5 % pendant 1 min.
+# Arrêt d'urgence : kubectl -n chaos-experiences annotate networkchaos m29-e13-perte-pooler \
+#   experiment.chaos-mesh.org/pause=true
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: m29-e13-perte-pooler
+  namespace: chaos-experiences
+  labels:
+    medisphere.internal/exercice: m29-e13
+  annotations:
+    medisphere.internal/ticket: PLAT-3013
+spec:
+  action: loss
+  mode: all
+  selector:
+    namespaces: [mediagenda-recette]
+    labelSelectors:
+      app.kubernetes.io/name: mediagenda
+      app.kubernetes.io/component: api
+  direction: to
+  target:
+    mode: all
+    selector:
+      namespaces: [mediagenda-recette]
+      labelSelectors:
+        cnpg.io/poolerName: mediagenda-db-pooler-rw
+  loss:
+    loss: "20"
+    correlation: "25"
+  duration: 3m

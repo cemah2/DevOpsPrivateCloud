@@ -1,0 +1,94 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.13.4",
+  "planned_values": {
+    "root_module": {
+      "child_modules": [
+        {
+          "address": "module.essai_lucas",
+          "resources": [
+            {
+              "address": "module.essai_lucas.proxmox_virtual_environment_vm.vm",
+              "mode": "managed",
+              "type": "proxmox_virtual_environment_vm",
+              "name": "vm",
+              "provider_name": "registry.opentofu.org/bpg/proxmox",
+              "schema_version": 0,
+              "values": {
+                "name": "essai-lucas",
+                "node_name": "pve01",
+                "pool_id": "lab",
+                "protection": false,
+                "tags": [],
+                "vm_id": 1099
+              },
+              "sensitive_values": {}
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "resource_changes": [
+    {
+      "address": "module.nbx01.proxmox_virtual_environment_vm.vm",
+      "module_address": "module.nbx01",
+      "mode": "managed",
+      "type": "proxmox_virtual_environment_vm",
+      "name": "vm",
+      "provider_name": "registry.opentofu.org/bpg/proxmox",
+      "change": {
+        "actions": ["delete"],
+        "before": {
+          "name": "nbx01",
+          "node_name": "pve01",
+          "pool_id": "lab",
+          "protection": true,
+          "tags": ["role-netbox", "socle"],
+          "vm_id": 1005
+        },
+        "after": null,
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": false
+      },
+      "action_reason": "delete_because_no_resource_config"
+    },
+    {
+      "address": "module.essai_lucas.proxmox_virtual_environment_vm.vm",
+      "module_address": "module.essai_lucas",
+      "mode": "managed",
+      "type": "proxmox_virtual_environment_vm",
+      "name": "vm",
+      "provider_name": "registry.opentofu.org/bpg/proxmox",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "name": "essai-lucas",
+          "node_name": "pve01",
+          "pool_id": "lab",
+          "protection": false,
+          "tags": [],
+          "vm_id": 1099
+        },
+        "after_unknown": {"id": true, "ipv4_addresses": true, "mac_addresses": true},
+        "before_sensitive": false,
+        "after_sensitive": {"tags": []}
+      }
+    }
+  ],
+  "configuration": {
+    "provider_config": {
+      "proxmox": {
+        "name": "proxmox",
+        "full_name": "registry.opentofu.org/bpg/proxmox"
+      }
+    },
+    "root_module": {}
+  },
+  "timestamp": "2026-10-20T09:12:44Z",
+  "applyable": true,
+  "complete": true,
+  "errored": false
+}

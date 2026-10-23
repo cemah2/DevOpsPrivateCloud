@@ -1,0 +1,8 @@
+# Compte de service du worker : aucun droit sur l'API, aucun jeton monté.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: medinotif
+  labels:
+    app.kubernetes.io/name: medinotif
+automountServiceAccountToken: false

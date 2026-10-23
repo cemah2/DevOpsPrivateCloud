@@ -1,0 +1,76 @@
+# Comptes des applications en recette. Mots de passe générés par la plateforme et rangés dans
+# OpenBao (kv/<application>/recette/amqp : utilisateur, mot_de_passe, url) ; lus ICI par le
+# ClusterSecretStore openbao (politique eso-plateforme étendue : exception documentée) pour créer
+# l'utilisateur, et dans l'espace de l'application par son propre SecretStore pour se connecter.
+# Format exigé par importCredentialsSecret : clés « username » et « password ». L'opérateur suit le
+# Secret : changer le mot de passe dans OpenBao le change dans RabbitMQ au rafraîchissement suivant.
+# Aucune étiquette (tags) : ni gestion, ni supervision ; AMQP seulement.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: rabbitmq-utilisateur-medinotif-recette
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: rabbitmq-utilisateur-medinotif-recette
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      metadata:
+        labels:
+          medisphere.internal/source: openbao
+      data:
+        username: "{{ .utilisateur }}"
+        password: "{{ .mot_de_passe }}"
+  dataFrom:
+    - extract:
+        key: medinotif/recette/amqp
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: User
+metadata:
+  name: medinotif-recette
+spec:
+  tags: []
+  importCredentialsSecret:
+    name: rabbitmq-utilisateur-medinotif-recette
+  rabbitmqClusterReference:
+    name: rabbitmq
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: rabbitmq-utilisateur-mediagenda-recette
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: rabbitmq-utilisateur-mediagenda-recette
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      metadata:
+        labels:
+          medisphere.internal/source: openbao
+      data:
+        username: "{{ .utilisateur }}"
+        password: "{{ .mot_de_passe }}"
+  dataFrom:
+    - extract:
+        key: mediagenda/recette/amqp
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: User
+metadata:
+  name: mediagenda-recette
+spec:
+  tags: []
+  importCredentialsSecret:
+    name: rabbitmq-utilisateur-mediagenda-recette
+  rabbitmqClusterReference:
+    name: rabbitmq

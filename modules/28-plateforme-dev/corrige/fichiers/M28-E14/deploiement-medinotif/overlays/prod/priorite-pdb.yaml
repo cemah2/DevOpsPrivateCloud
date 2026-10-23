@@ -1,0 +1,24 @@
+# medinotif/deploiement — overlays/prod/priorite-pdb.yaml (M28-E14, PLAT-2914)
+# Deux objets : un correctif du Deployment (priorité) et un PDB (ressource à ajouter à « resources »,
+# le correctif à « patches »). Avec minReplicaCount 2 (E13), minAvailable 1 laisse drainer un nœud
+# sans arrêter les envois ; avec un minimum de 1, ce PDB bloquerait tout drainage (0 éviction permise).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medinotif
+spec:
+  template:
+    spec:
+      priorityClassName: medisphere-critique
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: medinotif
+spec:
+  minAvailable: 1
+  # Un pod qui ne démarre pas (CrashLoopBackOff) ne doit pas bloquer un drainage.
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: medinotif

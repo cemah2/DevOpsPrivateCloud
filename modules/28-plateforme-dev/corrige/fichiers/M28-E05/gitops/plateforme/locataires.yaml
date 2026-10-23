@@ -1,0 +1,28 @@
+# plateforme/gitops — plateforme/locataires.yaml (M28-E05, PLAT-2905)
+# Les Tenant de Capsule, depuis plateforme/k8s (dossier locataires/, kustomize).
+# PAS de finaliseur resources-finalizer.argocd.argoproj.io : supprimer cette Application ne supprime
+# aucun Tenant. Chaque Tenant porte en plus « Prune=false,Delete=false » et preventDeletion.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: locataires
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    medisphere.internal/ticket: "PLAT-2905"
+spec:
+  project: plateforme
+  source:
+    repoURL: https://git01.par1.medisphere.internal/plateforme/k8s.git
+    targetRevision: main
+    path: locataires
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

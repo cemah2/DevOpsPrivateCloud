@@ -1,0 +1,10 @@
+---
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M27-E13, PLAT-2813.
+# FLUX PROVISOIRE : les travailleurs de k8s-par1 vers PostgreSQL de la grappe Patroni d'essai (pgbench
+# lancé depuis le cluster, facultatif). Retiré par la même MR que la destruction des VMs (git revert).
+# etcd (2379-2380) et l'API REST de Patroni (8008) restent DANS le VLAN 99 : aucune règle de bordure.
+# Une passerelle à la fois : --limit gw01 --check --diff, puis gw01, puis gw02.
+pare_feu_transit:
+  - {entree: $V_K8S, source: $K8S_TRAV, sortie: [$V_SANDBOX], destination: [10.10.99.71, 10.10.99.72, 10.10.99.73],
+     proto: tcp, ports: [5000, 5432],
+     motif: "PROVISOIRE M27-E13 : k8s-par1 vers la grappe Patroni d'essai (HAProxy 5000, PostgreSQL 5432)", ref: M27-E13}

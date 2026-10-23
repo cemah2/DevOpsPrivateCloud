@@ -1,0 +1,43 @@
+# plateforme/k8s — ordonnancement/priorites.yaml (M28-E14, PLAT-2914)
+# Classes de priorité de MédiSphère (medisphere-ci : priorite-ci.yaml, M19-E27, inchangée).
+#
+#   medisphere-critique  100000  production des applications (préempte tout ce qui est en dessous)
+#   medisphere-standard   10000  recette, dev, libre-service des locataires (défaut posé par Capsule)
+#   medisphere-ci          1000  pods de job de la CI (Never : ne préempte pas)          [M19]
+#   medisphere-lot          100  traitements par lots, essais de charge (Never : attend son tour)
+#   (aucune classe)           0  composants de plateforme non classés : voir capacite.md, § Risques
+#
+# Pas de globalDefault : une valeur par défaut globale s'appliquerait AUSSI aux composants de la
+# plateforme (Argo CD, Kyverno, Prometheus…) au prochain redémarrage de leurs pods, sans revue. La
+# classe par défaut des équipes est posée par Capsule, locataire par locataire (priorityClasses.default).
+# Les valeurs restent très en dessous de system-cluster-critical (2000000000) et de la limite des
+# classes utilisateur (1000000000).
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: medisphere-critique
+  labels: {medisphere.internal/role: production}
+value: 100000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "Production des applications MédiSphère : passe avant tout le reste, peut préempter (M28-E14)."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: medisphere-standard
+  labels: {medisphere.internal/role: equipes}
+value: 10000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "Recette, dev et libre-service des équipes ; défaut des locataires Capsule (M28-E14)."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: medisphere-lot
+  labels: {medisphere.internal/role: lots}
+value: 100
+globalDefault: false
+preemptionPolicy: Never
+description: "Traitements par lots et essais de charge : attendent qu'il y ait de la place, ne préemptent jamais (M28-E14)."

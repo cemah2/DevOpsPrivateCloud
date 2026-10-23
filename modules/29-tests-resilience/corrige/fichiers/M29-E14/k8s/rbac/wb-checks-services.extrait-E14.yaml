@@ -1,0 +1,6 @@
+# plateforme/k8s — rbac/wb-checks-services.yaml (EXTRAIT M29-E14)
+# Règle à AJOUTER à la ClusterRole agrégée wb-checks-services (créée en M27-E02, étendue par M28 et par
+# M29-E09 pour Chaos Mesh) : lecture des objets de k6-operator. Jamais les Secrets.
+  - apiGroups: ["k6.io"]
+    resources: ["testruns", "privateloadzones"]
+    verbs: ["get", "list", "watch"]

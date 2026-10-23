@@ -1,0 +1,13 @@
+# mediagenda/deploiement — base/values-communes.yaml : EXTRAIT (M28-E02, DEV-2902).
+# Ordres de grandeur INDICATIFS (non mesurés sur un vrai lab : relève les tiens) : au repos ≈ 15 m CPU et 140 Mi ; sous la charge de
+# charge.sh (≈ 60 req/s réparties sur 2 pods) ≈ 180 m et 170 Mi par pod, pic mémoire 210 Mi.
+# CPU : 200 m (la charge « normale » d'un pod en journée, ≈ 100-140 m, reste sous 70 %).
+# Mémoire : request ≈ consommation stable + 20 % ; limite ≈ 2 × request (pas de limite CPU :
+# l'étranglement CFS dégraderait la latence sans protéger personne, M14).
+# Remplace TES valeurs par TES mesures, puis : outils/rendre-base.sh (rendu commité, M17-E09).
+resources:
+  requests:
+    cpu: 200m
+    memory: 192Mi
+  limits:
+    memory: 384Mi
