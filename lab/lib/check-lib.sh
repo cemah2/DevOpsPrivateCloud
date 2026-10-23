@@ -306,6 +306,31 @@ bao_api() {
     "$base/v1/$1"
 }
 
+# --- Bloc G (PLAN §4.13) : lecture seule ---
+
+# rabbitmq_api "chemin" — API HTTP de gestion de RabbitMQ (grappe messagerie/rabbitmq, M27) avec le
+#   compte des checks (utilisateur « wb-checks », étiquette monitoring : métadonnées, jamais de message).
+#   Le fichier WB_RABBITMQ_CHECKS_FILE contient RABBITMQ_USER=... et RABBITMQ_PASSWORD=...
+#   Exemple : rabbitmq_api "queues/medinotif-prod/notifications" | jq -r .type
+#   Le vhost « / » s'écrit %2F ; un nom de vhost est encodé par l'appelant.
+rabbitmq_api() {
+  local f="${WB_RABBITMQ_CHECKS_FILE:-$HOME/.config/workbook/rabbitmq-checks.env}" RABBITMQ_USER="" RABBITMQ_PASSWORD=""
+  [[ -r "$f" ]] || { echo "identifiants RabbitMQ des checks illisibles : $f" >&2; return 1; }
+  # shellcheck disable=SC1090
+  source "$f"
+  curl -sf --max-time "$WB_TIMEOUT" -K <(printf 'user = "%s:%s"\n' "$RABBITMQ_USER" "$RABBITMQ_PASSWORD") -H "Accept: application/json" \
+    "${WB_RABBITMQ_URL:-https://rabbitmq.apps.par1.medisphere.internal}/api/$1"
+}
+
+# backstage_api "chemin" — API du portail Backstage (M28) avec le jeton d'accès externe statique des
+#   checks (limité au plugin catalog, lecture). Exemple : backstage_api "catalog/entities/by-name/component/default/mediagenda-api" | jq -r .spec.owner
+backstage_api() {
+  local f="${WB_BACKSTAGE_TOKEN_FILE:-$HOME/.config/workbook/backstage-checks.token}"
+  [[ -r "$f" ]] || { echo "jeton Backstage des checks illisible : $f" >&2; return 1; }
+  curl -sf --max-time "$WB_TIMEOUT" -K <(printf 'header = "Authorization: Bearer %s"\n' "$(<"$f")") \
+    -H "Accept: application/json" "${WB_BACKSTAGE_URL:-https://portail.apps.par1.medisphere.internal}/api/$1"
+}
+
 # summary — affiche le bilan et renvoie 0 si aucun KO
 summary() {
   echo
