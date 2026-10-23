@@ -40,9 +40,9 @@ while (($#)); do
   esac
 done
 case "$nom" in
-  legacy-rdv01) vmid=3401; ip=10.10.20.44; role="role-legacy"; mac=bc:24:11:20:34:01 ;;
-  ftp-part01)   vmid=3402; ip=10.10.20.45; role="role-ftp";   mac=bc:24:11:20:34:02 ;;
-  stats01)      vmid=3403; ip=10.10.20.46; role="role-stats"; mac=bc:24:11:20:34:03 ;;
+  legacy-rdv01) vmid=3401; ip=10.10.20.44; role="role-legacy"; mac=BC:24:11:20:34:01 ;;
+  ftp-part01)   vmid=3402; ip=10.10.20.45; role="role-ftp";   mac=BC:24:11:20:34:02 ;;
+  stats01)      vmid=3403; ip=10.10.20.46; role="role-stats"; mac=BC:24:11:20:34:03 ;;
   *) usage ;;
 esac
 [[ -r "$cle" ]] || mourir "clé publique d'adm01 illisible : $cle"
@@ -139,7 +139,7 @@ case "$nom" in
 esac
 
 dire "$nom : adaptation hors ligne du disque (VM arrêtée) — quelques minutes"
-virt-customize --quiet -a "$disque" \
+virt-customize --quiet --format raw -a "$disque" \
   --upload "$t/interfaces:/etc/network/interfaces" \
   --delete /etc/resolv.conf \
   --upload "$t/resolv.conf:/etc/resolv.conf" \
@@ -182,8 +182,15 @@ qm guest cmd "$vmid" network-get-interfaces | perl -MJSON::PP -0777 -ne '
 # --- 6. Compte de base de stats01 (legacy-rdv01 seulement) ----------------------------------------
 if [[ "$nom" == legacy-rdv01 ]]; then
   dire "$nom : compte MariaDB « stats » re-adressé vers 10.10.20.46"
-  qm guest exec "$vmid" --timeout 30 -- mariadb -e \
-    "RENAME USER 'stats'@'192.168.50.40' TO 'stats'@'10.10.20.46'" >/dev/null \
-    || echo "avertissement : RENAME USER a échoué (déjà fait ?) : vérifie SELECT user,host FROM mysql.user" >&2
+  # MariaDB démarre après l'agent : quelques essais. « qm guest exec » rend le code de la commande dans
+  # son JSON (exitcode), pas dans son propre code de sortie : on le lit.
+  ok=0
+  for _ in $(seq 1 12); do
+    if qm guest exec "$vmid" --timeout 30 -- mariadb -e \
+         "RENAME USER 'stats'@'192.168.50.40' TO 'stats'@'10.10.20.46'" 2>/dev/null \
+       | grep -Eq '"exitcode"[[:space:]]*:[[:space:]]*0([^0-9]|$)'; then ok=1; break; fi
+    sleep 5
+  done
+  ((ok)) || echo "avertissement : RENAME USER a échoué (déjà fait ? MariaDB arrêtée ?) : vérifie SELECT user,host FROM mysql.user" >&2
 fi
 dire "$nom : terminé. Suite : DNS/NetBox/import dans envs/f4-infoger, Ansible, sauvegarde (RB-345)."

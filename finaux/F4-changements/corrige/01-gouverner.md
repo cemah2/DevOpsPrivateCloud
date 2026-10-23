@@ -8,7 +8,7 @@
 - `TestRun` : mêmes champs et réglages que celui du M29-E14 (k6-operator 1.7, `restricted`, écriture distante vers un réplica).
 
 **Points non testés en conditions réelles** (signale tes retours, ils corrigent le workbook) :
-- règles d'enregistrement et leurs tests `promtool` : non exécutés à la rédaction (outil indisponible dans l'environnement de rédaction) — lance `promtool check rules` et `promtool test rules` avant la MR, comme ta CI le fait ;
+- règles d'enregistrement et leurs tests `promtool` : exécutés à la relecture avec promtool 3.5 (`check rules` et `test rules` verts, témoin et cluster) ; relance-les avec la version de ta CI ;
 - présence de l'étiquette `expected_response` dans les séries `k6_http_reqs_total` envoyées par l'écriture distante de k6 1.8 ; si elle manque, remplace le filtre par `status=~"0|5.."` (et documente-le) ;
 - code de la réponse anonyme du RGW et de l'interface de RabbitMQ à une sonde `https_2xx` (redirections, page de connexion) ;
 - seuils et durées de la mesure : ceux d'un lab de référence imaginé.
@@ -90,7 +90,7 @@ continuite:en_erreur = clamp_max(
   + (continuite:prod_5xx:taux1m > bool 0), 1)
 ```
 
-Secondes d'erreur d'une fenêtre de *D* secondes finissant à *FIN* : `avg_over_time(max(continuite:en_erreur)[Ds:15s]) * D` évaluée à *FIN*. Outil : [`outils/mesurer-interruption.sh`](fichiers/S02/observabilite/outils/mesurer-interruption.sh) (secondes d'erreur, couverture, requêtes envoyées et en erreur, 5xx et p95 de la prod, détail par sonde ; source `temoin` et groupes pour S08). Les checks du final font **exactement** ce calcul.
+Secondes d'erreur d'une fenêtre de *D* secondes finissant à *FIN* : `avg_over_time(max(continuite:en_erreur)[Ds:15s]) * D` évaluée à *FIN*, sur Thanos Query avec `dedup=false` (la charge k6 n'écrit que dans le réplica `-0` : seul lui voit ses erreurs ; le `max()` sur les deux réplicas garde le pire). Outil : [`outils/mesurer-interruption.sh`](fichiers/S02/observabilite/outils/mesurer-interruption.sh) (secondes d'erreur, couverture, requêtes envoyées et en erreur, 5xx et p95 de la prod, détail par sonde ; source `temoin` et groupes pour S08). Les checks du final font **exactement** ce calcul.
 
 *4. Tableau.* [`plateforme-changement-en-cours.json`](fichiers/S02/observabilite/tableaux/plateforme/plateforme-changement-en-cours.json) (UID `f4-changement-en-cours`, [kustomization](fichiers/S02/observabilite/tableaux/kustomization.extrait-F4.yaml)) : en haut, quatre chiffres (secondes d'erreur de la période affichée, requêtes en erreur, budget Pyrra restant, charge active) ; puis la série d'interruption et ses trois composantes, une frise d'état par sonde, les taux d'erreurs, la latence p95/p99 serveur et la vitesse de consommation du budget.
 
@@ -116,6 +116,7 @@ Secondes d'erreur d'une fenêtre de *D* secondes finissant à *FIN* : `avg_over_
 - Une sonde qui suit les redirections vers une page de connexion : elle reste verte quand le service est cassé derrière.
 - Un exécuteur `ramping-vus` ou `constant-vus` : quand le service ralentit, la charge baisse d'elle-même et masque la dégradation.
 - Écrire vers le Service `kps-prometheus` (deux réplicas) : moitié des points par réplica (M29-E14).
+- Relever la mesure par Thanos Query **dédoublonné** : Query suit un seul réplica ; s'il suit `-1`, qui ne reçoit pas la charge k6, les erreurs de la charge disparaissent de la mesure. D'où `dedup=false` et `max()`.
 - Laisser la sonde tourner hors fenêtre sans le dire : les mesures « avant » et « après » se mélangent.
 
 **En production chez MédiSphère**

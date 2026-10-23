@@ -28,15 +28,21 @@ else
   serie='max(continuite:en_erreur)'
 fi
 
-# requete 'PromQL' — valeurs du résultat évalué à FIN (une ligne par série : étiquettes puis valeur).
+# requete 'PromQL' [sans-dedup] — valeurs du résultat évalué à FIN (une ligne par série : étiquettes puis
+# valeur). « sans-dedup » : Thanos Query avec dedup=false, pour la MESURE seulement — la charge k6 n'écrit
+# que dans le réplica prometheus-kps-prometheus-0 (M29-E14) : continuite:en_erreur ne voit ses erreurs que
+# sur ce réplica, et le dédoublonnage de Query peut suivre l'autre ; max() prend alors le pire des deux.
+# (Paramètre ignoré par un Prometheus seul et par le témoin.)
 requete() {
+  local -a opt=()
+  [[ "${2:-}" == sans-dedup ]] && opt=(--data-urlencode "dedup=false")
   curl -sf --max-time 60 -H 'Accept: application/json' --data-urlencode "query=$1" --data-urlencode "time=$fin" \
-    "$base/api/v1/query" | jq -r '.data.result[] | "\(.metric | del(.__name__) | to_entries | map("\(.key)=\(.value)") | join(",")) \(.value[1])"'
+    "${opt[@]}" "$base/api/v1/query" | jq -r '.data.result[] | "\(.metric | del(.__name__) | to_entries | map("\(.key)=\(.value)") | join(",")) \(.value[1])"'
 }
 
 printf 'Fenêtre : %s → %s (%d s), source %s%s\n' "$1" "$2" "$d" "$source" "${groupes:+, groupes $groupes}"
-couverture="$(requete "count_over_time(${serie}[${d}s:15s]) * 15 / $d" | awk '{print $NF}')"
-erreur="$(requete "avg_over_time(${serie}[${d}s:15s]) * $d" | awk '{print $NF}')"
+couverture="$(requete "count_over_time(${serie}[${d}s:15s]) * 15 / $d" sans-dedup | awk '{print $NF}')"
+erreur="$(requete "avg_over_time(${serie}[${d}s:15s]) * $d" sans-dedup | awk '{print $NF}')"
 printf 'Couverture de la mesure : %.0f %%\n' "$(awk -v x="${couverture:-0}" 'BEGIN { print x * 100 }')"
 printf 'Secondes d'"'"'erreur cumulées : %.0f   ← à reporter dans mesure-interruption-s\n' "${erreur:-0}"
 

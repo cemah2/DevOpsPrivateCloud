@@ -133,6 +133,14 @@ _f4g_vms() {
 _f4g_vm_filtre() { _f4g_vms | jq -e --argjson v "$1" "any(.[]; .vmid == \$v and ($2))" >/dev/null 2>&1; }
 _f4g_vm_existe() { _f4g_vm_filtre "$1" 'true'; }
 
+# _f4g_decommissionnee VMID — la VM a été décommissionnée en F4-S14 : absente (ou arrêtée) ET fiche
+# CHG-3414 sur main. Permet aux contrôles de S10 de rester verts après le décommissionnement de 3401
+# (étiquette changements-v1 posée quand « tous les contrôles de F4 sont verts »).
+_f4g_decommissionnee() {
+  { ! _f4g_vm_existe "$1" || _f4g_vm_filtre "$1" '.status == "stopped"'; } || return 1
+  _f4g_doc "$_f4g_doc_dir/fiches" '^CHG-3414' "$1|legacy-rdv01" >/dev/null 2>&1
+}
+
 _f4g_config() { _f4g_pve "qm config $1" 2>/dev/null; }
 _f4g_agent() { _f4g_pve "qm guest cmd $1 ping" >/dev/null 2>&1; }
 

@@ -104,7 +104,7 @@ Versions cibles : [`annexes/versions-finaux-F1-F4.md`](../../../annexes/versions
 | Cilium | 1.20.3 | dernière 1.20, puis 1.21.x | toujours **avant** Kubernetes |
 | Argo CD, Kyverno, CloudNativePG | 3.5.5, 1.19.2, 1.30.1 | 3.6, 1.20, 1.31 si publiées | Kyverno 1.20 supprime `ClusterPolicy`, CNPG 1.31 supprime `barmanObjectStore` |
 | Ceph | 20.2.4 | dernière corrective Tentacle (≥ 20.2.5) | à défaut : système Rocky Linux 10 des hôtes en roulement |
-| OpenStack / Kolla-Ansible | 2026.1 / 22.2.0 | 2026.2 / 23.x stable | Kolla 23 en version candidate (23.0.0.0rc1) au relevé de l'annexe ; **23.0.0** publiée le 21/10/2026 (PyPI, ansible-core `>=2.20,<2.22`) : vérifie la dernière 23.x |
+| OpenStack / Kolla-Ansible | 2026.1 / 22.2.0 | 2026.2 / 23.x stable | **23.0.0** publiée le 21/10/2026 (PyPI, ansible-core `>=2.20,<2.22`), après deux versions candidates : vérifie la dernière 23.x |
 | mariadb-operator / MariaDB | — | 26.6 / 11.8 | migration de Legacy-RDV (S12-S13) |
 
 ---

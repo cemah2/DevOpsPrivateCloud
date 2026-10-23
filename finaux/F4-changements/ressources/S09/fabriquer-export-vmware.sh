@@ -98,9 +98,6 @@ chmod 0700 "$WB"
 exec 9>"$WB/verrou"
 flock -n 9 || mourir "une fabrication est déjà en cours (verrou $WB/verrou)"
 
-libre_gio=$(($(df --output=avail -k "$EXPORT" | tail -n 1) / 1048576))
-((libre_gio >= 25)) || mourir "$libre_gio Gio libres sous $EXPORT : il en faut 25 pendant la fabrication"
-
 TRAVAIL="$(mktemp -d "$EXPORT/.travail-XXXXXX")"
 trap 'rm -rf "$TRAVAIL"' EXIT
 
@@ -134,6 +131,11 @@ for l in "${VMS[@]}"; do
 done
 
 if ((${#a_faire[@]})); then
+  # Espace exigé seulement s'il y a quelque chose à fabriquer (une relance qui ne fait qu'afficher les
+  # sommes ne doit pas échouer faute de place).
+  libre_gio=$(($(df --output=avail -k "$EXPORT" | tail -n 1) / 1048576))
+  ((libre_gio >= 25)) || mourir "$libre_gio Gio libres sous $EXPORT : il en faut 25 pendant la fabrication"
+
   # --- 2. Image source, vérifiée ----------------------------------------------------------------------
   mkdir -p "$WB/cache"
   curl -fsSL --proto "=https" --proto-redir "=https" "$URL_BASE/SHA512SUMS" -o "$TRAVAIL/SHA512SUMS"

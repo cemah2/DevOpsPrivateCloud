@@ -4,7 +4,7 @@
 #   sauvegarde  sauvegarde finale (VM arrêtée) vers pbs-par2, PROTÉGÉE contre l'élagage
 #   essai       restauration d'essai en 3499 (réseau coupé), contrôle par l'agent, puis effacement de 3499
 #   effacer     effacement des disques de 3401 (une passe aléatoire + une passe de zéros) et preuve
-#   detruire    suppression de la VM 3401 (APRÈS le « removed » de envs/f4-infoger, voir RB-347)
+#   detruire    suppression de la VM 3401 (APRÈS « tofu state rm » dans envs/f4-infoger, voir RB-347)
 #   export      effacement de l'export d'InfoGér de legacy-rdv01 (hdd-bulk:import/infoger-export/)
 #
 #   decommissionner-legacy-rdv01.sh <étape> [--conserver-jusqu-au AAAA-MM-JJ]
@@ -41,11 +41,14 @@ case "$etape" in
     [[ "$jusqu" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || mourir "--conserver-jusqu-au AAAA-MM-JJ obligatoire (politique validée par Sophie Laurent)"
     trace "arrêt de $VMID et sauvegarde finale vers $PBS (mode stop : disque cohérent)"
     qm shutdown "$VMID" --timeout 180 || qm stop "$VMID"
-    vzdump "$VMID" --storage "$PBS" --mode stop \
+    # --protected 1 : la sauvegarde échappe à l'élagage du travail f4-infoger (keep-daily=7…).
+    vzdump "$VMID" --storage "$PBS" --mode stop --protected 1 \
       --notes-template "SAUVEGARDE FINALE legacy-rdv01 (CHG-3414) - protegee, conserver jusqu'au $jusqu" 2>&1 | tee -a "$JOURNAL"
     volid="$(pvesm list "$PBS" --vmid "$VMID" | awk 'NR > 1 {print $1}' | sort | tail -n 1)"
     [[ -n "$volid" ]] || mourir "sauvegarde introuvable dans $PBS"
-    pvesh set "/nodes/$NOEUD/storage/$PBS/content/$volid" --protected 1
+    pvesh get "/nodes/$NOEUD/storage/$PBS/content" --vmid "$VMID" --output-format json \
+      | VOLID="$volid" perl -MJSON::PP -0777 -ne 'exit((grep { $_->{volid} eq $ENV{VOLID} && $_->{protected} } @{decode_json($_)}) ? 0 : 1)' \
+      || mourir "la sauvegarde $volid n'est pas protégée"
     printf '%s\n' "$volid" > "$PREUVES/sauvegarde-finale"
     trace "sauvegarde finale $volid protégée (conservation jusqu'au $jusqu)"
     ;;
@@ -95,7 +98,7 @@ case "$etape" in
     ;;
   detruire)
     [[ -f "$PREUVES/disques-effaces" ]] || mourir "disques non effacés"
-    confirmer "suppression de la VM $VMID (déjà retirée de l'état OpenTofu par « removed »)" "detruire $VMID"
+    confirmer "suppression de la VM $VMID (déjà retirée de l'état OpenTofu par « tofu state rm »)" "detruire $VMID"
     qm destroy "$VMID" --purge 1 --destroy-unreferenced-disks 1
     trace "VM $VMID supprimée (configuration, disques, travaux de sauvegarde et de réplication)"
     ;;

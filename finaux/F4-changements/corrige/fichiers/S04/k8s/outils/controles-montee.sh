@@ -80,10 +80,10 @@ noeud() {
       printf '  %s/%s%s\n' "$ns" "$pod" "$([[ "$role" == primary ]] && echo '   ← PRIMAIRE CNPG : bascule automatique au cordon (à suivre)')"
     done
   echo "== PDB qui couvrent ces pods et n'autorisent aucune éviction"
-  local pods pdbs
+  local pods pdbs bloques
   pods="$(kubectl get pods -A --field-selector "spec.nodeName=$n" -o json)"
   pdbs="$(kubectl get pdb -A -o json)"
-  jq -r --argjson pdbs "$pdbs" '.items[] | . as $p
+  bloques="$(jq -r --argjson pdbs "$pdbs" '.items[] | . as $p
     | [$pdbs.items[] | select(.metadata.namespace == $p.metadata.namespace)
        | select((.spec.selector.matchLabels // {}) | to_entries | all(.key as $k | .value as $v | ($p.metadata.labels // {})[$k] == $v))
        | select((.spec.selector.matchExpressions // []) == [])] as $m
@@ -91,7 +91,9 @@ noeud() {
       elif ($m | length) == 1 and (($m[0].status.disruptionsAllowed // 0) == 0)
            and (any($m[0].metadata.ownerReferences[]?; .apiVersion | startswith("postgresql.cnpg.io")) | not)
       then "  [KO] \($p.metadata.namespace)/\($p.metadata.name) : PDB \($m[0].metadata.name) n'\''autorise aucune éviction"
-      else empty end' <<<"$pods" | tee /dev/stderr | grep -q . && ko=1
+      else empty end' <<<"$pods")"
+  # (pas de « tee | grep -q » : sous pipefail, le SIGPIPE de tee masquerait le KO)
+  if [[ -n "$bloques" ]]; then printf '%s\n' "$bloques"; ko=1; fi
   echo "== Pods sans contrôleur (perdus au drain) ou à une seule réplique"
   jq -r '.items[] | select(any(.metadata.ownerReferences[]?; .kind == "DaemonSet") | not)
     | select((.metadata.ownerReferences // []) == []) | "  [!!] \(.metadata.namespace)/\(.metadata.name) : aucun contrôleur, il ne reviendra pas"' <<<"$pods"

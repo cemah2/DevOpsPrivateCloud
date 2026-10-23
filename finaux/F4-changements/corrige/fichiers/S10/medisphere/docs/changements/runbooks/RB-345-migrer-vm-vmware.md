@@ -15,7 +15,7 @@
 3. **Invité, hors ligne** (`virt-customize -a $(pvesm path <volid>)`, VM arrêtée) : interface `ens18` + adresse du plan, résolveurs, `/etc/hosts` ; `open-vm-tools` purgé ; `qemu-guest-agent` installé ; compte `admin` + clé d'`adm01` + sudo ; accès du tiers fermé (compte verrouillé et expiré, clé et sudo supprimés, `AllowUsers` revu) ; configurations applicatives re-adressées ; `update-initramfs -u -k all` puis **contrôle** que `virtio_scsi` est dans chaque initramfs.
 4. Démarrage, agent (`qm guest cmd <vmid> ping`), console série en cas de doute (`qm terminal <vmid>`, sortie `Ctrl+O`).
 5. Re-adressages qui exigent le service démarré (ex. `RENAME USER` MariaDB).
-6. Code : blocs `import` dans `envs/f4-infoger`, `tofu plan -generate-config-out` la première fois, nettoyage, `tofu apply` (import + NetBox + DNS), **plan vide** ; pipeline Ansible ; répartiteurs (un à la fois).
+6. Code : blocs `import` dans `envs/f4-infoger`, `tofu plan -generate-config-out` la première fois (avec des blocs `import` littéraux, un par VM : la génération refuse un `import` à `for_each`), nettoyage, `tofu apply` (import + NetBox + DNS), **plan vide** ; pipeline Ansible ; répartiteurs (un à la fois).
 7. Sauvegarde : travail PBS dédié (`pvesh create /cluster/backup --id f4-infoger --vmid 3401,3402,3403 --storage pbs-par2 --schedule '02:30' --mode snapshot …`), première sauvegarde à la main, restauration d'essai d'**un** fichier.
 
 ## Après

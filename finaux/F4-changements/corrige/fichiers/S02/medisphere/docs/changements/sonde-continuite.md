@@ -33,9 +33,11 @@ Une série 0/1 par Prometheus, évaluée toutes les 15 s :
 **Secondes d'erreur cumulées** sur une fenêtre de durée *D* (en secondes) finissant à *FIN* :
 
 ```promql
-avg_over_time(max(continuite:en_erreur)[<D>s:15s]) * <D>          # évaluée à FIN, Thanos Query
+avg_over_time(max(continuite:en_erreur)[<D>s:15s]) * <D>          # évaluée à FIN, Thanos Query, dedup=false
 avg_over_time(max(continuite:sondes_en_erreur:max)[<D>s:15s]) * <D> # source « temoin » (k8s-par1 arrêté)
 ```
+
+Côté cluster, la requête passe **sans dédoublonnage** (`dedup=false`) : la charge k6 n'écrit que dans le réplica `prometheus-kps-prometheus-0` (M29-E14), donc seul ce réplica voit ses erreurs dans `continuite:en_erreur` ; Thanos Query, qui suit un réplica à la fois, pourrait lire l'autre. `max()` sur les deux réplicas garde le pire.
 
 C'est une mesure **pessimiste** : un échantillon en erreur compte pour tout son pas (15 s), et le taux des 5xx sur 1 min étale une rafale sur une minute. Elle est faite pour comparer des changements entre eux et à un objectif, pas pour un contrat au dixième de seconde. Outil : `plateforme/observabilite/outils/mesurer-interruption.sh DÉBUT FIN [cluster|temoin] [GROUPES]`.
 

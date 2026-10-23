@@ -13,7 +13,7 @@ Légende : **D** = déclare 1.37 · **N** = ne déclare pas 1.37 (silence ou mat
 
 | Composant | Installé | Déclare | 1.37 au relevé | Bloquant ? | Source |
 |---|---|---|---|---|---|
-| Cilium (CNI, Gateway, BGP, WireGuard, pare-feu d'hôte) | 1.20.3 | 1.20 : Kubernetes 1.33 à 1.36 ; 1.21 (en développement) : 1.34 à 1.37 | **X** pour 1.20 | **oui** : le CNI porte tout le réseau des pods | https://docs.cilium.io/en/stable/network/kubernetes/compatibility/ et https://docs.cilium.io/en/latest/network/kubernetes/compatibility/ |
+| Cilium (CNI, Gateway, BGP, WireGuard, pare-feu d'hôte) | 1.20.3 | 1.20 : Kubernetes 1.33 à 1.36 testés (« les versions plus récentes, non listées, dépendent de la rétrocompatibilité de Kubernetes ») ; 1.21 (en développement) : 1.34 à 1.37 | **N** pour 1.20 | **oui** : le CNI porte tout le réseau des pods ; « non testé » ne suffit pas pour lui | https://docs.cilium.io/en/stable/network/kubernetes/requirements/ et https://docs.cilium.io/en/latest/network/kubernetes/requirements/ |
 | containerd.io | 2.3.x | table « Kubernetes support » par version de containerd | à relever | oui si absent | https://containerd.io/releases/ |
 | cert-manager | 1.21.x | tableau des versions prises en charge | à relever | non (montée possible avant) | https://cert-manager.io/docs/releases/ |
 | ExternalDNS | 0.23.x | compatibilité dans le README | à relever | non | https://github.com/kubernetes-sigs/external-dns |
@@ -61,10 +61,10 @@ Légende : **D** = déclare 1.37 · **N** = ne déclare pas 1.37 (silence ou mat
 
 ## 4. API dépréciées ou retirées
 
-- Côté **serveur** (ce qui est réellement appelé) : la métrique `apiserver_requested_deprecated_apis` de l'API (Prometheus du M21), filtrée par `removed_release="1.37"` ; elle dit **qui** appelle une API dépréciée (étiquettes `group`, `version`, `resource`). C'est la source qui fait foi.
+- Côté **serveur** (ce qui est réellement appelé) : la métrique `apiserver_requested_deprecated_apis` de l'API (Prometheus du M21), filtrée par `removed_release="1.37"` ; elle dit **quelle** API dépréciée a été appelée (étiquettes `group`, `version`, `resource`, `subresource`), pas **qui** l'appelle : pour cela, le journal d'audit (annotation `k8s.io/deprecated` des requêtes, M14-E27). C'est la source qui fait foi pour « est-ce appelé ? ».
 - Côté **dépôts** (ce qui le serait au prochain déploiement) : kubeconform `-strict` avec les schémas de la **cible** sur les rendus des dépôts (`plateforme/gitops`, `plateforme/k8s`, dépôts de déploiement) ; un outil comme `pluto` (FairwindsOps) détecte les `apiVersion` dépréciées dans des fichiers et des releases Helm (à évaluer : non installé au M29).
 - Relevé du corrigé : aucune ressource du lab n'utilise une API retirée en 1.37 d'après la métrique (à refaire : un composant monté entre-temps peut en appeler une).
 
 ## 5. Lecture
 
-Au relevé, **trois composants ne déclarent pas 1.37** (Cilium 1.20 l'exclut, Argo CD 3.5 et KEDA 2.21 s'arrêtent à 1.36) et plusieurs sont « à relever ». Cilium suffit à décider : on ne monte pas le plan de contrôle d'un cluster dont le CNI ne déclare pas la version. Décision : CHG-3403.
+Au relevé, **trois composants ne déclarent pas 1.37** (Cilium 1.20, Argo CD 3.5 et KEDA 2.21 s'arrêtent à 1.36 ; aucun ne l'exclut explicitement, aucun ne l'a testée) et plusieurs sont « à relever ». Cilium suffit à décider : on ne monte pas le plan de contrôle d'un cluster dont le CNI ne déclare pas la version. Décision : CHG-3403.

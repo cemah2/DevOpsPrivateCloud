@@ -12,14 +12,14 @@
 | OpenStack / Kolla-Ansible | 2026.1 / 22.2.0 (M10) | 2026.2 « Hibiscus » sortie le 30/09/2026 ; Kolla-Ansible **23.0.0** publiée le 21/10/2026 (23.0.0.0rc1 le 07/10/2026 ; ansible-core `>=2.20,<2.22`), 22.2.0 dernière de la série 22 | **2026.2 avec Kolla-Ansible 23.x stable** | Kolla 23 stable disponible : la montée de production est possible ; si une 23.x corrective est publiée, la prendre |
 | Proxmox VE | 9.x sur `pve01` | 9.2 (21/05/2026) ; Ceph Tentacle 20.2.1 en option, import ESXi corrigé en 9.1 | inchangé (`pve01` n'est jamais mis à niveau par le workbook) | Import OVA/OVF (`qm importovf`, assistant d'import) et `qm disk import` pour les VMDK ; l'assistant d'import ESXi exige un ESXi joignable (absent du lab) |
 | Argo CD | 3.5.x (M20) | 3.5.x ; 3.6 GA annoncée le 03/11/2026 | 3.6.x quand elle est publiée | Composant de plateforme monté par GitOps (F4-S05) |
-| Kyverno | 1.19.x (M26) | 1.19.x ; 1.20 annoncée vers novembre 2026 | 1.20.x quand elle est publiée | 1.20 supprime `ClusterPolicy` : sans effet chez MédiSphère (politiques CEL seulement depuis le M26), à vérifier par un inventaire |
+| Kyverno | 1.19.x (M26) | 1.19.x ; 1.20 annoncée vers novembre 2026 | 1.20.x quand elle est publiée | 1.20 supprime `ClusterPolicy`, `Policy`, `CleanupPolicy`, `ClusterCleanupPolicy` et l'ancienne `PolicyException` du groupe `kyverno.io` : sans effet chez MédiSphère (politiques CEL seulement depuis le M26), à vérifier par un inventaire |
 | CloudNativePG | 1.30.1 (M16, M27) | 1.30.x ; 1.31 non publiée | 1.31.x quand elle est publiée | 1.31 supprime `barmanObjectStore` : MédiSphère n'archive que par le plugin Barman Cloud depuis le M16 (à vérifier sur chaque `Cluster`) |
 
 ## Migration de Legacy-RDV et des VMs d'InfoGér (F4)
 
 | Outil | Version | Ce qui compte |
 |---|---|---|
-| mariadb-operator | **26.6.x** (26.6.0 du 06/06/2026 ; charts OCI `oci://ghcr.io/mariadb-operator/charts/mariadb-operator-crds`, `mariadb-operator`, `mariadb-cluster`) | Licence MIT (projet communautaire, distinct du *MariaDB Enterprise Operator*). 26.6 : prise en charge de Kubernetes 1.36, ancien dépôt Helm et anciens registres d'images **dépréciés** au profit des charts OCI ; 26.3 : restauration à un instant donné. Les charts passent par `plateforme/charts-miroir` (recopiés et signés dans Harbor), comme tout chart tiers depuis le M20 |
+| mariadb-operator | **26.6.x** (26.6.0 du 06/06/2026 ; charts OCI `oci://ghcr.io/mariadb-operator/charts/mariadb-operator-crds`, `mariadb-operator`, `mariadb-cluster`) | Licence MIT (projet communautaire, distinct du *MariaDB Enterprise Operator*). 26.6 : prise en charge de Kubernetes 1.36, dépôt Helm `helm.mariadb.com` **déprécié** (le dépôt `mariadb-operator.github.io` reste servi) ; installation par charts OCI recommandée ; 26.3 : restauration à un instant donné. Les charts passent par `plateforme/charts-miroir` (recopiés et signés dans Harbor), comme tout chart tiers depuis le M20 |
 | MariaDB | 11.8 LTS (paquet Debian 13 et image `mariadb:11.8`) | Version de la VM d'InfoGér (Debian 12, MariaDB 10.11) plus ancienne : la migration change aussi de version majeure (dump logique, vérification des collations `utf8mb4`) |
 | PHP | 8.4 (Debian 13, image officielle `php:8.4-apache`) | `apps/legacy-rdv` est écrit pour 8.4 |
 | qemu-img / `qm` | ceux de Proxmox VE 9 | VMDK `streamOptimized` des exports VMware : `qemu-img info`, `qm importovf`, `qm disk import` |
@@ -29,4 +29,4 @@
 - **Cilium et Kubernetes 1.37** : ne pas monter le plan de contrôle en 1.37 tant que la version de Cilium installée ne la déclare pas ; l'ordre est Cilium d'abord (la nouvelle mineure de Cilium accepte encore 1.36), Kubernetes ensuite.
 - **Kolla-Ansible 23** : `ansible-core >=2.20,<2.22` (la plage change à chaque série) avant de créer l'environnement virtuel de déploiement ; la montée se fait avec `kolla-ansible upgrade` après `pull`, service par service possible avec `--tags`.
 - **Composants de plateforme** : les montées de mineure (Argo CD 3.6, Kyverno 1.20, CloudNativePG 1.31) passent par une MR dans `plateforme/charts-miroir` puis `plateforme/gitops` ; chaque note de version est lue pour les suppressions d'API (*breaking changes*) avant la MR.
-- **mariadb-operator 26.6** : l'ancien dépôt Helm (non OCI) est déprécié ; installer les CRD **avant** l'opérateur (chart séparé).
+- **mariadb-operator 26.6** : le dépôt Helm `helm.mariadb.com` est déprécié ; installer les CRD **avant** l'opérateur (chart séparé).

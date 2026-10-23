@@ -31,7 +31,8 @@
 #       continuite:en_erreur              1 si une sonde échoue OU si la charge k6 de la sonde voit des
 #                                         erreurs OU si MédiAgenda prod renvoie des 5xx, sinon 0.
 # Les deux règles sont évaluées toutes les 15 s (_F4M_PAS). « Secondes d'erreur cumulées » entre DÉBUT
-# et FIN = moyenne de la série 0/1 sur la fenêtre × durée de la fenêtre, évaluée à FIN.
+# et FIN = moyenne de la série 0/1 sur la fenêtre × durée de la fenêtre, évaluée à FIN (côté cluster :
+# Thanos Query interrogé avec dedup=false, max des deux réplicas, voir _f4m_prom).
 # Source « cluster » (défaut) = continuite:en_erreur via Thanos Query ; source « temoin » =
 # continuite:sondes_en_erreur:max sur mon01 (seule source disponible quand k8s-par1 est arrêté, F4-S08),
 # ou, si la fiche restreint les groupes de sondes (clé mesure-groupes, expression régulière sur
@@ -194,11 +195,16 @@ _f4m_decision() {
 # --- Prometheus (cluster ou témoin) ----------------------------------------------------------------
 
 # _f4m_prom SOURCE 'PromQL' [INSTANT] — JSON d'une requête instantanée (SOURCE : cluster|temoin).
+# _F4M_SANS_DEDUP=1 (cluster) : requête Thanos Query avec dedup=false. Nécessaire pour la MESURE : la
+# charge k6 n'écrit que dans prometheus-kps-prometheus-0 (M29-E14), donc continuite:en_erreur ne voit les
+# erreurs de la charge que sur ce réplica ; le dédoublonnage de Query (« penalty », M21-E24) peut suivre
+# l'autre réplica. Sans dédoublonnage, max(continuite:en_erreur) prend le pire des deux réplicas.
 _f4m_prom() {
   local base
   local -a t=()
   if [[ "$1" == temoin ]]; then base="$_f4m_temoin"; else base="${WB_PROM_URL:-http://prometheus.apps.par1.medisphere.internal:9090}"; fi
   [[ -n "${3:-}" ]] && t=(--data-urlencode "time=$3")
+  [[ "$1" != temoin && "${_F4M_SANS_DEDUP:-0}" == 1 ]] && t+=(--data-urlencode "dedup=false")
   curl -sf --max-time "$((WB_TIMEOUT * 4))" -H "Accept: application/json" --data-urlencode "query=$2" \
     "${t[@]}" "$base/api/v1/query"
 }
@@ -235,7 +241,7 @@ _f4m_interruption() {
   d1="$(_f4m_epoch "$2")" || return 1
   d=$((d1 - d0))
   ((d > 0)) || return 1
-  v="$(_f4m_prom_val "$src" "avg_over_time($(_f4m_serie "$src" "${4:-}")[${d}s:${_F4M_PAS}s]) * $d" "$d1")" || return 1
+  v="$(_F4M_SANS_DEDUP=1 _f4m_prom_val "$src" "avg_over_time($(_f4m_serie "$src" "${4:-}")[${d}s:${_F4M_PAS}s]) * $d" "$d1")" || return 1
   [[ -n "$v" && "$v" != NaN ]] || return 1
   awk -v x="$v" 'BEGIN { printf "%d\n", x + 0.5 }'
 }
@@ -247,7 +253,7 @@ _f4m_couverture() {
   d1="$(_f4m_epoch "$2")" || return 1
   d=$((d1 - d0))
   ((d > 0)) || return 1
-  v="$(_f4m_prom_val "$src" "count_over_time($(_f4m_serie "$src" "${4:-}")[${d}s:${_F4M_PAS}s]) * ${_F4M_PAS} / $d" "$d1")" || return 1
+  v="$(_F4M_SANS_DEDUP=1 _f4m_prom_val "$src" "count_over_time($(_f4m_serie "$src" "${4:-}")[${d}s:${_F4M_PAS}s]) * ${_F4M_PAS} / $d" "$d1")" || return 1
   [[ -n "$v" ]] || { echo 0; return 0; }
   awk -v x="$v" 'BEGIN { if (x > 1) x = 1; printf "%.2f\n", x }'
 }

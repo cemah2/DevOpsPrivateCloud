@@ -5,4 +5,5 @@ apiVersion: kubeadm.k8s.io/v1beta4
 kind: ClusterConfiguration
 kubernetesVersion: v1.37.<CORRECTIF>
 # … controlPlaneEndpoint (k8s-api.par1.medisphere.internal:8443), networking, apiServer
-#   (authentification structurée du M24), etcd… inchangés …
+#   (authentification structurée du M24), etcd, proxy.disabled: true (M15-E08 : sans lui, « kubeadm upgrade
+#   apply » réinstallerait kube-proxy à côté du remplacement de Cilium)… inchangés …

@@ -222,7 +222,7 @@ Un noyau qui ne trouve pas sa racine n'a pas, dans son initramfs, le pilote du c
 
 | Élément | Valeur |
 |---|---|
-| Opérateur | **mariadb-operator 26.6.x** (licence MIT ; distinct du *MariaDB Enterprise Operator*) : charts OCI `oci://ghcr.io/mariadb-operator/charts/mariadb-operator-crds` et `…/mariadb-operator`, recopiés et signés par `plateforme/charts-miroir` ; espace **`mariadb-system`** ; API `k8s.mariadb.com/v1alpha1` (`MariaDB`, `Database`, `User`, `Grant`, `Backup`, `SqlJob`…). L'ancien dépôt Helm non OCI est **déprécié** |
+| Opérateur | **mariadb-operator 26.6.x** (licence MIT ; distinct du *MariaDB Enterprise Operator*) : charts OCI `oci://ghcr.io/mariadb-operator/charts/mariadb-operator-crds` et `…/mariadb-operator`, recopiés et signés par `plateforme/charts-miroir` ; espace **`mariadb-system`** ; API `k8s.mariadb.com/v1alpha1` (`MariaDB`, `Database`, `User`, `Grant`, `Backup`, `SqlJob`…). Le dépôt Helm `helm.mariadb.com` est **déprécié** ; l'installation par les charts OCI est celle que recommande le projet |
 | Base | MariaDB **11.8** (image officielle par le cache Harbor) : la VM est en 10.11, la migration change aussi de version majeure |
 | Locataire et espaces | locataire Capsule **`legacy`** (propriétaire : l'équipe plateforme, Legacy-RDV n'a pas d'équipe de développement), espaces **`legacy-rdv-recette`** (synchronisé automatiquement) et **`legacy-rdv-prod`** (synchronisé à la main), PSA `restricted`, quotas ; créés par le mécanisme « équipe en code » de F2 ou, à défaut, par `plateforme/k8s` comme les autres espaces |
 | Secrets | OpenBao : `kv/legacy/<env>/mariadb` et `kv/legacy/<env>/s3`, livrés par ESO (SecretStore `openbao` de chaque espace, rôle `eso-legacy-rdv-<env>`) |

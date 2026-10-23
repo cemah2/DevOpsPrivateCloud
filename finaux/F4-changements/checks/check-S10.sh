@@ -14,9 +14,19 @@ source "$(dirname "${BASH_SOURCE[0]}")/_f4-montees.sh"
 title "F4-S10 — Migrer les VMs d'InfoGér vers Proxmox VE"
 require_cmd jq curl ssh dig
 
+# legacy-rdv01 (3401) décommissionnée en F4-S14 : ses contrôles de migration ne s'appliquent plus.
+_f4_s10_decom=0
+if _f4g_decommissionnee 3401; then _f4_s10_decom=1; fi
+
 for _f4_s10_nom in legacy-rdv01 ftp-part01 stats01; do
   _f4_s10_id="$(_f4g_vmid "$_f4_s10_nom")"
   _f4_s10_ip="$(_f4g_ip "$_f4_s10_nom")"
+  if [[ "$_f4_s10_nom" == legacy-rdv01 ]] && ((_f4_s10_decom)); then
+    skip "$_f4_s10_nom : VM, adresse, DNS et NetBox" "décommissionnée en F4-S14 (CHG-3414)"
+    check_output "une sauvegarde de $_f4_s10_nom ($_f4_s10_id) existe sur pbs-par2" "pbs-par2:backup/vm/$_f4_s10_id/" \
+      _f4g_pve "pvesm list pbs-par2 --vmid $_f4_s10_id"
+    continue
+  fi
   check_cmd "VM $_f4_s10_id nommée $_f4_s10_nom, dans le pool lab" _f4g_vm_filtre "$_f4_s10_id" ".name == \"$_f4_s10_nom\" and .pool == \"lab\""
   check_cmd "$_f4_s10_nom : VirtIO SCSI, carte virtio sur vinfra, agent activé, ni SATA/IDE ni vmxnet3/e1000" _f4g_conforme "$_f4_s10_id"
   if _f4g_agent "$_f4_s10_id"; then
@@ -41,8 +51,12 @@ for _f4_s10_nom in legacy-rdv01 ftp-part01 stats01; do
 done
 
 # --- Services rendus ----------------------------------------------------------------------------------
-check_output "Legacy-RDV répond sur http://legacy-rdv01.par1.medisphere.internal/" 'Rendez-vous' \
-  _f4g_get "http://legacy-rdv01.par1.medisphere.internal/"
+if ((_f4_s10_decom)); then
+  skip "Legacy-RDV sur http://legacy-rdv01.par1.medisphere.internal/" "VM décommissionnée en F4-S14"
+else
+  check_output "Legacy-RDV répond sur http://legacy-rdv01.par1.medisphere.internal/" 'Rendez-vous' \
+    _f4g_get "http://legacy-rdv01.par1.medisphere.internal/"
+fi
 check_output "Legacy-RDV répond sur $_f4g_rdv/ (nom des cabinets, répartiteurs)" 'Rendez-vous' _f4g_get "$_f4g_rdv/"
 check_cmd "sonde de continuité de mon01 : un groupe continuite-* étiqueté service=legacy-rdv vise le nom des cabinets" \
   _f4m_prom_non_vide temoin 'probe_success{job="blackbox", groupe=~"continuite-.+", service="legacy-rdv", instance=~"https://rdv\\.par1\\.medisphere\\.internal.*"}'
@@ -63,13 +77,16 @@ fi
 # --- Code ---------------------------------------------------------------------------------------------
 _f4_s10_tf() {
   local f c tout=""
+  # (3401 n'est plus exigée une fois décommissionnée, F4-S14)
   while IFS= read -r f; do
     [[ "$f" == *.tf ]] || continue
     c="$(_f4g_fichier plateforme/infra "$f" 2>/dev/null)" || continue
     tout+="$c"$'\n'
   done < <(_f4g_arbre plateforme/infra envs/f4-infoger)
   grep -Eq '^[[:space:]]*import[[:space:]]*\{' <<<"$tout" || return 1
-  for v in 3401 3402 3403; do grep -q "$v" <<<"$tout" || return 1; done
+  local v vms=(3402 3403)
+  ((_f4_s10_decom)) || vms+=(3401)
+  for v in "${vms[@]}"; do grep -q "$v" <<<"$tout" || return 1; done
 }
 check_cmd "plateforme/infra (main) : envs/f4-infoger importe les VMs 3401-3403 (blocs import)" _f4_s10_tf
 

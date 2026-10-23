@@ -26,11 +26,12 @@ Ce n'est pas la VM du M09-E23 : les systèmes sont des **Debian 12** installées
 Sur `pve01` (il a accès à Internet, et c'est là que tu importeras) :
 
 ```
-root@pve01:~# apt-get install -y libguestfs-tools
+root@pve01:~# apt-get install -s libguestfs-tools | grep -E '^(Inst|Remv)'
+root@pve01:~# apt-get install libguestfs-tools
 root@pve01:~# /root/DevOpsPrivateCloud/finaux/F4-changements/ressources/S09/fabriquer-export-vmware.sh
 ```
 
-> ⚠️ **Attention** : `libguestfs-tools` s'installe sur l'hôte Proxmox lui-même (paquets Debian officiels, aucun service démarré). Si tu préfères ne rien installer sur `pve01`, garde-le en tête dans ta fiche de changement et retire le paquet après F4 (`apt-get purge libguestfs-tools && apt-get autoremove`).
+> ⚠️ **Attention** : `libguestfs-tools` s'installe sur l'hôte Proxmox lui-même (paquets Debian officiels, aucun service démarré). La simulation (`-s`) doit n'afficher **que** des lignes `Inst` : si une ligne `Remv` apparaît (un paquet de Proxmox VE, `pve-qemu-kvm` par exemple, serait retiré), réponds **non** à `apt-get` et arrête-toi là. Si tu préfères ne rien installer sur `pve01`, garde-le en tête dans ta fiche de changement et retire le paquet après F4 (`apt-get purge libguestfs-tools`, puis `apt-get autoremove` après avoir relu sa simulation `apt-get -s autoremove` : rien d'autre que les dépendances de libguestfs ne doit partir).
 
 - Le dossier produit est `<chemin du stockage hdd-bulk>/import/infoger-export/` (option `--stockage` pour un autre stockage de type répertoire). Rien d'autre n'est écrit ; aucune VM n'est créée ni modifiée ; le contenu `import` du stockage n'est **pas** activé par le script.
 - Durée : 15 à 30 minutes. Espace : 25 Gio libres pendant la fabrication, environ 3 Gio ensuite.

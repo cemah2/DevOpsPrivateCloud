@@ -69,7 +69,8 @@ ls /etc/sudoers.d
 echo "[unités activées (multi-user)]"
 ls /etc/systemd/system/multi-user.target.wants
 echo "[clés SSH autorisées]"
--glob ls /home/*/.ssh/authorized_keys
+-glob ll /home/*/.ssh
+-ll /root/.ssh
 echo "[fichiers de secrets connus]"
 -ls /etc/stats
 -ls /var/backups/infoger

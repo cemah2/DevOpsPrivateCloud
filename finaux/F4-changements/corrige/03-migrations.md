@@ -6,7 +6,7 @@
 - fabrication de l'export (`ressources/S09/`) : comportement de `virt-customize` sur Proxmox VE 9 (réseau de la machine d'appoint, `update-grub` lors du remplacement du noyau *cloud*, MariaDB temporaire démarrée dans la machine d'appoint) ;
 - démarrage OVMF des images Debian 12 *genericcloud* sans entrée de démarrage (chemin de secours `\EFI\BOOT\BOOTX64.EFI`) : si la VM reste au shell UEFI, repasse-la en SeaBIOS (image hybride) et note l'écart ;
 - configuration OpenTofu de VMs importées (`bpg/proxmox` 0.116) : quelques attributs relus peuvent différer (format du disque, ordre des étiquettes) ;
-- objets de mariadb-operator 26.6 : étiquettes des pods créées par l'opérateur, nom du conteneur (`mariadb`), variable `MARIADB_ROOT_PASSWORD` dans le pod, héritage des étiquettes par le `ServiceMonitor` (`inheritMetadata`), compatibilité PSA `restricted` des Jobs de sauvegarde et des `SqlJob`, besoins réseau de ces Jobs (vers l'API) ;
+- objets de mariadb-operator 26.6 (champs des manifestes vérifiés contre les CRD de l'étiquette `v26.6.0` ; nom du conteneur `mariadb`, variable `MARIADB_ROOT_PASSWORD` et étiquette `app.kubernetes.io/instance` vérifiés dans le code source à cette étiquette) : héritage des étiquettes par le `ServiceMonitor` (`inheritMetadata`), compatibilité PSA `restricted` des Jobs de sauvegarde et des `SqlJob`, besoins réseau de ces Jobs (vers l'API) ;
 - valeurs du chart de l'opérateur au-delà des clés vérifiées dans `values.yaml` de l'étiquette `v26.6.0`.
 
 ---
@@ -19,7 +19,8 @@ Fichiers : [`S09/pve01/inspecter-export.sh`](fichiers/S09/pve01/inspecter-export
 
 1. **Fabrication** de l'export (`ressources/S09/README.md`), sommes « du courriel » copiées hors de `pve01` (dans le ticket CHG-3409) :
    ```
-   root@pve01:~# apt-get install -y libguestfs-tools
+   root@pve01:~# apt-get install -s libguestfs-tools | grep -E '^(Inst|Remv)'   # aucune ligne Remv
+   root@pve01:~# apt-get install libguestfs-tools
    root@pve01:~# /root/DevOpsPrivateCloud/finaux/F4-changements/ressources/S09/fabriquer-export-vmware.sh | tee /root/courriel-infoger.txt
    ```
 2. **Intégrité** : manifeste converti (`SHA256(f)= somme` → `somme  f`) puis `sha256sum -c`, et comparaison avec les sommes du courriel :
@@ -72,9 +73,9 @@ Fichiers : [`S10/pve01/convertir-vm-infoger.sh`](fichiers/S10/pve01/convertir-vm
    root@pve01:~# ./convertir-vm-infoger.sh --vm ftp-part01 --cle /root/cle-admin.pub --sommes /root/courriel-infoger.txt
    ```
    Le script : vérifie le manifeste **et** les sommes du courriel ; `qm importovf … --dryrun 1` puis l'import (seuls nom, cœurs, mémoire et disque sont repris) ; pose le matériel **avant tout démarrage** (`virtio-scsi-single`, disque `discard,iothread,ssd`, `net0` `virtio` sur `vinfra` avec une MAC du plan, `x86-64-v2-AES`, console série, agent, `onboot`, étiquettes ; `ovmf` + `efidisk0 … pre-enrolled-keys=0` pour les VMs EFI sans Secure Boot) ; adapte **hors ligne** l'invité avec `virt-customize` sur `$(pvesm path <volid>)` (interface `ens18` + adresse du plan, résolveurs, `/etc/hosts`, `open-vm-tools` purgé, `qemu-guest-agent` installé, compte `admin` + clé + sudo, `10-infoger.conf` remplacé par `AllowUsers admin`, compte `infoger` verrouillé et expiré, sa clé et son sudo supprimés, `pasv_address` et `stats.cnf` re-adressés, `update-initramfs` puis contrôle de `virtio_scsi` dans chaque initramfs) ; démarre, attend l'agent ; pour `legacy-rdv01`, `RENAME USER 'stats'@'192.168.50.40' TO 'stats'@'10.10.20.46'`.
-3. **Code** : blocs `import` ajoutés, première configuration générée puis nettoyée :
+3. **Code** : blocs `import` ajoutés, première configuration générée puis nettoyée. La génération ne fonctionne **pas** avec un `import` à `for_each` (limite documentée d'OpenTofu) : la première fois, trois blocs `import` littéraux (`to = proxmox_virtual_environment_vm.legacy_rdv01`, `id = "pve01/3401"`…) dans une branche de travail, génération, puis réécriture du résultat nettoyé en une ressource à `for_each` avec le bloc `import` à `for_each` de [`imports.tf`](fichiers/S10/infra/envs/f4-infoger/imports.tf) :
    ```
-   admin@adm01:~/src/infra/envs/f4-infoger$ tofu plan -generate-config-out=genere.tf   # première fois seulement
+   admin@adm01:~/src/infra/envs/f4-infoger$ tofu plan -generate-config-out=genere.tf   # première fois seulement, imports littéraux
    admin@adm01:~/src/infra/envs/f4-infoger$ tofu apply      # par le pipeline de plateforme/infra
    admin@adm01:~/src/infra/envs/f4-infoger$ tofu plan -detailed-exitcode   # 0 : aucun changement
    ```
@@ -90,7 +91,7 @@ Fichiers : [`S10/pve01/convertir-vm-infoger.sh`](fichiers/S10/pve01/convertir-vm
    root@pve01:~# vzdump 3402 --storage pbs-par2 --mode snapshot
    ```
    Sonde de continuité : groupe **`continuite-legacy-rdv`** (étiquette `service: legacy-rdv`, cible `https://rdv.par1.medisphere.internal/`) ajouté à `host_vars/mon01/supervision_temoin.yml` de `plateforme/ansible` ([extrait](fichiers/S10/ansible/inventories/lab/host_vars/mon01/supervision_temoin.yml.extrait-F4-S10)), joué par le rôle `supervision_temoin` : c'est la même sonde qui mesurera la bascule (S13). Le port FTP se suit par `node_exporter` et `alloy` (le témoin du M21 n'a pas de module TCP : en ajouter un est une amélioration possible, pas un prérequis).
-8. **Preuves de service** : `curl -s https://rdv.par1.medisphere.internal/ | grep 'Rendez-vous'` ; un dépôt FTP de test en passif depuis `adm01` (`curl -T test.csv ftp://partenaire-labo@10.10.20.45/entrant/`, mot de passe du partenaire **réinitialisé** et transmis au partenaire par Nadia, ou compte de test temporaire supprimé ensuite) ; statistique lancée à la main sur `stats01` (`sudo /opt/stats/stats-rdv.sh`), fichier du jour non vide.
+8. **Preuves de service** : `curl -s https://rdv.par1.medisphere.internal/ | grep 'Rendez-vous'` ; un dépôt FTP de test en passif depuis `adm01` (`curl --disable-epsv --user partenaire-labo -T test.csv ftp://10.10.20.45/entrant/` : `--disable-epsv` force la commande `PASV`, la seule où le serveur **annonce** son adresse ; en `EPSV`, que curl essaie d'abord, le client réutilise l'adresse de la connexion de contrôle et un `pasv_address` oublié passerait inaperçu ; mot de passe du partenaire **réinitialisé** et transmis au partenaire par Nadia, ou compte de test temporaire, ajouté à `/etc/vsftpd.user_list` et supprimé ensuite) ; statistique lancée à la main sur `stats01` (`sudo /opt/stats/stats-rdv.sh`), fichier du jour non vide.
 
 **Explications**
 
@@ -246,7 +247,7 @@ Un vidage logique transporte des **valeurs** : `DATETIME` tels quels (heures de 
 **Alternatives**
 - **Réplication** MariaDB (10.11 → 11.8 en réplica, `CHANGE MASTER` vers la VM) : fenêtre réduite au gel + bascule (≈ 2 min), au prix d'un flux à ouvrir et sécuriser, d'un binlog à activer (redémarrage de MariaDB sur la VM) et d'un compte de réplication.
 - Bascule par le DNS (`rdv` en CNAME vers le nom de la Gateway) : dépend des TTL et des caches des postes des cabinets ; les répartiteurs donnent une bascule instantanée et réversible.
-- Geler par `read_only=1` sur la VM : bloque aussi le compte root (sauf `SUPER`) ; les droits du compte applicatif suffisent et se vérifient.
+- Geler par `read_only=1` sur la VM : bloque les écritures de **tous** les comptes qui n'ont pas le privilège `READ_ONLY ADMIN` (en 10.11, `root` l'a, par `SUPER`/`ALL PRIVILEGES`) : efficace mais global à l'instance, et à défaire au retour arrière ; retirer les droits d'écriture du seul compte applicatif est plus ciblé et se vérifie (`SHOW GRANTS`).
 
 **Pièges classiques**
 - Oublier de geler : des rendez-vous pris sur la VM pendant le vidage sont perdus.

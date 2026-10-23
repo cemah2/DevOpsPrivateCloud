@@ -11,6 +11,11 @@ require_cmd jq curl ssh
 
 if _f4g_export_dir >/dev/null 2>&1; then
   for _f4_s09_vm in legacy-rdv01 ftp-part01 stats01; do
+    # F4-S14 efface l'export de legacy-rdv01 (données de santé) après la sauvegarde finale.
+    if [[ "$_f4_s09_vm" == legacy-rdv01 ]] && ! _f4g_export_conforme legacy-rdv01 && _f4g_decommissionnee 3401; then
+      skip "export de legacy-rdv01" "effacé au décommissionnement (F4-S14, CHG-3414)"
+      continue
+    fi
     check_cmd "export de $_f4_s09_vm présent sur pve01, complet et conforme à son manifeste" _f4g_export_conforme "$_f4_s09_vm"
   done
 else

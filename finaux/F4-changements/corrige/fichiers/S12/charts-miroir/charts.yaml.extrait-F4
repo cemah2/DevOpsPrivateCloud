@@ -1,5 +1,5 @@
 # plateforme/charts-miroir — charts.yaml : EXTRAIT à ajouter (F4-S12, CHG-3412).
-# mariadb-operator 26.6 : charts OCI officiels (l'ancien dépôt Helm https://… est DÉPRÉCIÉ depuis 26.6).
+# mariadb-operator 26.6 : charts OCI officiels, installation recommandée (le dépôt Helm helm.mariadb.com est DÉPRÉCIÉ).
 # Deux charts : les CRD (à installer AVANT), puis l'opérateur (crds.enabled: false dans ses valeurs).
 # Empreintes relevées à la main (« helm pull oci://… --version 26.6.0 » puis sha256sum de l'archive),
 # relues en MR ; le pipeline refuse une archive dont l'empreinte diffère.

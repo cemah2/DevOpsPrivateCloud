@@ -2,7 +2,7 @@
 
 > ⚠️ Corrigé : à n'ouvrir qu'après avoir cherché. Solution de référence ; fichiers dans [`fichiers/S14/`](fichiers/S14/).
 
-**Points non testés en conditions réelles** : protection d'une sauvegarde PBS par `pvesh set …/content/<volid> --protected 1` depuis `pve01` (à vérifier sur ta version ; l'interface de PVE propose aussi « Protéger ») ; `tofu state rm` sur une instance d'un `for_each` (forme exacte de l'adresse entre apostrophes) ; durée de `shred` sur un volume LVM-thin de 8 Gio (quelques minutes).
+**Points non testés en conditions réelles** : protection de la sauvegarde finale par `vzdump … --protected 1` (option documentée de `vzdump` ; l'interface de PVE propose aussi « Protéger » sur une sauvegarde existante) ; `tofu state rm` sur une instance d'un `for_each` (forme exacte de l'adresse entre apostrophes) ; durée de `shred` sur un volume LVM-thin de 8 Gio (quelques minutes).
 
 ---
 
@@ -32,7 +32,7 @@ Fichiers : [`S14/medisphere/docs/changements/`](fichiers/S14/medisphere/docs/cha
    ```
    Les preuves (`/root/decommissionnement-legacy-rdv01/journal.txt` et son empreinte) sont jointes à CHG-3414 : elles ne contiennent aucune donnée de santé (commandes, résultats, sommes).
 4. **ADR-0340** : options A (maintien), B (migration des cabinets vers MédiAgenda), C (réécriture) ; décision de référence : B, avec A borné à 12 mois en maintenance de sécurité seulement.
-5. **Étiquette** `changements-v1` sur `plateforme/medisphere` une fois tout sur `main` et `lab/bin/check F4 1` à `F4 14` verts (S11 : panne annulée ou réparée).
+5. **Étiquette** `changements-v1` sur `plateforme/medisphere` une fois tout sur `main` et `lab/bin/check F4 1` à `F4 14` verts (S11 : panne annulée ou réparée ; S10 : une fois 3401 supprimée et CHG-3414 sur `main`, ses contrôles propres à `legacy-rdv01` passent en « ignoré », la sauvegarde de 3401 reste exigée).
 
 **Explications**
 Un serveur qui a porté des données de santé ne se « supprime » pas : on garde **une** copie maîtrisée (sauvegarde finale protégée, durée écrite, restauration prouvée), on détruit **toutes** les autres, et on le prouve. Sur LVM-thin, supprimer un volume rend ses blocs au pool sans les effacer ; `blkdiscard` les désalloue (lectures à zéro) mais ne garantit rien sur le support physique selon le *passdown* du pool et le SSD : réécrire le volume puis vérifier des échantillons est la preuve la plus simple à fournir. La VM d'essai et l'export de migration portent les mêmes données : même traitement. Le code suit : la VM sort de l'état sans être détruite par OpenTofu (`prevent_destroy` protège les deux autres VMs de la même ressource), puis les enregistrements NetBox et DNS partent par `apply`.

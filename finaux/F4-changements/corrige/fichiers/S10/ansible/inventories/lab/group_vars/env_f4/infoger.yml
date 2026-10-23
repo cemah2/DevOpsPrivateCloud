@@ -13,6 +13,8 @@ infoger_flux_entrants:
   legacy-rdv01:
     - {port: 22, proto: tcp, depuis: [10.10.10.0/24], pourquoi: "administration depuis MGMT"}
     - {port: 80, proto: tcp, depuis: [10.10.70.10, 10.10.70.11], pourquoi: "lb01/lb02 (rdv), exception EXC-H-035 (HTTP) jusqu'à CHG-3413"}
+    # Contrôles d'exploitation (adm01, lab/bin/check F4 10) : Legacy-RDV vu sans les répartiteurs.
+    - {port: 80, proto: tcp, depuis: [10.10.10.0/24], pourquoi: "contrôles depuis MGMT (adm01), même exception EXC-H-035"}
     - {port: 3306, proto: tcp, depuis: [10.10.20.46], pourquoi: "stats01, statistiques nocturnes"}
     - {port: 9100, proto: tcp, depuis: [10.10.40.0/24], pourquoi: "node_exporter (Prometheus du cluster)"}
   ftp-part01:

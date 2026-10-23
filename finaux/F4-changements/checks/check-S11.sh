@@ -22,6 +22,14 @@ _f4_s11_redemarree() {
   ((uptime < age))
 }
 
+# _f4_s11_mac_inchangee VMID — MAC de net0 actuelle = MAC de net0 dans l'instantané avant_f4_s11.
+_f4_s11_mac_inchangee() {
+  local avant apres
+  avant="$(_f4g_pve "qm config $1 --snapshot avant_f4_s11" 2>/dev/null | sed -nE 's/^net0: [a-z0-9]+=([0-9A-Fa-f:]{17}).*/\1/p')"
+  apres="$(_f4g_config "$1" | sed -nE 's/^net0: [a-z0-9]+=([0-9A-Fa-f:]{17}).*/\1/p')"
+  [[ -n "$avant" && "${avant,,}" == "${apres,,}" ]]
+}
+
 for _f4_s11_nom in ftp-part01 stats01; do
   _f4_s11_id="$(_f4g_vmid "$_f4_s11_nom")"
   _f4_s11_ip="$(_f4g_ip "$_f4_s11_nom")"
@@ -35,6 +43,11 @@ for _f4_s11_nom in ftp-part01 stats01; do
     fi
   fi
   check_cmd "$_f4_s11_nom : configuration Proxmox conforme (VirtIO SCSI, scsi0, carte virtio sur vinfra, agent)" _f4g_conforme "$_f4_s11_id"
+  # Carte « refaite » (variante 2) : la MAC doit redevenir celle du code (celle d'avant l'incident),
+  # sinon tofu plan n'est pas vide. Comparée à l'instantané tant qu'il existe (avant --annuler).
+  if _f4g_pve "qm listsnapshot $_f4_s11_id" 2>/dev/null | grep -qw avant_f4_s11; then
+    check_cmd "$_f4_s11_nom : MAC de net0 identique à celle d'avant l'incident (celle du code)" _f4_s11_mac_inchangee "$_f4_s11_id"
+  fi
   if _f4g_agent "$_f4_s11_id"; then
     check_cmd "$_f4_s11_nom : l'agent QEMU répond" true
     check_output "$_f4_s11_nom : l'invité porte $_f4_s11_ip" "^${_f4_s11_ip//./\\.}$" _f4g_ips "$_f4_s11_id"

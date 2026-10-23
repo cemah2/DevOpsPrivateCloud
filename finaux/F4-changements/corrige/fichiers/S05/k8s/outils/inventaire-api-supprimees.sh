@@ -2,9 +2,10 @@
 # plateforme/k8s — outils/inventaire-api-supprimees.sh (F4-S05, CHG-3405)
 # Avant les montées de mineure du trimestre : inventaire, en LECTURE, des objets qui utilisent une API
 # que la version cible supprime (annexe des versions des finaux) :
-#   - Kyverno 1.20 : ClusterPolicy (kyverno.io/v1) supprimée — vérifie dans les notes de version si Policy
-#     et les autres types kyverno.io/v1 le sont aussi ; MédiSphère n'utilise que les
-#     politiques CEL policies.kyverno.io/v1 depuis le M26 ;
+#   - Kyverno 1.20 : types historiques du groupe kyverno.io supprimés — ClusterPolicy, Policy,
+#     CleanupPolicy, ClusterCleanupPolicy et l'ancienne PolicyException kyverno.io (annonce de la 1.19,
+#     kyverno.io/blog, 20/08/2026 : relis les notes de la 1.20) ; MédiSphère n'utilise que les
+#     politiques CEL policies.kyverno.io/v1 (et leurs PolicyException) depuis le M26 ;
 #   - CloudNativePG 1.31 : spec.backup.barmanObjectStore supprimé ; MédiSphère archive par le plugin
 #     Barman Cloud depuis le M16.
 # Les objets sont lus dans le CLUSTER (ce qui tourne) ; le même contrôle sur les dépôts se fait par
@@ -13,8 +14,9 @@
 set -euo pipefail
 
 trouve=0
-echo "== Kyverno : ClusterPolicy / Policy (kyverno.io)"
-for t in clusterpolicies.kyverno.io policies.kyverno.io; do
+echo "== Kyverno : types historiques du groupe kyverno.io (supprimés en 1.20)"
+for t in clusterpolicies.kyverno.io policies.kyverno.io cleanuppolicies.kyverno.io \
+  clustercleanuppolicies.kyverno.io policyexceptions.kyverno.io; do
   if sortie="$(kubectl get "$t" -A -o json 2>&1)"; then
     n="$(jq '.items | length' <<<"$sortie")"
     if ((n > 0)); then
